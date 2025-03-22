@@ -1,65 +1,175 @@
-// app/study.tsx
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, PanResponder, Dimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Flashcard {
   id: number;
-  front: string; // 表面 (問題)
-  back: string;  // 裏面 (解答)
+  front: string;
+  pronunciation: string;
+  example: string;
+  back: string;
 }
 
 const StudyScreen = () => {
-  // ダミーのフラッシュカードデータ (本来はAPIやストレージから読み込む)
   const [flashcards, setFlashcards] = useState<Flashcard[]>([
-    { id: 1, front: 'Hello', back: 'こんにちは' },
-    { id: 2, front: 'Thank you', back: 'ありがとう' },
-    { id: 3, front: 'Good morning', back: 'おはようございます' },
-    { id: 4, front: "Good bye", back: "さようなら"}
+    { id: 1, front: 'work', pronunciation: 'wɜːrk', example: 'She is always busy with work.', back: '仕事' },
+    { id: 2, front: 'apple', pronunciation: 'ˈæpl', example: 'An apple a day keeps the doctor away.', back: 'りんご' },
+    { id: 3, front: 'dog', pronunciation: 'dɔːɡ', example: 'The dog is barking.', back: '犬' },
   ]);
 
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [showBack, setShowBack] = useState(false);
+  const animatedValue = useRef(new Animated.Value(0)).current;
+  const swipeValue = useRef(new Animated.ValueXY()).current;
+  const screenWidth = Dimensions.get('window').width;
+  // No more cardTransitionValue
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        swipeValue.extractOffset();
+      },
+      onPanResponderMove: Animated.event(
+        [null, { dx: swipeValue.x, dy: swipeValue.y }],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: (evt, gestureState) => {
+        const SWIPE_THRESHOLD = screenWidth / 4;
+        const VELOCITY_THRESHOLD = 0.2;
+
+        if (gestureState.dx > SWIPE_THRESHOLD || gestureState.vx > VELOCITY_THRESHOLD) {
+          animateCardTransition(1, handlePrevCard);
+        } else if (gestureState.dx < -SWIPE_THRESHOLD || gestureState.vx < -VELOCITY_THRESHOLD) {
+          animateCardTransition(-1, handleNextCard);
+        } else {
+          Animated.spring(swipeValue, {
+            toValue: { x: 0, y: 0 },
+            friction: 9,
+            tension: 40,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   const currentCard = flashcards[currentCardIndex];
 
-  const handleNextCard = () => {
-    // 次のカードへ (最後のカードなら最初に戻る)
-    setCurrentCardIndex((prevIndex) => (prevIndex + 1) % flashcards.length);
-    setShowBack(false); // 裏面を非表示に戻す
+  const flipCard = () => {
+    Animated.timing(animatedValue, {
+      toValue: showBack ? 0 : 180,
+      duration: 500,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      setShowBack(!showBack);
+    });
   };
-  const handlePrevCard = () => {
-    // 前のカードに戻る。
-    setCurrentCardIndex((prevIndex) => prevIndex === 0 ? flashcards.length - 1: prevIndex - 1);
-    setShowBack(false);
+
+  const frontInterpolate = animatedValue.interpolate({
+    inputRange: [0, 180],
+    outputRange: ['0deg', '180deg'],
+  });
+
+  const backInterpolate = animatedValue.interpolate({
+    inputRange: [0, 180],
+    outputRange: ['180deg', '360deg'],
+  });
+
+  const frontAnimatedStyle = {
+    transform: [{ rotateY: frontInterpolate }],
+  };
+
+  const backAnimatedStyle = {
+    transform: [{ rotateY: backInterpolate }],
+  };
+
+  const handleNextCard = () => {
+    gotoNextCard();
+  };
+
+  const handleUnknown = () => {
+    gotoNextCard();
   }
 
-  const handleFlipCard = () => {
-    setShowBack(!showBack);
+  const handlePrevCard = () => {
+    setCurrentCardIndex(prevIndex => {
+      const newIndex = prevIndex === 0 ? flashcards.length - 1 : prevIndex - 1;
+      resetCardAnimation();
+      return newIndex;
+    });
+  }
+
+  const gotoNextCard = () => {
+    setCurrentCardIndex(prevIndex => {
+      const newIndex = (prevIndex + 1) % flashcards.length;
+      resetCardAnimation();
+      return newIndex;
+    });
+  }
+
+    const resetCardAnimation = () => {
+        setShowBack(false);
+        animatedValue.setValue(0);
+        swipeValue.setValue({ x: 0, y: 0 });
+        // No need to reset cardTransitionValue
+    };
+
+    // Animate card transition with direction (only opacity and movement)
+    const animateCardTransition = (direction: number, callback: () => void) => {
+        Animated.timing(swipeValue, { // Only animate swipeValue
+          toValue: { x: direction * screenWidth, y: 0 },
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => {
+            callback();
+        });
+    };
+
+
+  const cardTransitionStyle = {
+    // opacity: cardTransitionValue, // Remove opacity animation
+    transform: [
+      { translateX: swipeValue.x },
+      { translateY: swipeValue.y },
+      // { scale: cardTransitionValue } // Remove scaling
+    ],
   };
 
   return (
     <View style={styles.container}>
+      <View style={styles.topBar}>
+        <Text style={styles.progressText}>{currentCardIndex + 1}/{flashcards.length}</Text>
+      </View>
       {flashcards.length > 0 ? (
         <>
-          <View style={styles.cardContainer}>
-            <TouchableOpacity
-              style={[styles.card, showBack ? styles.cardBack : styles.cardFront]}
-              onPress={handleFlipCard}
-            >
-              <Text style={styles.cardText}>
-                {showBack ? currentCard.back : currentCard.front}
-              </Text>
-            </TouchableOpacity>
-            <Text style={styles.cardIndexText}>{currentCardIndex + 1} / {flashcards.length}</Text>
-          </View>
-          <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.button} onPress={handlePrevCard}>
-              <Text style={styles.buttonText}>前へ</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.button} onPress={handleNextCard}>
-              <Text style={styles.buttonText}>次へ</Text>
-            </TouchableOpacity>
+          <Animated.View style={[styles.cardContainer, cardTransitionStyle]} {...panResponder.panHandlers}>
+            <Animated.View style={[styles.card, styles.cardFront, frontAnimatedStyle, showBack ? styles.hidden : {}]}>
+              <Text style={styles.cardWord}>{currentCard.front}</Text>
+              <Text style={styles.cardPronunciation}>{currentCard.pronunciation}</Text>
+              <Text style={styles.cardExample}>{currentCard.example}</Text>
+              <TouchableOpacity style={styles.flipHint} onPress={flipCard}>
+                <Text style={styles.flipHintText}>タップしてめくる</Text>
+              </TouchableOpacity>
+            </Animated.View>
 
+            <Animated.View style={[styles.card, styles.cardBack, backAnimatedStyle, !showBack ? styles.hidden : {}]}>
+              <Text style={styles.cardBackText}>{currentCard.back}</Text>
+              <TouchableOpacity style={styles.flipHint} onPress={flipCard}>
+                <Text style={styles.flipHintText}>タップしてめくる</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </Animated.View>
+
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity style={[styles.button, styles.buttonRed]} onPress={handleUnknown}>
+              <Text style={styles.buttonText}>？</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.button, styles.buttonGreen]} onPress={handleNextCard}>
+              <Ionicons name="checkmark-circle" size={24} color="white" />
+            </TouchableOpacity>
           </View>
         </>
       ) : (
@@ -68,70 +178,115 @@ const StudyScreen = () => {
     </View>
   );
 };
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#f5f5f5',
-  },
-  cardContainer: {
-    width: '100%',
-    maxWidth: 400,
-    height: 250, // カードの高さを固定
-    marginBottom: 20,
-  },
-  card: {
-    flex: 1, // cardContainer の高さいっぱいにする
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 10,
-    padding: 20,
-    // 影をつける (iOS)
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    // 影をつける (Android)
-    elevation: 5,
-  },
-  cardFront: {
-    backgroundColor: 'white',
-  },
-  cardBack: {
-    backgroundColor: '#e0f7fa', // 裏面の色を変える
-  },
-  cardText: {
-    fontSize: 24,
-    textAlign: 'center', // テキストを中央揃え
-  },
-  cardIndexText:{
-    textAlign: 'center',
-    marginTop: 5,
-    color: 'gray',
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    maxWidth: 400,
-    marginBottom: 20,
-  },
-  button: {
-    backgroundColor: '#3498db',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 5,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-  },
-  emptyText: {
-    fontSize: 18,
-    color: '#777',
-  },
+    container: {
+        flex: 1,
+        backgroundColor: '#f8f8ff',
+        padding: 20,
+        alignItems: 'center',
+    },
+    topBar: {
+        width: '100%',
+        paddingTop: 10,
+        alignItems: 'center',
+    },
+    progressText: {
+        fontSize: 16,
+        color: '#666',
+    },
+    cardContainer: {
+        width: '100%',
+        height: 400,
+        marginBottom: 20,
+    },
+    card: {
+        position: 'absolute',
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 20,
+        padding: 20,
+        backfaceVisibility: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+        elevation: 5,
+    },
+    cardFront: {
+        backgroundColor: 'white',
+    },
+    cardBack: {
+        backgroundColor: '#f0f8ff',
+        transform: [{ rotateY: '180deg' }],
+    },
+    cardWord: {
+        fontSize: 48,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 10,
+    },
+    cardPronunciation: {
+        fontSize: 20,
+        color: '#666',
+        marginBottom: 20,
+    },
+    cardExample: {
+        fontSize: 18,
+        color: '#444',
+        textAlign: 'center',
+        marginBottom: 40,
+    },
+    flipHint: {
+        position: 'absolute',
+        bottom: 20,
+        padding: 10,
+        backgroundColor: 'rgba(0,0,0,0.1)',
+        borderRadius: 5,
+    },
+    flipHintText: {
+        fontSize: 14,
+        color: '#888',
+    },
+    cardBackText: {
+        fontSize: 36,
+        textAlign: 'center',
+        color: '#333',
+    },
+    buttonContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        width: '100%',
+        paddingHorizontal: 10,
+    },
+    button: {
+        paddingVertical: 15,
+        paddingHorizontal: 20,
+        borderRadius: 30,
+        alignItems: 'center',
+        flex: 1,
+        marginHorizontal: 5,
+    },
+    buttonRed: {
+        backgroundColor: '#ff6961',
+    },
+    buttonGreen: {
+        backgroundColor: '#77dd77',
+    },
+    buttonText: {
+        color: 'white',
+        fontSize: 24,
+        fontWeight: 'bold',
+    },
+    hidden: {
+        display: 'none',
+    },
+    emptyText: {
+        fontSize: 18,
+        color: '#777',
+    },
 });
 
 export default StudyScreen;
