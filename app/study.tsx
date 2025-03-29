@@ -116,14 +116,14 @@ const StudyScreen = () => {
   // カードの表裏のスタイル
   const frontAnimatedStyle = {
     transform: [{ rotateY: frontInterpolate }],
-    shadowOpacity: isFlipping ? 0 : 0.2,
-    shadowColor: isFlipping ? 'transparent' : '#000',
+    shadowOpacity: isAnimating || isFlipping ? 0 : 0.2,
+    shadowColor: isAnimating || isFlipping ? 'transparent' : '#000',
   };
 
   const backAnimatedStyle = {
     transform: [{ rotateY: backInterpolate }],
-    shadowOpacity: isFlipping ? 0 : 0.2,
-    shadowColor: isFlipping ? 'transparent' : '#000',
+    shadowOpacity: isAnimating || isFlipping ? 0 : 0.2,
+    shadowColor: isAnimating || isFlipping ? 'transparent' : '#000',
   };
 
   // カード操作のハンドラー
