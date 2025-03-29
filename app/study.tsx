@@ -22,6 +22,7 @@ const StudyScreen = () => {
   const [currentCardIndex, setCurrentCardIndex] = useState(0);  // 現在表示中のカードのインデックス
   const [showBack, setShowBack] = useState(false);  // カードの裏面を表示するかどうか
   const [isAnimating, setIsAnimating] = useState(false);  // スワイプアニメーション中かどうか
+  const [isFlipping, setIsFlipping] = useState(false);  // カードをめくっているかどうか
   const animatedValue = useRef(new Animated.Value(0)).current;  // カードの回転アニメーション用
   const swipeValue = useRef(new Animated.ValueXY()).current;    // カードのスワイプアニメーション用
   const opacityValue = useRef(new Animated.Value(1)).current;   // 透明度アニメーション用
@@ -89,13 +90,15 @@ const StudyScreen = () => {
 
   // カードをめくるアニメーション
   const flipCard = () => {
+    setIsFlipping(true);
     Animated.timing(animatedValue, {
       toValue: showBack ? 0 : 180,
-      duration: 500,
+      duration: 200,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start(() => {
       setShowBack(!showBack);
+      setIsFlipping(false);
     });
   };
 
@@ -113,10 +116,14 @@ const StudyScreen = () => {
   // カードの表裏のスタイル
   const frontAnimatedStyle = {
     transform: [{ rotateY: frontInterpolate }],
+    shadowOpacity: isFlipping ? 0 : 0.2,
+    shadowColor: isFlipping ? 'transparent' : '#000',
   };
 
   const backAnimatedStyle = {
     transform: [{ rotateY: backInterpolate }],
+    shadowOpacity: isFlipping ? 0 : 0.2,
+    shadowColor: isFlipping ? 'transparent' : '#000',
   };
 
   // カード操作のハンドラー
@@ -217,21 +224,21 @@ const StudyScreen = () => {
 
           <Animated.View style={[styles.cardContainer, cardTransitionStyle, { opacity: opacityValue }]} {...panResponder.panHandlers}>
             {/* カードの表面 */}
-            <Animated.View style={[styles.card, styles.cardFront, frontAnimatedStyle, showBack ? styles.hidden : {}]}>
+            <Animated.View 
+              style={[styles.card, styles.cardFront, frontAnimatedStyle, showBack ? styles.hidden : {}]}
+              onTouchEnd={flipCard}
+            >
               <Text style={styles.cardWord}>{currentCard.front}</Text>
               <Text style={styles.cardPronunciation}>{currentCard.pronunciation}</Text>
               <Text style={styles.cardExample}>{currentCard.example}</Text>
-              <TouchableOpacity style={styles.flipHint} onPress={flipCard}>
-                <Text style={styles.flipHintText}>タップしてめくる</Text>
-              </TouchableOpacity>
             </Animated.View>
 
             {/* カードの裏面 */}
-            <Animated.View style={[styles.card, styles.cardBack, backAnimatedStyle, !showBack ? styles.hidden : {}]}>
+            <Animated.View 
+              style={[styles.card, styles.cardBack, backAnimatedStyle, !showBack ? styles.hidden : {}]}
+              onTouchEnd={flipCard}
+            >
               <Text style={styles.cardBackText}>{currentCard.back}</Text>
-              <TouchableOpacity style={styles.flipHint} onPress={flipCard}>
-                <Text style={styles.flipHintText}>タップしてめくる</Text>
-              </TouchableOpacity>
             </Animated.View>
           </Animated.View>
 
@@ -300,7 +307,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
     },
     cardBack: {
-        backgroundColor: '#f0f8ff',
+        backgroundColor: 'white',
         transform: [{ rotateY: '180deg' }],
     },
     cardWord: {
@@ -319,17 +326,6 @@ const styles = StyleSheet.create({
         color: '#444',
         textAlign: 'center',
         marginBottom: 40,
-    },
-    flipHint: {
-        position: 'absolute',
-        bottom: 20,
-        padding: 10,
-        backgroundColor: 'rgba(0,0,0,0.1)',
-        borderRadius: 5,
-    },
-    flipHintText: {
-        fontSize: 14,
-        color: '#888',
     },
     cardBackText: {
         fontSize: 36,
