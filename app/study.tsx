@@ -23,11 +23,31 @@ const StudyScreen = () => {
   const [showBack, setShowBack] = useState(false);  // カードの裏面を表示するかどうか
   const [isAnimating, setIsAnimating] = useState(false);  // スワイプアニメーション中かどうか
   const [isFlipping, setIsFlipping] = useState(false);  // カードをめくっているかどうか
+  const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; color: string; position: 'topLeft' | 'topRight' } | null>(null);  // フィードバックメッセージ
   const animatedValue = useRef(new Animated.Value(0)).current;  // カードの回転アニメーション用
   const swipeValue = useRef(new Animated.ValueXY()).current;    // カードのスワイプアニメーション用
   const opacityValue = useRef(new Animated.Value(1)).current;   // 透明度アニメーション用
+  const feedbackOpacity = useRef(new Animated.Value(0)).current;  // フィードバックメッセージの透明度
   const screenWidth = Dimensions.get('window').width;
   // No more cardTransitionValue
+
+  // フィードバックメッセージを表示する関数
+  const showFeedback = (text: string, color: string, position: 'topLeft' | 'topRight') => {
+    setFeedbackMessage({ text, color, position });
+    Animated.sequence([
+      Animated.timing(feedbackOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(feedbackOpacity, {
+        toValue: 0,
+        duration: 200,
+        delay: 800,
+        useNativeDriver: true,
+      })
+    ]).start();
+  };
 
   // スワイプジェスチャーの設定
   const panResponder = useRef(
@@ -61,9 +81,13 @@ const StudyScreen = () => {
         const VELOCITY_THRESHOLD = 0.2;           // 速度判定の閾値
 
         if (gestureState.dx > SWIPE_THRESHOLD || gestureState.vx > VELOCITY_THRESHOLD) {
-          animateCardTransition(1, handlePrevCard);  // 右スワイプで前のカードへ
+          // 右スワイプ
+          showFeedback('Good!', '#77dd77', 'topRight');
+          animateCardTransition(1, gotoNextCard);  // 右方向にアニメーション
         } else if (gestureState.dx < -SWIPE_THRESHOLD || gestureState.vx < -VELOCITY_THRESHOLD) {
-          animateCardTransition(-1, handleNextCard);  // 左スワイプで次のカードへ
+          // 左スワイプ
+          showFeedback('Try again', '#ff6961', 'topLeft');
+          animateCardTransition(-1, gotoNextCard);  // 左方向にアニメーション
         } else {
           // 閾値未満の場合は元の位置に戻す
           Animated.parallel([
@@ -128,10 +152,12 @@ const StudyScreen = () => {
 
   // カード操作のハンドラー
   const handleNextCard = () => {
+    showFeedback('Good!', '#77dd77', 'topRight');
     animateCardTransition(1, gotoNextCard);  // 右にスワイプ
   };
 
   const handleUnknown = () => {
+    showFeedback('Try again', '#ff6961', 'topLeft');
     animateCardTransition(-1, gotoNextCard);  // 左にスワイプ
   }
 
@@ -199,6 +225,8 @@ const StudyScreen = () => {
         setIsAnimating(false);
       });
     }
+    // カードが切り替わったらフィードバックメッセージを非表示にする
+    setFeedbackMessage(null);
   }, [currentCardIndex]);
 
   return (
@@ -241,6 +269,24 @@ const StudyScreen = () => {
               <Text style={styles.cardBackText}>{currentCard.back}</Text>
             </Animated.View>
           </Animated.View>
+
+          {/* フィードバックメッセージ */}
+          {feedbackMessage && (
+            <Animated.View 
+              style={[
+                styles.feedbackContainer,
+                { 
+                  opacity: feedbackOpacity,
+                  top: 100,
+                  [feedbackMessage.position === 'topLeft' ? 'left' : 'right']: 40,
+                }
+              ]}
+            >
+              <Text style={[styles.feedbackText, { color: feedbackMessage.color }]}>
+                {feedbackMessage.text}
+              </Text>
+            </Animated.View>
+          )}
 
           {/* 操作ボタン */}
           <View style={styles.buttonContainer}>
@@ -384,6 +430,17 @@ const styles = StyleSheet.create({
         height: '100%',
         backgroundColor: '#4a90e2',
         borderRadius: 2,
+    },
+    feedbackContainer: {
+        position: 'absolute',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+    },
+    feedbackText: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        textAlign: 'center',
     },
 });
 
