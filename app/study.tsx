@@ -121,11 +121,11 @@ const StudyScreen = () => {
 
   // カード操作のハンドラー
   const handleNextCard = () => {
-    gotoNextCard();
+    animateCardTransition(1, gotoNextCard);  // 右にスワイプ
   };
 
   const handleUnknown = () => {
-    gotoNextCard();
+    animateCardTransition(-1, gotoNextCard);  // 左にスワイプ
   }
 
   const handlePrevCard = () => {
@@ -154,13 +154,20 @@ const StudyScreen = () => {
 
   // カードの遷移アニメーション
   const animateCardTransition = (direction: number, callback: () => void) => {
-    Animated.timing(swipeValue, {
-      toValue: { x: direction * screenWidth, y: 0 },
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
+    setIsAnimating(true);
+    Animated.parallel([
+      Animated.timing(swipeValue, {
+        toValue: { x: direction * screenWidth, y: 0 },
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityValue, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
       callback();
-      // アニメーション完了後も非表示のまま（カード切り替え後に再表示される）
     });
   };
 
@@ -194,6 +201,20 @@ const StudyScreen = () => {
       </View>
       {flashcards.length > 0 ? (
         <>
+          {/* プログレスバー */}
+          <View style={styles.progressBarContainer}>
+            <View style={styles.progressBarBackground}>
+              <Animated.View 
+                style={[
+                  styles.progressBarFill,
+                  {
+                    width: `${((currentCardIndex + 1) / flashcards.length) * 100}%`
+                  }
+                ]} 
+              />
+            </View>
+          </View>
+
           <Animated.View style={[styles.cardContainer, cardTransitionStyle, { opacity: opacityValue }]} {...panResponder.panHandlers}>
             {/* カードの表面 */}
             <Animated.View style={[styles.card, styles.cardFront, frontAnimatedStyle, showBack ? styles.hidden : {}]}>
@@ -216,10 +237,18 @@ const StudyScreen = () => {
 
           {/* 操作ボタン */}
           <View style={styles.buttonContainer}>
-            <TouchableOpacity style={[styles.button, styles.buttonRed]} onPress={handleUnknown}>
+            <TouchableOpacity 
+              style={[styles.button, styles.buttonRed]} 
+              onPress={handleUnknown}
+              disabled={isAnimating}
+            >
               <Text style={styles.buttonText}>？</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.button, styles.buttonGreen]} onPress={handleNextCard}>
+            <TouchableOpacity 
+              style={[styles.button, styles.buttonGreen]} 
+              onPress={handleNextCard}
+              disabled={isAnimating}
+            >
               <Ionicons name="checkmark-circle" size={24} color="white" />
             </TouchableOpacity>
           </View>
@@ -343,6 +372,22 @@ const styles = StyleSheet.create({
     emptyText: {
         fontSize: 18,
         color: '#777',
+    },
+    progressBarContainer: {
+        width: '100%',
+        paddingHorizontal: 10,
+        marginBottom: 20,
+    },
+    progressBarBackground: {
+        height: 4,
+        backgroundColor: '#e0e0e0',
+        borderRadius: 2,
+        overflow: 'hidden',
+    },
+    progressBarFill: {
+        height: '100%',
+        backgroundColor: '#4a90e2',
+        borderRadius: 2,
     },
 });
 
