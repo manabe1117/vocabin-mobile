@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons'; // アイコンをインポート
+import { createClient } from '@supabase/supabase-js';
 
 interface TranslationResult {
   meaning: string;
@@ -18,143 +19,50 @@ interface TranslationResult {
   notes: string;
 }
 
+// Supabaseクライアントの初期化
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 // useTranslationフックはモックで代用. 実際のアプリでは適切に実装してください。
 const useTranslation = () => {
   const [translation, setTranslation] = useState<TranslationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | { message: string } | null>(null);
 
-  const mockTranslations: { [key: string]: TranslationResult[] } = {
-    work: [
-      {
-        meaning: "仕事、労働",
-        pronunciation: "wəːrk",
-        examples: ["Work hard to achieve your goals.", "I have a lot of work to do today."],
-        synonyms: ["job", "employment", "task", "occupation"],
-        notes: "「work」は英語のCEFRレベルB1で、名詞として使われます。この単語は日常的な会話やビジネスの場面で頻繁に使用されるため、覚えておくと便利です。",
-      },
-      {
-        meaning: "働く、機能する",
-        pronunciation: "wɜːrk",
-        examples: ["This machine doesn't work.", "He works at a bank."],
-        synonyms: ["operate", "function", "labor"],
-        notes: "「work」は動詞としても使われ、機械が「機能する」という意味や、人が「働く」という意味を持ちます。",
-      },
-    ],
-    study: [
-      {
-        meaning: "勉強、研究",
-        pronunciation: "ˈstʌdi",
-        examples: ["I need to study for the exam.", "The study shows interesting results."],
-        synonyms: ["learn", "research", "investigation"],
-        notes: "「study」は名詞としても動詞としても使われます。学問的な文脈でよく使われる単語です。",
-      },
-      {
-        meaning: "調査する、研究する",
-        pronunciation: "ˈstʌdi",
-        examples: ["Scientists are studying the effects of climate change.", "They studied the market before launching the product."],
-        synonyms: ["examine", "analyze", "investigate"],
-        notes: "「study」は動詞として、何かを詳しく調べる、研究するという意味で使われます。",
-      },
-    ],
-    hello: [
-      {
-        meaning: "こんにちは",
-        pronunciation: "həˈloʊ",
-        examples: ["Hello, how are you?", "She said hello to everyone."],
-        synonyms: ["hi", "greetings", "howdy"],
-        notes: "「hello」は最も一般的な挨拶の一つです。カジュアルな場面でもフォーマルな場面でも使えます。",
-      },
-    ],
-    goodbye: [
-      {
-        meaning: "さようなら",
-        pronunciation: "ˌɡʊdˈbaɪ",
-        examples: ["Goodbye, see you later.", "He waved goodbye."],
-        synonyms: ["farewell", "bye", "see you"],
-        notes: "「goodbye」は別れの挨拶です。カジュアルな場面でもフォーマルな場面でも使えます。",
-      },
-    ],
-    "こんにちは": [
-      {
-        meaning: "Hello",
-        pronunciation: "həˈloʊ",
-        examples: ["Hello, how are you?", "She said hello to everyone."],
-        synonyms: ["hi", "greetings", "howdy"],
-        notes: "「hello」は最も一般的な挨拶の一つです。カジュアルな場面でもフォーマルな場面でも使えます。",
-      },
-    ],
-    "さようなら": [
-      {
-        meaning: "Goodbye",
-        pronunciation: "ˌɡʊdˈbaɪ",
-        examples: ["Goodbye, see you later.", "He waved goodbye."],
-        synonyms: ["farewell", "bye", "see you"],
-        notes: "「goodbye」は別れの挨拶です。カジュアルな場面でもフォーマルな場面でも使えます。",
-      },
-    ],
-    "仕事": [
-      {
-        meaning: "work",
-        pronunciation: "wəːrk",
-        examples: ["Work hard to achieve your goals.", "I have a lot of work to do today."],
-        synonyms: ["job", "employment", "task", "occupation"],
-        notes: "「work」は英語のCEFRレベルB1で、名詞として使われます。この単語は日常的な会話やビジネスの場面で頻繁に使用されるため、覚えておくと便利です。",
-      },
-      {
-        meaning: "work",
-        pronunciation: "wɜːrk",
-        examples: ["This machine doesn't work.", "He works at a bank."],
-        synonyms: ["operate", "function", "labor"],
-        notes: "「work」は動詞としても使われ、機械が「機能する」という意味や、人が「働く」という意味を持ちます。",
-      },
-    ],
-    "勉強": [
-      {
-        meaning: "study",
-        pronunciation: "ˈstʌdi",
-        examples: ["I need to study for the exam.", "The study shows interesting results."],
-        synonyms: ["learn", "research", "investigation"],
-        notes: "「study」は名詞としても動詞としても使われます。学問的な文脈でよく使われる単語です。",
-      },
-      {
-        meaning: "study",
-        pronunciation: "ˈstʌdi",
-        examples: ["Scientists are studying the effects of climate change.", "They studied the market before launching the product."],
-        synonyms: ["examine", "analyze", "investigate"],
-        notes: "「study」は動詞として、何かを詳しく調べる、研究するという意味で使われます。",
-      },
-    ],
-  };
-
   const translate = async (text: string, targetLanguage: 'en' | 'ja') => {
     setLoading(true);
     setError(null);
     setTranslation(null);
 
-    // ランダムな遅延をシミュレート
-    const delay = Math.random() * 1000 + 500; // 500msから1500msのランダムな遅延
-    await new Promise((resolve) => setTimeout(resolve, delay));
-
     try {
-      const lowerCaseText = text.toLowerCase();
-      const results = mockTranslations[lowerCaseText];
+      const { data, error } = await supabase.functions.invoke('get-dictionary', {
+        body: { vocabulary: text }
+      });
 
-      if (results && results.length > 0) {
-        // 複数の翻訳結果がある場合は、ランダムに1つを選択
-        const randomIndex = Math.floor(Math.random() * results.length);
-        setTranslation(results[randomIndex]);
+      if (error) throw error;
+
+      if (data) {
+        // データの形式を変換
+        const formattedData: TranslationResult = {
+          meaning: data.meanings ? data.meanings.join(', ') : '',
+          pronunciation: data.pronunciation || '',
+          examples: data.examples ? data.examples.map((ex: { en: string; ja: string }) => ex.en) : [],
+          synonyms: data.synonyms || [],
+          notes: data.notes || ''
+        };
+        setTranslation(formattedData);
       } else {
-        // エラーは設定するが、エラーメッセージは表示しない
         setError({ message: `「${text}」の翻訳データが見つかりません。` });
-        //setTranslation(null); // 翻訳結果をクリア
       }
     } catch (err) {
+      console.error('Translation error:', err);
       setError(err as Error);
     } finally {
       setLoading(false);
     }
   };
+
   return { translation, loading, error, translate };
 };
 
