@@ -19,6 +19,10 @@ interface TranslationResult {
   notes: string;
 }
 
+interface SuggestionResponse {
+  suggestion: string;
+}
+
 // Supabaseクライアントの初期化
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -27,6 +31,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // useTranslationフックはモックで代用. 実際のアプリでは適切に実装してください。
 const useTranslation = () => {
   const [translation, setTranslation] = useState<TranslationResult | null>(null);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | { message: string } | null>(null);
 
@@ -34,16 +39,25 @@ const useTranslation = () => {
     setLoading(true);
     setError(null);
     setTranslation(null);
+    setSuggestion(null);
 
     try {
       const { data, error } = await supabase.functions.invoke('get-dictionary', {
         body: { vocabulary: text }
       });
 
+      console.log('data', data);
+
       if (error) throw error;
 
       if (data) {
-        // データの形式を変換
+        // suggestionが返ってきた場合
+        if ('suggestion' in data) {
+          setSuggestion(data.suggestion);
+          return;
+        }
+
+        // 通常の辞書データが返ってきた場合
         const formattedData: TranslationResult = {
           meaning: data.meanings ? data.meanings.join(', ') : '',
           pronunciation: data.pronunciation || '',
@@ -63,21 +77,29 @@ const useTranslation = () => {
     }
   };
 
-  return { translation, loading, error, translate };
+  return { translation, suggestion, loading, error, translate };
 };
 
 const TranslateScreen = () => {
   const [inputText, setInputText] = useState('');
   const [inputLanguage, setInputLanguage] = useState<'ja' | 'en'>('ja'); // 入力言語の状態を追加
-  const { translation, loading, error, translate } = useTranslation();
+  const { translation, suggestion, loading, error, translate } = useTranslation();
 
   const handleTranslate = () => {
     translate(inputText, inputLanguage);
   };
 
+  const handleSuggestionClick = () => {
+    if (suggestion) {
+      setInputText(suggestion);
+      translate(suggestion, inputLanguage);
+    }
+  };
+
   const clearInput = () => {
     setInputText('');
-    //setTranslation(null); //Clear previous result if needed.
+    setTranslation(null);
+    setSuggestion(null);
   };
 
   // 入力言語を切り替える関数
@@ -92,86 +114,127 @@ const TranslateScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.searchBarContainer}>
-        <TouchableOpacity onPress={toggleInputLanguage} style={styles.languageButton}>
-          <Text style={styles.languageButtonText}>{inputLanguage === 'ja' ? '日本語' : 'English'}</Text>
+        <TouchableOpacity 
+          onPress={toggleInputLanguage} 
+          style={styles.languageButton}
+        >
+          <Text style={styles.languageButtonText}>
+            {inputLanguage === 'ja' ? '日本語' : 'English'}
+          </Text>
         </TouchableOpacity>
-        <TextInput
-          style={styles.input}
-          placeholder={placeholder}
-          value={inputText}
-          onChangeText={setInputText}
-          onSubmitEditing={handleTranslate} // Enterキーで翻訳
-        />
-        <TouchableOpacity style={styles.clearButton} onPress={clearInput}>
-          <Ionicons name="close-circle-outline" size={24} color="#777" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.magicButton} onPress={handleTranslate}>
-          <Ionicons name="search-circle-outline" size={24} color="#777" />
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder={placeholder}
+            value={inputText}
+            onChangeText={setInputText}
+            onSubmitEditing={handleTranslate}
+            placeholderTextColor="#999"
+          />
+          {inputText.length > 0 && (
+            <TouchableOpacity 
+              style={styles.clearButton} 
+              onPress={clearInput}
+            >
+              <Ionicons name="close-circle" size={20} color="#999" />
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity 
+          style={[styles.magicButton, inputText.length === 0 && styles.magicButtonDisabled]} 
+          onPress={handleTranslate}
+          disabled={inputText.length === 0}
+        >
+          <Ionicons 
+            name="search" 
+            size={20} 
+            color={inputText.length === 0 ? "#ccc" : "#4a90e2"} 
+          />
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.scrollView}>
-        {loading && <ActivityIndicator size="large" color="#a5d6a7" />}
-
-        {/* エラーメッセージの表示を削除 */}
-        {/* {error && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>エラー: {error.message}</Text>
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#4a90e2" />
           </View>
-        )} */}
+        )}
+
+        {suggestion && (
+          <View style={styles.suggestionContainer}>
+            <View style={styles.suggestionContent}>
+              <View style={styles.suggestionHeader}>
+                <Ionicons name="search-circle" size={20} color="#4a90e2" />
+                <Text style={styles.suggestionText}>もしかして？</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.suggestionButton}
+                onPress={handleSuggestionClick}
+              >
+                <Text style={styles.suggestionWord}>{suggestion}</Text>
+                <Ionicons name="arrow-forward" size={20} color="#4a90e2" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {translation && (
           <View style={styles.resultCard}>
             <View style={styles.wordHeader}>
-              <Text style={styles.wordText}>{inputText}</Text>
-              <View style={styles.iconContainer}>
-                <TouchableOpacity>
-                  <Ionicons name="volume-high-outline" size={24} color="#555" />
-                </TouchableOpacity>
+              <View style={styles.wordContainer}>
+                <Text style={styles.wordText}>{inputText}</Text>
+                <Text style={styles.pronunciation}>{translation.pronunciation}</Text>
               </View>
+              <TouchableOpacity style={styles.soundButton}>
+                <Ionicons name="volume-high" size={24} color="#4a90e2" />
+              </TouchableOpacity>
             </View>
-            <Text style={styles.pronunciation}>{translation.pronunciation}</Text>
 
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>定義</Text>
               <Text style={styles.sectionText}>{translation.meaning}</Text>
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>類義語</Text>
-              <View style={styles.synonymContainer}>
-                {translation.synonyms.map((synonym, index) => (
-                  <Text key={index} style={styles.synonym}>
-                    {synonym}
-                  </Text>
+            {translation.synonyms.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>類義語</Text>
+                <View style={styles.synonymContainer}>
+                  {translation.synonyms.map((synonym, index) => (
+                    <TouchableOpacity 
+                      key={index} 
+                      style={styles.synonym}
+                      onPress={() => {
+                        setInputText(synonym);
+                        translate(synonym, inputLanguage);
+                      }}
+                    >
+                      <Text style={styles.synonymText}>{synonym}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {translation.examples.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>例文</Text>
+                {translation.examples.map((example, index) => (
+                  <View key={index} style={styles.exampleContainer}>
+                    <Text style={styles.sectionText}>{example}</Text>
+                  </View>
                 ))}
               </View>
-            </View>
+            )}
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>例文</Text>
-              {translation.examples.map((example, index) => (
-                <Text key={index} style={styles.sectionText}>
-                  {example}
-                </Text>
-              ))}
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>補足</Text>
-              <Text style={styles.sectionText}>{translation.notes}</Text>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>メモ</Text>
-              <TextInput
-                style={styles.memoInput}
-                placeholder="タップして入力"
-                multiline
-              />
-            </View>
+            {translation.notes && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>補足</Text>
+                <Text style={styles.sectionText}>{translation.notes}</Text>
+              </View>
+            )}
 
             <TouchableOpacity style={styles.saveButton}>
+              <Ionicons name="bookmark-outline" size={20} color="white" style={styles.saveButtonIcon} />
               <Text style={styles.saveButtonText}>保存</Text>
             </TouchableOpacity>
           </View>
@@ -180,150 +243,200 @@ const TranslateScreen = () => {
     </View>
   );
 };
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f0f0', // Light gray background
+    backgroundColor: '#f8f9fa',
   },
   searchBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
+    padding: 12,
+    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: '#e9ecef',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  languageButton: {
+    padding: 8,
+    marginRight: 8,
+    backgroundColor: '#e9ecef',
+    borderRadius: 8,
+  },
+  languageButtonText: {
+    fontSize: 14,
+    color: '#495057',
+    fontWeight: '500',
+  },
+  inputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    marginRight: 8,
   },
   input: {
     flex: 1,
     height: 40,
-    borderColor: '#ddd',
-    borderWidth: 1,
-    borderRadius: 20, // Rounded input
-    paddingHorizontal: 15,
-    marginRight: 5,
-    backgroundColor: 'white',
+    fontSize: 16,
+    color: '#212529',
   },
   clearButton: {
-    padding: 10,
-  },
-  clearButtonText: {
-    fontSize: 20,
-    color: '#777',
+    padding: 4,
   },
   magicButton: {
     padding: 10,
+    backgroundColor: '#e9ecef',
+    borderRadius: 12,
   },
-  magicButtonText: {
-    fontSize: 20,
-    color: '#777',
+  magicButtonDisabled: {
+    opacity: 0.7,
   },
-
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
   scrollView: {
     flex: 1,
-    paddingHorizontal: 15,
+    padding: 16,
   },
   resultCard: {
     backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 15,
-    marginTop: 15,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  wordHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  wordContainer: {
+    flex: 1,
+  },
+  wordText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#212529',
+    marginBottom: 4,
+  },
+  pronunciation: {
+    fontSize: 16,
+    color: '#6c757d',
+  },
+  soundButton: {
+    padding: 8,
+  },
+  section: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4a90e2',
+    marginBottom: 8,
+  },
+  sectionText: {
+    fontSize: 16,
+    color: '#495057',
+    lineHeight: 24,
+  },
+  synonymContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  synonym: {
+    backgroundColor: '#e3f2fd',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  synonymText: {
+    color: '#1976d2',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  exampleContainer: {
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  suggestionContainer: {
+    backgroundColor: '#fff3e0',
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3, // For Android shadow
+    elevation: 3,
   },
-  wordHeader: {
+  suggestionContent: {
+    flexDirection: 'column',
+    gap: 8,
+  },
+  suggestionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 6,
   },
-  wordText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  iconContainer: {
-    flexDirection: 'row',
-  },
-  icon: {
-    fontSize: 22,
-    marginLeft: 15,
-    color: '#555',
-  },
-  pronunciation: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 10,
-  },
-  section: {
-    marginBottom: 15,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#4a90e2', // Blue accent color
-    marginBottom: 5,
-  },
-  sectionText: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
-  },
-  synonymContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap', // Allow synonyms to wrap to the next line
-  },
-  synonym: {
-    backgroundColor: '#e0f2f1', // Light teal background for synonyms
-    borderRadius: 10,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    marginRight: 5,
-    marginBottom: 5,
-    color: '#004d40',
+  suggestionText: {
     fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
   },
-  memoInput: {
+  suggestionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'white',
+    padding: 12,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    padding: 10,
-    marginTop: 5,
-    minHeight: 80,
+    borderColor: '#ffb74d',
+  },
+  suggestionWord: {
     fontSize: 16,
-    backgroundColor: '#f8f8f8',
+    color: '#4a90e2',
+    fontWeight: 'bold',
   },
   saveButton: {
-    backgroundColor: '#4a90e2', // Blue color for the button
-    padding: 15,
-    borderRadius: 25, // Fully rounded button
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
+    justifyContent: 'center',
+    backgroundColor: '#4a90e2',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 8,
+    shadowColor: '#4a90e2',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  saveButtonIcon: {
+    marginRight: 8,
   },
   saveButtonText: {
     color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  errorContainer: {
-    backgroundColor: '#ffcccc',
-    padding: 10,
-    borderRadius: 5,
-    marginBottom: 20,
-  },
-  errorText: {
-    color: '#cc0000',
-  },
-  languageButton: {
-    padding: 10,
-    marginRight: 5,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 5,
-  },
-  languageButtonText: {
     fontSize: 16,
-    color: '#333',
+    fontWeight: '600',
   },
 });
 
