@@ -44,6 +44,86 @@ const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 // MEMO: 環境変数が設定されていない場合のエラーハンドリングは元のコードにはなかったため省略
 const supabase = createClient(supabaseUrl!, supabaseServiceRoleKey!);
 
+/**
+ * 文字列が英語かどうかを判定する関数
+ * @param text 判定する文字列
+ * @returns 英語の場合はtrue、それ以外はfalse
+ */
+function isEnglish(text: string): boolean {
+  // 基本的な英語の文字パターン（アルファベット、スペース、ハイフン、アポストロフィ）
+  const englishPattern = /^[a-zA-Z\s'-]+$/;
+  
+  // 日本語の文字パターン（ひらがな、カタカナ、漢字）
+  const japanesePattern = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
+  
+  // 日本語文字が含まれている場合はfalse
+  if (japanesePattern.test(text)) {
+    return false;
+  }
+  
+  // 英語の文字パターンに一致する場合はtrue
+  return englishPattern.test(text);
+}
+
+/**
+ * 日本語の単語を英語に翻訳する関数
+ * @param japaneseWord 日本語の単語
+ * @returns 英語の単語の配列、翻訳に失敗した場合はnull
+ */
+async function translateToEnglish(japaneseWord: string): Promise<string[] | null> {
+  try {
+    const prompt = `
+      Translate this Japanese word to English: "${japaneseWord}"
+      If there are multiple possible translations, return them as a JSON array.
+      If there is only one translation, return it as a single-item array.
+      Return only the JSON array, nothing else.
+      If the input is not Japanese, return ["${japaneseWord}"].
+    `;
+
+    const requestBody = {
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }],
+      generationConfig: {
+        temperature: 0.3,
+        topK: 1,
+        topP: 0.1,
+      },
+    };
+
+    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Translation API request failed (${response.status})`);
+    }
+
+    const data = await response.json();
+    if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+      throw new Error('Invalid translation API response structure');
+    }
+
+    const text = data.candidates[0].content.parts[0].text.trim();
+    const translations = JSON.parse(text);
+    
+    if (!Array.isArray(translations)) {
+      throw new Error('Translation response is not an array');
+    }
+
+    return translations.filter((t: string) => typeof t === 'string' && t.trim() !== '');
+  } catch (error) {
+    console.error('Translation error:', error);
+    return null;
+  }
+}
+
 // Deno の HTTP サーバーを起動
 Deno.serve(async (req) => {
   // CORS プリフライトリクエスト (OPTIONS) の処理
@@ -65,67 +145,65 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // リクエストボディを JSON としてパースし、Zod でバリデーション
     const requestBody = await req.json();
     const validatedBody = requestBodySchema.safeParse(requestBody);
 
-    // バリデーション失敗時のエラーハンドリング
     if (!validatedBody.success) {
       console.error('リクエストボディのバリデーションエラー:', validatedBody.error.issues);
       return new Response(JSON.stringify({ error: 'Invalid request body', details: validatedBody.error.issues }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400, // Bad Request
+        status: 400,
       });
     }
 
-    // バリデーション済みのリクエストボディから単語を取得
     const { vocabulary } = validatedBody.data;
 
-    // --- Step 1: Supabase で単語が存在するか確認 ---
-    const existingVocabulary = await fetchVocabularyFromSupabase(vocabulary);
+    // 英語かどうかを判定
+    const isEnglishInput = isEnglish(vocabulary);
+    console.log(`Input "${vocabulary}" is ${isEnglishInput ? 'English' : 'Japanese'}`);
 
-    // Supabase にデータが存在する場合、そのデータを返す
-    if (existingVocabulary) {
-      console.log(`Vocabulary "${vocabulary}" found in Supabase with ID: ${existingVocabulary.id}`);
-      return new Response(JSON.stringify(existingVocabulary), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200, // OK
-      });
+    if (isEnglishInput) {
+      // 英語の場合：直接Supabaseで検索
+      const existingVocabulary = await fetchVocabularyFromSupabase(vocabulary);
+      if (existingVocabulary) {
+        return new Response(JSON.stringify(existingVocabulary), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        });
+      }
+      // 存在しない場合はGeminiプロンプトへ
+      const geminiApiResponse = await fetchGeminiApi(vocabulary);
+      return handleGeminiResponse(geminiApiResponse, vocabulary);
+    } else {
+      // 英語以外の場合：まず翻訳
+      const translations = await translateToEnglish(vocabulary);
+      if (!translations) {
+        return new Response(JSON.stringify({ error: 'Translation failed' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500,
+        });
+      }
+
+      if (translations.length === 1) {
+        // 翻訳が1つの場合：Supabaseで検索
+        const existingVocabulary = await fetchVocabularyFromSupabase(translations[0]);
+        if (existingVocabulary) {
+          return new Response(JSON.stringify(existingVocabulary), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+          });
+        }
+        // 存在しない場合はGeminiプロンプトへ
+        const geminiApiResponse = await fetchGeminiApi(translations[0]);
+        return handleGeminiResponse(geminiApiResponse, translations[0]);
+      } else {
+        // 翻訳が複数の場合：選択肢として返す
+        return new Response(JSON.stringify({ translations }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        });
+      }
     }
-
-    // --- Step 2: Supabase に存在しない場合、Gemini API で情報を取得 ---
-    console.log(`Vocabulary "${vocabulary}" not found in Supabase. Fetching from Gemini API.`);
-    const geminiApiResponse = await fetchGeminiApi(vocabulary);
-
-    // Gemini API がスペル修正候補を返した場合
-    if ('suggestion' in geminiApiResponse) {
-      console.log(`Gemini API returned a spelling suggestion: "${geminiApiResponse.suggestion}" for "${vocabulary}"`);
-      return new Response(JSON.stringify(geminiApiResponse), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200, // OK (サジェストも成功レスポンスとして扱う)
-      });
-    }
-
-    // --- Step 3: Gemini API から取得した単語情報を Supabase に挿入 ---
-    const insertedId = await insertVocabularyToSupabase(
-      geminiApiResponse, // Gemini から取得したデータ
-      'en', // ソース言語 (固定)
-      'ja'  // 翻訳先言語 (固定)
-    );
-
-    // --- Step 4: 挿入成功後、取得した ID を付与してクライアントに返す ---
-    const formattedData: VocabularyData = {
-      ...geminiApiResponse, // Gemini から取得した情報に
-      id: insertedId,        // Supabase で発行された ID を追加
-    };
-
-    console.log(`Successfully inserted vocabulary "${vocabulary}" into Supabase with ID: ${insertedId}`);
-    return new Response(JSON.stringify(formattedData), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200, // OK
-    });
-
-  // --- エラーハンドリング ---
   } catch (error) {
     console.error('An error occurred:', error); // エラーログを出力
 
@@ -155,7 +233,7 @@ Deno.serve(async (req) => {
       }
     } else {
       // Error インスタンスではない予期せぬ例外
-       return new Response(JSON.stringify({ error: "An unexpected non-error object was thrown" }), {
+      return new Response(JSON.stringify({ error: "An unexpected non-error object was thrown" }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 500, // Internal Server Error
       });
@@ -172,28 +250,25 @@ async function fetchVocabularyFromSupabase(vocabulary: string): Promise<Vocabula
   console.log('Fetching vocabulary from Supabase:', vocabulary);
 
   const { data, error } = await supabase
-    .from('vocabulary') // 'vocabulary' テーブルを指定
-    .select('*')        // すべてのカラムを選択
-    .eq('vocabulary', vocabulary.trim()) // 'vocabulary' カラムで完全一致検索 (前後の空白は除去)
-    .limit(1)           // 結果を1件に制限
-    .maybeSingle();     // 結果が0件または1件であることを期待 (複数件はエラー)
+    .from('vocabulary')
+    .select('*')
+    .eq('vocabulary', vocabulary.trim())
+    .limit(1)
+    .maybeSingle();
 
-  // データ取得時にエラーが発生した場合
   if (error) {
     console.error('Error fetching vocabulary from Supabase:', error);
-    return null; // エラーが発生した場合は null を返す (元の仕様)
+    return null;
   }
 
-  // データが見つからなかった場合
   if (!data) {
     console.log('Vocabulary not found in Supabase.');
     return null;
   }
 
-  // データが見つかった場合のログ
   console.log('Supabase data found:', data);
 
-  // example_sentences (JSON文字列または配列) をパース
+  // example_sentences のパース処理
   let parsedExamples: { en: string; ja: string; }[] = [];
   if (data.example_sentences) {
     if (typeof data.example_sentences === 'string') {
@@ -201,16 +276,13 @@ async function fetchVocabularyFromSupabase(vocabulary: string): Promise<Vocabula
         parsedExamples = JSON.parse(data.example_sentences);
       } catch (e) {
         console.error('Error parsing example sentences:', e);
-        // パース失敗時は空配列のまま (元の仕様)
       }
     } else if (Array.isArray(data.example_sentences)) {
-      // 既に配列の場合はそのまま使用
       parsedExamples = data.example_sentences;
     }
-    // 文字列でも配列でもない場合は空配列のまま
   }
 
-  // conjugations (JSON文字列またはオブジェクト) をパース
+  // conjugations のパース処理
   let parsedConjugations: { [key: string]: string } | undefined;
   if (data.conjugations) {
     if (typeof data.conjugations === 'string') {
@@ -218,29 +290,24 @@ async function fetchVocabularyFromSupabase(vocabulary: string): Promise<Vocabula
         parsedConjugations = JSON.parse(data.conjugations);
       } catch (e) {
         console.error('Error parsing conjugations:', e);
-        // パース失敗時は undefined のまま (元の仕様)
       }
     } else if (typeof data.conjugations === 'object' && data.conjugations !== null) {
-      // 既にオブジェクトの場合はそのまま使用 (null は除外)
-      parsedConjugations = data.conjugations as { [key: string]: string }; // 型アサーションでオブジェクトであることを示す
+      parsedConjugations = data.conjugations as { [key: string]: string };
     }
-    // 文字列でもオブジェクトでもない場合は undefined のまま
   }
 
-  // Supabase から取得したデータを VocabularyData 型に整形して返す
-  // pronunciation と notes カラムの値も取得して含める
   return {
     id: data.id,
     vocabulary: data.vocabulary,
     partOfSpeech: data.part_of_speech,
-    pronunciation: data.pronunciation, // DB から取得した pronunciation をそのまま設定
-    meanings: data.meanings, // DB から取得した meanings をそのまま設定 (型チェックは元のコード通り省略)
+    pronunciation: data.pronunciation,
+    meanings: data.meanings,
     examples: parsedExamples,
-    synonyms: data.synonyms, // DB から取得した synonyms をそのまま設定 (型チェックは元のコード通り省略)
-    antonyms: data.antonyms, // DB から取得した antonyms をそのまま設定 (型チェックは元のコード通り省略)
+    synonyms: data.synonyms,
+    antonyms: data.antonyms,
     conjugations: parsedConjugations,
-    notes: data.notes,         // DB から取得した notes をそのまま設定
-  } as VocabularyData; // 型アサーション (元のコード通り)
+    notes: data.notes,
+  } as VocabularyData;
 }
 
 /**
@@ -309,7 +376,6 @@ async function fetchGeminiApi(vocabulary: string): Promise<VocabularyData | Sugg
   console.log(`Fetching vocabulary data for "${vocabulary}" from Gemini API.`);
 
   // Gemini API に送信するプロンプト
-  // pronunciation と notes の取得も依頼するよう修正
   const prompt = `
     Check spelling of "${vocabulary}".
 
@@ -332,7 +398,7 @@ async function fetchGeminiApi(vocabulary: string): Promise<VocabularyData | Sugg
     Use English for "synonyms", "antonyms". Use IPA for "pronunciation".
     Include irregular forms. Omit non-existent conjugations. Omit "pronunciation" or "notes" if not applicable or not available.
 
-    If the spelling of "${vocabulary}" is incorrect, return {"suggestion": "<corrected_spell>"}. Where <corrected_spell> is the most likely corrected spelling for "${vocabulary}".
+    If the spelling is incorrect, return {"suggestion": "<corrected_spell>"}. Where <corrected_spell> is the most likely corrected spelling.
 
     Strictly JSON. When no suggestion, generate meanings. Do not include any extra fields like "id". Only include the requested fields.
   `;
@@ -479,4 +545,33 @@ async function fetchGeminiApi(vocabulary: string): Promise<VocabularyData | Sugg
     const message = parseError instanceof Error ? parseError.message : String(parseError);
     throw new Error(`JSON parsing failed: ${message}`); // エラーを投げる
   }
+}
+
+/**
+ * Gemini APIのレスポンスを処理する関数
+ * @param response Gemini APIからのレスポンス
+ * @param vocabulary 元の単語
+ * @returns 処理済みのレスポンス
+ */
+async function handleGeminiResponse(
+  response: VocabularyData | SuggestionResponse,
+  vocabulary: string
+): Promise<Response> {
+  if ('suggestion' in response) {
+    return new Response(JSON.stringify(response), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+    });
+  }
+
+  const insertedId = await insertVocabularyToSupabase(response, 'en', 'ja');
+  const formattedData: VocabularyData = {
+    ...response,
+    id: insertedId,
+  };
+
+  return new Response(JSON.stringify(formattedData), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    status: 200,
+  });
 }

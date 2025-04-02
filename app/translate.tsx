@@ -12,6 +12,7 @@ import { Ionicons, Feather } from '@expo/vector-icons'; // アイコンをイン
 import { createClient } from '@supabase/supabase-js';
 
 interface TranslationResult {
+  vocabulary: string;
   meaning: string;
   pronunciation: string;
   examples: string[];
@@ -35,7 +36,7 @@ const useTranslation = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | { message: string } | null>(null);
 
-  const translate = async (text: string, targetLanguage: 'en' | 'ja') => {
+  const translate = async (text: string) => {
     setLoading(true);
     setError(null);
     setTranslation(null);
@@ -59,6 +60,7 @@ const useTranslation = () => {
 
         // 通常の辞書データが返ってきた場合
         const formattedData: TranslationResult = {
+          vocabulary: data.vocabulary || '',
           meaning: data.meanings ? data.meanings.join(', ') : '',
           pronunciation: data.pronunciation || '',
           examples: data.examples ? data.examples.map((ex: { en: string; ja: string }) => ex.en) : [],
@@ -77,59 +79,56 @@ const useTranslation = () => {
     }
   };
 
-  return { translation, suggestion, loading, error, translate };
+  return { translation, suggestion, loading, error, translate, setTranslation, setSuggestion };
 };
 
 const TranslateScreen = () => {
   const [inputText, setInputText] = useState('');
-  const [inputLanguage, setInputLanguage] = useState<'ja' | 'en'>('ja'); // 入力言語の状態を追加
-  const { translation, suggestion, loading, error, translate } = useTranslation();
+  const [displayText, setDisplayText] = useState('');
+  const { translation, suggestion, loading, error, translate, setTranslation, setSuggestion } = useTranslation();
 
   const handleTranslate = () => {
-    translate(inputText, inputLanguage);
+    setDisplayText(inputText);
+    translate(inputText);
   };
 
   const handleSuggestionClick = () => {
     if (suggestion) {
       setInputText(suggestion);
-      translate(suggestion, inputLanguage);
+      setDisplayText(suggestion);
+      translate(suggestion);
     }
   };
 
   const clearInput = () => {
     setInputText('');
+    setDisplayText('');
     setTranslation(null);
     setSuggestion(null);
   };
 
-  // 入力言語を切り替える関数
-  const toggleInputLanguage = () => {
-    setInputLanguage((prevLanguage) => (prevLanguage === 'ja' ? 'en' : 'ja'));
-  };
-
-  // プレースホルダーを動的に変更
-  const placeholder =
-    inputLanguage === 'ja' ? '日本語で入力' : 'Enter a word to translate';
-
   return (
     <View style={styles.container}>
       <View style={styles.searchBarContainer}>
-        <TouchableOpacity 
-          onPress={toggleInputLanguage} 
-          style={styles.languageButton}
-        >
-          <Text style={styles.languageButtonText}>
-            {inputLanguage === 'ja' ? '日本語' : 'English'}
-          </Text>
-        </TouchableOpacity>
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
-            placeholder={placeholder}
+            placeholder="単語を入力"
             value={inputText}
             onChangeText={setInputText}
             onSubmitEditing={handleTranslate}
             placeholderTextColor="#999"
+            textContentType="none"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="off"
+            multiline={false}
+            returnKeyType="search"
+            enablesReturnKeyAutomatically={true}
+            blurOnSubmit={true}
+            keyboardType="default"
+            keyboardAppearance="light"
+            inputMode="text"
           />
           {inputText.length > 0 && (
             <TouchableOpacity 
@@ -182,7 +181,7 @@ const TranslateScreen = () => {
           <View style={styles.resultCard}>
             <View style={styles.wordHeader}>
               <View style={styles.wordContainer}>
-                <Text style={styles.wordText}>{inputText}</Text>
+                <Text style={styles.wordText}>{translation.vocabulary}</Text>
                 <Text style={styles.pronunciation}>{translation.pronunciation}</Text>
               </View>
               <TouchableOpacity style={styles.soundButton}>
@@ -191,7 +190,7 @@ const TranslateScreen = () => {
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>定義</Text>
+              <Text style={styles.sectionTitle}>意味</Text>
               <Text style={styles.sectionText}>{translation.meaning}</Text>
             </View>
 
@@ -205,7 +204,7 @@ const TranslateScreen = () => {
                       style={styles.synonym}
                       onPress={() => {
                         setInputText(synonym);
-                        translate(synonym, inputLanguage);
+                        translate(synonym);
                       }}
                     >
                       <Text style={styles.synonymText}>{synonym}</Text>
@@ -261,17 +260,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
-  },
-  languageButton: {
-    padding: 8,
-    marginRight: 8,
-    backgroundColor: '#e9ecef',
-    borderRadius: 8,
-  },
-  languageButtonText: {
-    fontSize: 14,
-    color: '#495057',
-    fontWeight: '500',
   },
   inputContainer: {
     flex: 1,
