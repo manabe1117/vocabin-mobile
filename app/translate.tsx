@@ -18,7 +18,7 @@ interface VocabularyResult {
   vocabulary: string;
   meaning: string;
   pronunciation: string;
-  examples: string[];
+  examples: { en: string; ja: string }[];
   synonyms: string[];
   notes: string;
 }
@@ -90,7 +90,7 @@ const useVocabulary = () => {
           vocabulary: data.vocabulary || '',
           meaning: data.meanings ? data.meanings.join(', ') : '',
           pronunciation: data.pronunciation || '',
-          examples: data.examples ? data.examples.map((ex: { en: string; ja: string }) => ex.en) : [],
+          examples: data.examples ? data.examples.map((ex: { en: string; ja: string }) => ex) : [],
           synonyms: data.synonyms || [],
           notes: data.notes || ''
         };
@@ -283,7 +283,8 @@ const TranslateScreen = () => {
                 <Text style={styles.sectionTitle}>例文</Text>
                 {vocabulary.examples.map((example, index) => (
                   <View key={index} style={styles.exampleContainer}>
-                    <Text style={styles.sectionText}>{example}</Text>
+                    <Text style={styles.exampleText}>{example.en}</Text>
+                    <Text style={styles.exampleTranslation}>{example.ja}</Text>
                   </View>
                 ))}
               </View>
@@ -437,6 +438,18 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
+  },
+  exampleText: {
+    fontSize: 16,
+    color: '#495057',
+    lineHeight: 24,
+    marginBottom: 4,
+  },
+  exampleTranslation: {
+    fontSize: 14,
+    color: '#6c757d',
+    lineHeight: 20,
+    fontStyle: 'italic',
   },
   suggestionContainer: {
     backgroundColor: '#fff3e0',
