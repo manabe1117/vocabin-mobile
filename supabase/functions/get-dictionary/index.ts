@@ -110,7 +110,15 @@ async function translateToEnglish(japaneseWord: string): Promise<string[] | null
       throw new Error('Invalid translation API response structure');
     }
 
-    const text = data.candidates[0].content.parts[0].text.trim();
+    let text = data.candidates[0].content.parts[0].text.trim();
+    
+    // Markdown形式のJSONコードブロックを除去
+    const jsonStart = text.indexOf('```json');
+    const jsonEnd = text.lastIndexOf('```');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      text = text.substring(jsonStart + 7, jsonEnd).trim();
+    }
+    
     const translations = JSON.parse(text);
     
     if (!Array.isArray(translations)) {

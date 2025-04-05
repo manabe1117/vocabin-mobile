@@ -7,11 +7,14 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons'; // アイコンをインポート
 import { createClient } from '@supabase/supabase-js';
+import { useAuth } from '@/context/AuthContext';
 
-interface TranslationResult {
+interface VocabularyResult {
+  id: number;
   vocabulary: string;
   meaning: string;
   pronunciation: string;
@@ -29,18 +32,41 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// useTranslationフックはモックで代用. 実際のアプリでは適切に実装してください。
-const useTranslation = () => {
-  const [translation, setTranslation] = useState<TranslationResult | null>(null);
+// useVocabularyフックはモックで代用. 実際のアプリでは適切に実装してください。
+const useVocabulary = () => {
+  const [vocabulary, setVocabulary] = useState<VocabularyResult | null>(null);
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | { message: string } | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
+  const { session } = useAuth();
+
+  const checkSavedStatus = async (vocabularyId: number) => {
+    if (!session) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke(`get-study-status?vocabularyId=${vocabularyId}&type=3`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      console.log('study-status', data);
+
+      if (error) throw error;
+      setIsSaved(data.isSaved);
+    } catch (error) {
+      console.error('保存状態の確認エラー:', error);
+    }
+  };
 
   const translate = async (text: string) => {
     setLoading(true);
     setError(null);
-    setTranslation(null);
+    setVocabulary(null);
     setSuggestion(null);
+    setIsSaved(false);
 
     try {
       const { data, error } = await supabase.functions.invoke('get-dictionary', {
@@ -59,7 +85,8 @@ const useTranslation = () => {
         }
 
         // 通常の辞書データが返ってきた場合
-        const formattedData: TranslationResult = {
+        const formattedData: VocabularyResult = {
+          id: data.id,
           vocabulary: data.vocabulary || '',
           meaning: data.meanings ? data.meanings.join(', ') : '',
           pronunciation: data.pronunciation || '',
@@ -67,7 +94,9 @@ const useTranslation = () => {
           synonyms: data.synonyms || [],
           notes: data.notes || ''
         };
-        setTranslation(formattedData);
+        setVocabulary(formattedData);
+        // 保存状態を確認
+        await checkSavedStatus(data.id);
       } else {
         setError({ message: `「${text}」の翻訳データが見つかりません。` });
       }
@@ -79,13 +108,14 @@ const useTranslation = () => {
     }
   };
 
-  return { translation, suggestion, loading, error, translate, setTranslation, setSuggestion };
+  return { vocabulary, suggestion, loading, error, translate, setVocabulary, setSuggestion, isSaved, setIsSaved };
 };
 
 const TranslateScreen = () => {
   const [inputText, setInputText] = useState('');
   const [displayText, setDisplayText] = useState('');
-  const { translation, suggestion, loading, error, translate, setTranslation, setSuggestion } = useTranslation();
+  const { vocabulary, suggestion, loading, error, translate, setVocabulary, setSuggestion, isSaved, setIsSaved } = useVocabulary();
+  const { session } = useAuth();
 
   const handleTranslate = () => {
     setDisplayText(inputText);
@@ -100,11 +130,45 @@ const TranslateScreen = () => {
     }
   };
 
+  const handleSave = async () => {
+    if (!session) {
+      Alert.alert('エラー', 'ログインが必要です');
+      return;
+    }
+
+    if (!vocabulary) {
+      Alert.alert('エラー', '保存する単語がありません');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke('update-study-status', {
+        method: 'POST',
+        body: {
+          vocabularyId: vocabulary.id,
+          type: 3
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (error) throw error;
+
+      // 保存状態を反転させる
+      setIsSaved(!isSaved);
+    } catch (error) {
+      console.error('保存エラー:', error);
+      Alert.alert('エラー', '単語の保存に失敗しました');
+    }
+  };
+
   const clearInput = () => {
     setInputText('');
     setDisplayText('');
-    setTranslation(null);
+    setVocabulary(null);
     setSuggestion(null);
+    setIsSaved(false);
   };
 
   return (
@@ -177,12 +241,12 @@ const TranslateScreen = () => {
           </View>
         )}
 
-        {translation && (
+        {vocabulary && (
           <View style={styles.resultCard}>
             <View style={styles.wordHeader}>
               <View style={styles.wordContainer}>
-                <Text style={styles.wordText}>{translation.vocabulary}</Text>
-                <Text style={styles.pronunciation}>{translation.pronunciation}</Text>
+                <Text style={styles.wordText}>{vocabulary.vocabulary}</Text>
+                <Text style={styles.pronunciation}>{vocabulary.pronunciation}</Text>
               </View>
               <TouchableOpacity style={styles.soundButton}>
                 <Ionicons name="volume-high" size={24} color="#4a90e2" />
@@ -191,14 +255,14 @@ const TranslateScreen = () => {
 
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>意味</Text>
-              <Text style={styles.sectionText}>{translation.meaning}</Text>
+              <Text style={styles.sectionText}>{vocabulary.meaning}</Text>
             </View>
 
-            {translation.synonyms.length > 0 && (
+            {vocabulary.synonyms.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>類義語</Text>
                 <View style={styles.synonymContainer}>
-                  {translation.synonyms.map((synonym, index) => (
+                  {vocabulary.synonyms.map((synonym, index) => (
                     <TouchableOpacity 
                       key={index} 
                       style={styles.synonym}
@@ -214,10 +278,10 @@ const TranslateScreen = () => {
               </View>
             )}
 
-            {translation.examples.length > 0 && (
+            {vocabulary.examples.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>例文</Text>
-                {translation.examples.map((example, index) => (
+                {vocabulary.examples.map((example, index) => (
                   <View key={index} style={styles.exampleContainer}>
                     <Text style={styles.sectionText}>{example}</Text>
                   </View>
@@ -225,16 +289,26 @@ const TranslateScreen = () => {
               </View>
             )}
 
-            {translation.notes && (
+            {vocabulary.notes && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>補足</Text>
-                <Text style={styles.sectionText}>{translation.notes}</Text>
+                <Text style={styles.sectionText}>{vocabulary.notes}</Text>
               </View>
             )}
 
-            <TouchableOpacity style={styles.saveButton}>
-              <Ionicons name="bookmark-outline" size={20} color="white" style={styles.saveButtonIcon} />
-              <Text style={styles.saveButtonText}>保存</Text>
+            <TouchableOpacity 
+              style={[styles.saveButton, isSaved && styles.savedButton]} 
+              onPress={handleSave}
+            >
+              <Ionicons 
+                name={isSaved ? "checkmark-circle" : "bookmark-outline"} 
+                size={20} 
+                color={isSaved ? "#4CAF50" : "white"} 
+                style={styles.saveButtonIcon} 
+              />
+              <Text style={[styles.saveButtonText, isSaved && styles.savedButtonText]}>
+                {isSaved ? '保存済み' : '保存'}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -418,6 +492,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  savedButton: {
+    backgroundColor: '#E8F5E9',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
   saveButtonIcon: {
     marginRight: 8,
   },
@@ -425,6 +504,9 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  savedButtonText: {
+    color: '#4CAF50',
   },
 });
 

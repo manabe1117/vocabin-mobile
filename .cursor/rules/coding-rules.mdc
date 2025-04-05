@@ -1,0 +1,65 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# 命名規則
+- コンポーネント: PascalCase (例: TranslateScreen)
+- カスタムフック: useプレフィックス + PascalCase (例: useTranslation)
+- 関数: camelCase (例: handleTranslate)
+- 定数: UPPER_SNAKE_CASE (例: MAX_LENGTH)
+
+# インポート順序
+1. react
+2. react-native
+3. @expo/vector-icons
+4. @supabase/supabase-js
+5. context/*
+6. components/*
+7. hooks/*
+8. utils/*
+9. types/*
+10. constants/*
+11. assets/*
+12. ./*
+
+# コメント規則
+- インターフェースとタイプには説明コメントを必須
+- 複雑な関数には説明コメントを必須
+
+# フォーマット規則
+- インデント: 2スペース
+- 1行の最大長: 100文字
+
+# TypeScript規則
+- 厳格な型チェックを有効化
+- 暗黙的なanyを禁止
+
+# Git規則
+- コミットメッセージ: ^(feat|fix|docs|style|refactor|test|chore): .{1,50}$
+- ブランチ名: ^(feature|fix|hotfix|release)/[a-z0-9-]+$
+
+# UIコンポーネント規則
+## 再利用可能なコンポーネント
+- 共通のUI要素は必ずcomponentsディレクトリに作成
+- 例: Button, Card, Input, Modal, LoadingIndicatorなど
+
+## コンポーネントの分割方針
+- 同じUIパターンが3回以上使用される場合はコンポーネント化
+- 複雑なUIは小さなコンポーネントに分割
+- スタイルの重複がある場合は共通コンポーネント化
+
+## スタイルの統一
+- 色、フォントサイズ、余白などはconstants/styles.tsで一元管理
+- スタイルの重複を避け、共通のスタイルオブジェクトを使用
+- コンポーネント固有のスタイルはそのコンポーネント内で定義
+
+## コンポーネントの命名
+- 機能を表す明確な名前を使用
+- 接頭辞で種類を明示 (例: PrimaryButton, SecondaryButton)
+- 状態を持つ場合は接尾辞で明示 (例: ButtonWithLoading)
+
+## コンポーネントのプロパティ
+- 必須のプロパティは明示的に指定
+- デフォルト値は可能な限り設定
+- 共通のプロパティは共通のインターフェースで定義
