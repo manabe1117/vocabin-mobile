@@ -1,23 +1,57 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, PanResponder, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, PanResponder, Dimensions, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 // フラッシュカードの型定義
 interface Flashcard {
   id: number;
-  front: string;      // 英単語
-  pronunciation: string;  // 発音記号
-  example: string;    // 例文
-  back: string;       // 日本語訳
+  vocabulary_id: number;
+  vocabulary: string;
+  part_of_speech: string;
+  meanings: string[];
+  examples: { en: string; ja: string }[];
+  synonyms: string[];
+  antonyms: string[];
+  box_level: number;
+  lastStudied: string;
+  reviewCount: number;
 }
 
 const StudyScreen = () => {
-  // サンプルのフラッシュカードデータ
-  const [flashcards, setFlashcards] = useState<Flashcard[]>([
-    { id: 1, front: 'work', pronunciation: 'wɜːrk', example: 'She is always busy with work.', back: '仕事' },
-    { id: 2, front: 'apple', pronunciation: 'ˈæpl', example: 'An apple a day keeps the doctor away.', back: 'りんご' },
-    { id: 3, front: 'dog', pronunciation: 'dɔːɡ', example: 'The dog is barking.', back: '犬' },
-  ]);
+  const { session } = useAuth();
+  const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // フラッシュカードデータを取得
+  const fetchFlashcards = async () => {
+    try {
+      if (!session?.access_token) {
+        throw new Error('認証トークンがありません');
+      }
+
+      const { data, error } = await supabase.functions.invoke('get-flashcards', {
+        body: { type: 3 }
+      });
+
+      if (error) throw error;
+
+      setFlashcards(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '予期せぬエラーが発生しました');
+      console.log('fetchFlashcards error', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (session?.access_token) {
+      fetchFlashcards();
+    }
+  }, [session?.access_token]);
 
   const [currentCardIndex, setCurrentCardIndex] = useState(0);  // 現在表示中のカードのインデックス
   const [showBack, setShowBack] = useState(false);  // カードの裏面を表示するかどうか
@@ -234,7 +268,26 @@ const StudyScreen = () => {
       <View style={styles.topBar}>
         <Text style={styles.progressText}>{currentCardIndex + 1}/{flashcards.length}</Text>
       </View>
-      {flashcards.length > 0 ? (
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4a90e2" />
+          <Text style={styles.loadingText}>フラッシュカードを読み込み中...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => {
+              setIsLoading(true);
+              setError(null);
+              fetchFlashcards();
+            }}
+          >
+            <Text style={styles.retryButtonText}>再試行</Text>
+          </TouchableOpacity>
+        </View>
+      ) : flashcards.length > 0 ? (
         <>
           {/* プログレスバー */}
           <View style={styles.progressBarContainer}>
@@ -256,9 +309,9 @@ const StudyScreen = () => {
               style={[styles.card, styles.cardFront, frontAnimatedStyle, showBack ? styles.hidden : {}]}
               onTouchEnd={flipCard}
             >
-              <Text style={styles.cardWord}>{currentCard.front}</Text>
-              <Text style={styles.cardPronunciation}>{currentCard.pronunciation}</Text>
-              <Text style={styles.cardExample}>{currentCard.example}</Text>
+              <Text style={styles.cardWord}>{currentCard.vocabulary}</Text>
+              <Text style={styles.cardPronunciation}>{currentCard.part_of_speech}</Text>
+              <Text style={styles.cardExample}>{currentCard.examples[0]?.en || '例文なし'}</Text>
             </Animated.View>
 
             {/* カードの裏面 */}
@@ -266,7 +319,13 @@ const StudyScreen = () => {
               style={[styles.card, styles.cardBack, backAnimatedStyle, !showBack ? styles.hidden : {}]}
               onTouchEnd={flipCard}
             >
-              <Text style={styles.cardBackText}>{currentCard.back}</Text>
+              <Text style={styles.cardBackText}>{currentCard.meanings[0] || '意味なし'}</Text>
+              {currentCard.synonyms.length > 0 && (
+                <View style={styles.synonymsContainer}>
+                  <Text style={styles.synonymsTitle}>類義語:</Text>
+                  <Text style={styles.synonymsText}>{currentCard.synonyms.join(', ')}</Text>
+                </View>
+              )}
             </Animated.View>
           </Animated.View>
 
@@ -440,6 +499,52 @@ const styles = StyleSheet.create({
     feedbackText: {
         fontSize: 32,
         fontWeight: 'bold',
+        textAlign: 'center',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 16,
+        color: '#666',
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    errorText: {
+        fontSize: 16,
+        color: '#ff6961',
+        textAlign: 'center',
+        marginBottom: 20,
+    },
+    retryButton: {
+        backgroundColor: '#4a90e2',
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 5,
+    },
+    retryButtonText: {
+        color: 'white',
+        fontSize: 16,
+    },
+    synonymsContainer: {
+        marginTop: 20,
+        alignItems: 'center',
+    },
+    synonymsTitle: {
+        fontSize: 16,
+        color: '#666',
+        marginBottom: 5,
+    },
+    synonymsText: {
+        fontSize: 14,
+        color: '#444',
         textAlign: 'center',
     },
 });

@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons'; // アイコンをインポート
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { Audio } from 'expo-av';
 
@@ -27,11 +27,6 @@ interface VocabularyResult {
 interface SuggestionResponse {
   suggestion: string;
 }
-
-// Supabaseクライアントの初期化
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // useVocabularyフックはモックで代用. 実際のアプリでは適切に実装してください。
 const useVocabulary = () => {
@@ -293,8 +288,8 @@ const TranslateScreen = () => {
                 <Text style={styles.sectionTitle}>類義語</Text>
                 <View style={styles.synonymContainer}>
                   {vocabulary.synonyms.map((synonym, index) => (
-                    <TouchableOpacity 
-                      key={index} 
+                    <TouchableOpacity
+                      key={index}
                       style={styles.synonym}
                       onPress={() => {
                         setInputText(synonym);
