@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 import { Ionicons, Feather } from '@expo/vector-icons'; // アイコンをインポート
 import { createClient } from '@supabase/supabase-js';
 import { useAuth } from '@/context/AuthContext';
+import { Audio } from 'expo-av';
 
 interface VocabularyResult {
   id: number;
@@ -116,6 +117,15 @@ const TranslateScreen = () => {
   const [displayText, setDisplayText] = useState('');
   const { vocabulary, suggestion, loading, error, translate, setVocabulary, setSuggestion, isSaved, setIsSaved } = useVocabulary();
   const { session } = useAuth();
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+
+  useEffect(() => {
+    return sound
+      ? () => {
+          sound.unloadAsync();
+        }
+      : undefined;
+  }, [sound]);
 
   const handleTranslate = () => {
     setDisplayText(inputText);
@@ -169,6 +179,23 @@ const TranslateScreen = () => {
     setVocabulary(null);
     setSuggestion(null);
     setIsSaved(false);
+  };
+
+  const playSound = async (text: string) => {
+    try {
+      if (sound) {
+        await sound.unloadAsync();
+      }
+
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=en&client=tw-ob` },
+        { shouldPlay: true }
+      );
+      setSound(newSound);
+    } catch (error) {
+      console.error('音声再生エラー:', error);
+      Alert.alert('エラー', '音声の再生に失敗しました');
+    }
   };
 
   return (
@@ -248,7 +275,10 @@ const TranslateScreen = () => {
                 <Text style={styles.wordText}>{vocabulary.vocabulary}</Text>
                 <Text style={styles.pronunciation}>{vocabulary.pronunciation}</Text>
               </View>
-              <TouchableOpacity style={styles.soundButton}>
+              <TouchableOpacity 
+                style={styles.soundButton}
+                onPress={() => playSound(vocabulary.vocabulary)}
+              >
                 <Ionicons name="volume-high" size={24} color="#4a90e2" />
               </TouchableOpacity>
             </View>
