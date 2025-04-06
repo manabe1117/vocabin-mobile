@@ -111,7 +111,7 @@ async function translateToEnglish(japaneseWord: string): Promise<string[] | null
     }
 
     let text = data.candidates[0].content.parts[0].text.trim();
-    
+
     // Markdown形式のJSONコードブロックを除去
     const jsonStart = text.indexOf('```json');
     const jsonEnd = text.lastIndexOf('```');

@@ -94,8 +94,17 @@ const StudyScreen = () => {
       onPanResponderMove: (evt, gestureState) => {
         const VISIBILITY_THRESHOLD = screenWidth / 20;  // 非表示にする閾値
 
+        console.log('スワイプ移動中:', {
+          dx: gestureState.dx,
+          dy: gestureState.dy,
+          vx: gestureState.vx,
+          vy: gestureState.vy,
+          isAnimating
+        });
+
         // スワイプの移動量が閾値を超えたら非表示にする
         if (Math.abs(gestureState.dx) > VISIBILITY_THRESHOLD && !isAnimating) {
+          console.log('閾値を超えたため非表示処理を開始');
           setIsAnimating(true);
           Animated.timing(opacityValue, {
             toValue: 0,
@@ -114,15 +123,46 @@ const StudyScreen = () => {
         const SWIPE_THRESHOLD = screenWidth / 4;  // スワイプ判定の閾値
         const VELOCITY_THRESHOLD = 0.2;           // 速度判定の閾値
 
+        console.log('スワイプ終了:', {
+          dx: gestureState.dx,
+          vx: gestureState.vx,
+          threshold: SWIPE_THRESHOLD,
+          velocityThreshold: VELOCITY_THRESHOLD,
+          currentCard: currentCard ? '存在する' : '存在しない'
+        });
+
+        if (!currentCard) {
+          console.log('現在のカードが存在しないため、スワイプ処理を中断');
+          Animated.parallel([
+            Animated.spring(swipeValue, {
+              toValue: { x: 0, y: 0 },
+              friction: 9,
+              tension: 40,
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacityValue, {
+              toValue: 1,
+              duration: 150,
+              useNativeDriver: true,
+            })
+          ]).start(() => {
+            setIsAnimating(false);
+          });
+          return;
+        }
+
         if (gestureState.dx > SWIPE_THRESHOLD || gestureState.vx > VELOCITY_THRESHOLD) {
+          console.log('右スワイプを検出');
           // 右スワイプ
           showFeedback('Good!', '#77dd77', 'topRight');
           animateCardTransition(1, gotoNextCard);  // 右方向にアニメーション
         } else if (gestureState.dx < -SWIPE_THRESHOLD || gestureState.vx < -VELOCITY_THRESHOLD) {
+          console.log('左スワイプを検出');
           // 左スワイプ
           showFeedback('Try again', '#ff6961', 'topLeft');
           animateCardTransition(-1, gotoNextCard);  // 左方向にアニメーション
         } else {
+          console.log('閾値未満のため元の位置に戻す');
           // 閾値未満の場合は元の位置に戻す
           Animated.parallel([
             Animated.spring(swipeValue, {
@@ -148,6 +188,10 @@ const StudyScreen = () => {
 
   // カードをめくるアニメーション
   const flipCard = () => {
+    if (!currentCard) {
+      console.log('現在のカードが存在しません');
+      return;
+    }
     setIsFlipping(true);
     Animated.timing(animatedValue, {
       toValue: showBack ? 0 : 180,
@@ -186,16 +230,28 @@ const StudyScreen = () => {
 
   // カード操作のハンドラー
   const handleNextCard = () => {
+    if (!currentCard) {
+      console.log('現在のカードが存在しません');
+      return;
+    }
     showFeedback('Good!', '#77dd77', 'topRight');
-    animateCardTransition(1, gotoNextCard);  // 右にスワイプ
+    animateCardTransition(1, gotoNextCard);
   };
 
   const handleUnknown = () => {
+    if (!currentCard) {
+      console.log('現在のカードが存在しません');
+      return;
+    }
     showFeedback('Try again', '#ff6961', 'topLeft');
-    animateCardTransition(-1, gotoNextCard);  // 左にスワイプ
+    animateCardTransition(-1, gotoNextCard);
   }
 
   const handlePrevCard = () => {
+    if (flashcards.length === 0) {
+      console.log('フラッシュカードが存在しません');
+      return;
+    }
     setCurrentCardIndex(prevIndex => {
       const newIndex = prevIndex === 0 ? flashcards.length - 1 : prevIndex - 1;
       resetCardAnimation();
@@ -204,6 +260,10 @@ const StudyScreen = () => {
   }
 
   const gotoNextCard = () => {
+    if (flashcards.length === 0) {
+      console.log('フラッシュカードが存在しません');
+      return;
+    }
     setCurrentCardIndex(prevIndex => {
       const newIndex = (prevIndex + 1) % flashcards.length;
       resetCardAnimation();
@@ -221,6 +281,12 @@ const StudyScreen = () => {
 
   // カードの遷移アニメーション
   const animateCardTransition = (direction: number, callback: () => void) => {
+    console.log('カード遷移アニメーション開始:', {
+      direction,
+      currentIndex: currentCardIndex,
+      nextIndex: (currentCardIndex + 1) % flashcards.length
+    });
+
     setIsAnimating(true);
     Animated.parallel([
       Animated.timing(swipeValue, {
@@ -234,22 +300,30 @@ const StudyScreen = () => {
         useNativeDriver: true,
       })
     ]).start(() => {
+      console.log('アニメーション完了、コールバック実行');
       callback();
+      // アニメーション値をリセット
+      swipeValue.setValue({ x: 0, y: 0 });
+      opacityValue.setValue(1);
+      setIsAnimating(false);
     });
   };
 
   // カードの遷移スタイル
   const cardTransitionStyle = {
-    // opacity: cardTransitionValue, // Remove opacity animation
     transform: [
       { translateX: swipeValue.x },
       { translateY: swipeValue.y },
-      // { scale: cardTransitionValue } // Remove scaling
     ],
   };
 
   // currentCardIndexが変更された後に再表示する
   useEffect(() => {
+    console.log('currentCardIndexが変更:', {
+      newIndex: currentCardIndex,
+      card: flashcards[currentCardIndex]
+    });
+    
     if (isAnimating) {
       Animated.timing(opacityValue, {
         toValue: 1,
