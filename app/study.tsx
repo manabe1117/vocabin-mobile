@@ -73,9 +73,14 @@ const StudyScreen = () => {
   const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; color: string; position: 'topLeft' | 'topRight' } | null>(null);
   const animatedValue = useRef(new Animated.Value(0)).current; // フリップアニメーション用
   const swipeValue = useRef(new Animated.ValueXY()).current;
-  const opacityValue = useRef(new Animated.Value(1)).current; // コメントアウト中
+  // const opacityValue = useRef(new Animated.Value(1)).current; // コメントアウト中
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
   const screenWidth = Dimensions.get('window').width;
+  const [swipeDistance, setSwipeDistance] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const [touchStartTime, setTouchStartTime] = useState(0);
+  const [touchStartX, setTouchStartX] = useState(0);
+  const [touchStartY, setTouchStartY] = useState(0);
 
   // (showFeedback は前回のコードと同じ)
   const showFeedback = (text: string, color: string, position: 'topLeft' | 'topRight') => {
@@ -104,10 +109,22 @@ const StudyScreen = () => {
       onMoveShouldSetPanResponder: () => !isAnimating && !isFlipping,
       onPanResponderGrant: (evt, gestureState) => {
         if (isAnimating || isFlipping) return;
-         swipeValue.setOffset({ x: 0, y: 0 });
+        setSwipeDistance(0);
+        setIsSwiping(false);
+        setTouchStartTime(Date.now());
+        setTouchStartX(gestureState.x0);
+        setTouchStartY(gestureState.y0);
+        swipeValue.setOffset({ x: 0, y: 0 });
       },
       onPanResponderMove: (evt, gestureState) => {
         if (isAnimating || isFlipping) return;
+        const dx = Math.abs(gestureState.moveX - touchStartX);
+        const dy = Math.abs(gestureState.moveY - touchStartY);
+        setSwipeDistance(dx);
+        // 移動距離が一定以上の場合のみスワイプと判定
+        if (dx > 10 || dy > 10) {
+          setIsSwiping(true);
+        }
         swipeValue.setValue({
           x: gestureState.dx,
           y: gestureState.dy
@@ -115,6 +132,8 @@ const StudyScreen = () => {
       },
       onPanResponderRelease: (evt, gestureState) => {
         if (isAnimating || isFlipping) return;
+        setSwipeDistance(0);
+        setIsSwiping(false);
 
         const SWIPE_THRESHOLD = screenWidth / 3;
         const dx = gestureState.dx;
@@ -138,15 +157,9 @@ const StudyScreen = () => {
           Animated.parallel([
             Animated.timing(swipeValue, {
               toValue: { x: direction * screenWidth, y: 0 },
-              duration: 200,
+              duration: 300,
               useNativeDriver: true,
-            }),
-            // ★コメントアウト: opacity のアニメーション
-            // Animated.timing(opacityValue, {
-            //   toValue: 0,
-            //   duration: 200,
-            //   useNativeDriver: true,
-            // })
+            })
           ]).start(() => {
             setCurrentCardIndex(prevIndex => {
               const currentLength = flashcardsRef.current.length;
@@ -154,10 +167,11 @@ const StudyScreen = () => {
               return newIndex;
             });
             swipeValue.setValue({ x: 0, y: 0 });
-            // ★コメントアウト: opacity のリセット
-            // opacityValue.setValue(1);
-            setShowBack(false); // 表面に戻す
-            animatedValue.setValue(0); // ★ フリップアニメーションもリセット
+            // 裏面を向いている場合のみ表面に戻す
+            if (showBack) {
+              setShowBack(false);
+              animatedValue.setValue(0);
+            }
             setIsAnimating(false);
           });
         } else {
@@ -176,10 +190,25 @@ const StudyScreen = () => {
 
   // (flipCard, アニメーション補間値, スタイル定義などは前回のコードと同じ)
   const flipCard = () => {
-    if (!currentCard || isAnimating || isFlipping) {
-        console.log('Cannot flip card now.');
-        return;
+    if (!currentCard || isAnimating || isFlipping || isSwiping) {
+      console.log('Cannot flip card now.');
+      return;
     }
+
+    // スワイプの移動距離をチェック
+    const SWIPE_THRESHOLD = 20; // 20ピクセル以上の移動でスワイプと判定
+    if (swipeDistance > SWIPE_THRESHOLD) {
+      console.log('Cannot flip while swiping.');
+      return;
+    }
+
+    // タップ時間が短い場合のみ反転を許可
+    const TAP_DURATION_THRESHOLD = 200; // 200ms未満をタップと判定
+    if (Date.now() - touchStartTime > TAP_DURATION_THRESHOLD) {
+      console.log('Not a tap.');
+      return;
+    }
+
     setIsFlipping(true);
     Animated.timing(animatedValue, {
       toValue: showBack ? 0 : 180,
@@ -225,10 +254,8 @@ const StudyScreen = () => {
   useEffect(() => {
     setFeedbackMessage(null);
     feedbackOpacity.setValue(0);
-    // ★ currentCardIndex が変わった時に animatedValue をリセットすることも可能だが、
-    //   コールバック内でリセットする方がアニメーション完了直後で確実なため、ここでは不要。
-    // animatedValue.setValue(0);
-    // setShowBack(false);
+    setShowBack(false); // カードが切り替わった時に必ず表面を表示
+    animatedValue.setValue(0); // アニメーションの値もリセット
   }, [currentCardIndex]);
 
   // カード操作のハンドラー
@@ -240,7 +267,7 @@ const StudyScreen = () => {
     Animated.parallel([
       Animated.timing(swipeValue, {
         toValue: { x: screenWidth, y: 0 },
-        duration: 200,
+        duration: 300,
         useNativeDriver: true,
       }),
       // ★コメントアウト: opacity のアニメーション
@@ -272,7 +299,7 @@ const StudyScreen = () => {
     Animated.parallel([
       Animated.timing(swipeValue, {
         toValue: { x: -screenWidth, y: 0 },
-        duration: 200,
+        duration: 300,
         useNativeDriver: true,
       }),
       // ★コメントアウト: opacity のアニメーション
