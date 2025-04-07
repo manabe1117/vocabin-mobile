@@ -6,42 +6,47 @@ import { supabase } from '../lib/supabase';
 
 // フラッシュカードの型定義
 interface Flashcard {
-  id: number;
-  vocabulary_id: number;
-  vocabulary: string;
-  part_of_speech: string;
-  meanings: string[];
-  examples: { en: string; ja: string }[];
-  synonyms: string[];
-  antonyms: string[];
-  box_level: number;
-  lastStudied: string;
-  reviewCount: number;
+    id: number;
+    vocabulary_id: number;
+    vocabulary: string;
+    part_of_speech: string;
+    meanings: string[];
+    examples: { en: string; ja: string }[];
+    synonyms: string[];
+    antonyms: string[];
+    box_level: number;
+    lastStudied: string;
+    reviewCount: number;
 }
 
 const StudyScreen = () => {
   const { session } = useAuth();
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+  const flashcardsRef = useRef(flashcards);
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // フラッシュカードデータを取得
+  // (fetchFlashcards, useEffect は前回のコードと同じ)
   const fetchFlashcards = async () => {
+    setIsLoading(true);
+    setError(null);
     try {
       if (!session?.access_token) {
         throw new Error('認証トークンがありません');
       }
-
       const { data, error } = await supabase.functions.invoke('get-flashcards', {
         body: { type: 3 }
       });
-
       if (error) throw error;
-
-      setFlashcards(data);
+      const fetchedFlashcards = data || [];
+      setFlashcards(fetchedFlashcards);
+      flashcardsRef.current = fetchedFlashcards;
     } catch (err) {
-      setError(err instanceof Error ? err.message : '予期せぬエラーが発生しました');
+      const errorMessage = err instanceof Error ? err.message : '予期せぬエラーが発生しました';
+      setError(errorMessage);
       console.log('fetchFlashcards error', err);
+      flashcardsRef.current = [];
     } finally {
       setIsLoading(false);
     }
@@ -50,24 +55,32 @@ const StudyScreen = () => {
   useEffect(() => {
     if (session?.access_token) {
       fetchFlashcards();
+    } else {
+        setIsLoading(false);
+        flashcardsRef.current = [];
     }
   }, [session?.access_token]);
 
-  const [currentCardIndex, setCurrentCardIndex] = useState(0);  // 現在表示中のカードのインデックス
-  const [showBack, setShowBack] = useState(false);  // カードの裏面を表示するかどうか
-  const [isAnimating, setIsAnimating] = useState(false);  // スワイプアニメーション中かどうか
-  const [isFlipping, setIsFlipping] = useState(false);  // カードをめくっているかどうか
-  const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; color: string; position: 'topLeft' | 'topRight' } | null>(null);  // フィードバックメッセージ
-  const animatedValue = useRef(new Animated.Value(0)).current;  // カードの回転アニメーション用
-  const swipeValue = useRef(new Animated.ValueXY()).current;    // カードのスワイプアニメーション用
-  const opacityValue = useRef(new Animated.Value(1)).current;   // 透明度アニメーション用
-  const feedbackOpacity = useRef(new Animated.Value(0)).current;  // フィードバックメッセージの透明度
-  const screenWidth = Dimensions.get('window').width;
-  // No more cardTransitionValue
+  useEffect(() => {
+    flashcardsRef.current = flashcards;
+  }, [flashcards]);
 
-  // フィードバックメッセージを表示する関数
+
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [showBack, setShowBack] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [isFlipping, setIsFlipping] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; color: string; position: 'topLeft' | 'topRight' } | null>(null);
+  const animatedValue = useRef(new Animated.Value(0)).current; // フリップアニメーション用
+  const swipeValue = useRef(new Animated.ValueXY()).current;
+  const opacityValue = useRef(new Animated.Value(1)).current; // コメントアウト中
+  const feedbackOpacity = useRef(new Animated.Value(0)).current;
+  const screenWidth = Dimensions.get('window').width;
+
+  // (showFeedback は前回のコードと同じ)
   const showFeedback = (text: string, color: string, position: 'topLeft' | 'topRight') => {
     setFeedbackMessage({ text, color, position });
+    feedbackOpacity.setValue(0);
     Animated.sequence([
       Animated.timing(feedbackOpacity, {
         toValue: 1,
@@ -83,102 +96,77 @@ const StudyScreen = () => {
     ]).start();
   };
 
+
   // スワイプジェスチャーの設定
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        swipeValue.extractOffset();
+      onStartShouldSetPanResponder: () => !isAnimating && !isFlipping,
+      onMoveShouldSetPanResponder: () => !isAnimating && !isFlipping,
+      onPanResponderGrant: (evt, gestureState) => {
+        if (isAnimating || isFlipping) return;
+         swipeValue.setOffset({ x: 0, y: 0 });
       },
       onPanResponderMove: (evt, gestureState) => {
-        const VISIBILITY_THRESHOLD = screenWidth / 20;  // 非表示にする閾値
-
-        console.log('スワイプ移動中:', {
-          dx: gestureState.dx,
-          dy: gestureState.dy,
-          vx: gestureState.vx,
-          vy: gestureState.vy,
-          isAnimating
-        });
-
-        // スワイプの移動量が閾値を超えたら非表示にする
-        if (Math.abs(gestureState.dx) > VISIBILITY_THRESHOLD && !isAnimating) {
-          console.log('閾値を超えたため非表示処理を開始');
-          setIsAnimating(true);
-          Animated.timing(opacityValue, {
-            toValue: 0,
-            duration: 150,
-            useNativeDriver: true,
-          }).start();
-        }
-
-        // アニメーションの更新
+        if (isAnimating || isFlipping) return;
         swipeValue.setValue({
           x: gestureState.dx,
           y: gestureState.dy
         });
       },
       onPanResponderRelease: (evt, gestureState) => {
-        const SWIPE_THRESHOLD = screenWidth / 4;  // スワイプ判定の閾値
-        const VELOCITY_THRESHOLD = 0.2;           // 速度判定の閾値
+        if (isAnimating || isFlipping) return;
 
-        console.log('スワイプ終了:', {
-          dx: gestureState.dx,
-          vx: gestureState.vx,
-          threshold: SWIPE_THRESHOLD,
-          velocityThreshold: VELOCITY_THRESHOLD,
-          currentCard: currentCard ? '存在する' : '存在しない'
-        });
+        const SWIPE_THRESHOLD = screenWidth / 3;
+        const dx = gestureState.dx;
+        const vx = gestureState.vx;
 
-        if (!currentCard) {
-          console.log('現在のカードが存在しないため、スワイプ処理を中断');
-          Animated.parallel([
-            Animated.spring(swipeValue, {
-              toValue: { x: 0, y: 0 },
-              friction: 9,
-              tension: 40,
-              useNativeDriver: true,
-            }),
-            Animated.timing(opacityValue, {
-              toValue: 1,
-              duration: 150,
-              useNativeDriver: true,
-            })
-          ]).start(() => {
-            setIsAnimating(false);
-          });
-          return;
+        let direction = 0;
+        if (dx > SWIPE_THRESHOLD || vx > 0.5) {
+          direction = 1;
+        } else if (dx < -SWIPE_THRESHOLD || vx < -0.5) {
+          direction = -1;
         }
 
-        if (gestureState.dx > SWIPE_THRESHOLD || gestureState.vx > VELOCITY_THRESHOLD) {
-          console.log('右スワイプを検出');
-          // 右スワイプ
-          showFeedback('Good!', '#77dd77', 'topRight');
-          animateCardTransition(1, gotoNextCard);  // 右方向にアニメーション
-        } else if (gestureState.dx < -SWIPE_THRESHOLD || gestureState.vx < -VELOCITY_THRESHOLD) {
-          console.log('左スワイプを検出');
-          // 左スワイプ
-          showFeedback('Try again', '#ff6961', 'topLeft');
-          animateCardTransition(-1, gotoNextCard);  // 左方向にアニメーション
-        } else {
-          console.log('閾値未満のため元の位置に戻す');
-          // 閾値未満の場合は元の位置に戻す
+        if (direction !== 0) {
+          setIsAnimating(true);
+          if (direction === 1) {
+            showFeedback('Good!', '#77dd77', 'topRight');
+          } else {
+            showFeedback('Try again', '#ff6961', 'topLeft');
+          }
+
           Animated.parallel([
-            Animated.spring(swipeValue, {
-              toValue: { x: 0, y: 0 },
-              friction: 9,
-              tension: 40,
+            Animated.timing(swipeValue, {
+              toValue: { x: direction * screenWidth, y: 0 },
+              duration: 200,
               useNativeDriver: true,
             }),
-            Animated.timing(opacityValue, {
-              toValue: 1,
-              duration: 150,
-              useNativeDriver: true,
-            })
+            // ★コメントアウト: opacity のアニメーション
+            // Animated.timing(opacityValue, {
+            //   toValue: 0,
+            //   duration: 200,
+            //   useNativeDriver: true,
+            // })
           ]).start(() => {
+            setCurrentCardIndex(prevIndex => {
+              const currentLength = flashcardsRef.current.length;
+              const newIndex = currentLength > 0 ? (prevIndex + 1) % currentLength : 0;
+              return newIndex;
+            });
+            swipeValue.setValue({ x: 0, y: 0 });
+            // ★コメントアウト: opacity のリセット
+            // opacityValue.setValue(1);
+            setShowBack(false); // 表面に戻す
+            animatedValue.setValue(0); // ★ フリップアニメーションもリセット
             setIsAnimating(false);
           });
+        } else {
+          Animated.spring(swipeValue, {
+            toValue: { x: 0, y: 0 },
+            friction: 9,
+            tension: 40,
+            useNativeDriver: true,
+          }).start();
         }
       },
     })
@@ -186,11 +174,11 @@ const StudyScreen = () => {
 
   const currentCard = flashcards[currentCardIndex];
 
-  // カードをめくるアニメーション
+  // (flipCard, アニメーション補間値, スタイル定義などは前回のコードと同じ)
   const flipCard = () => {
-    if (!currentCard) {
-      console.log('現在のカードが存在しません');
-      return;
+    if (!currentCard || isAnimating || isFlipping) {
+        console.log('Cannot flip card now.');
+        return;
     }
     setIsFlipping(true);
     Animated.timing(animatedValue, {
@@ -204,7 +192,6 @@ const StudyScreen = () => {
     });
   };
 
-  // カードの表裏の回転アニメーション用の補間値
   const frontInterpolate = animatedValue.interpolate({
     inputRange: [0, 180],
     outputRange: ['0deg', '180deg'],
@@ -215,7 +202,6 @@ const StudyScreen = () => {
     outputRange: ['180deg', '360deg'],
   });
 
-  // カードの表裏のスタイル
   const frontAnimatedStyle = {
     transform: [{ rotateY: frontInterpolate }],
     shadowOpacity: isAnimating || isFlipping ? 0 : 0.2,
@@ -228,224 +214,209 @@ const StudyScreen = () => {
     shadowColor: isAnimating || isFlipping ? 'transparent' : '#000',
   };
 
-  // カード操作のハンドラー
-  const handleNextCard = () => {
-    if (!currentCard) {
-      console.log('現在のカードが存在しません');
-      return;
-    }
-    showFeedback('Good!', '#77dd77', 'topRight');
-    animateCardTransition(1, gotoNextCard);
-  };
-
-  const handleUnknown = () => {
-    if (!currentCard) {
-      console.log('現在のカードが存在しません');
-      return;
-    }
-    showFeedback('Try again', '#ff6961', 'topLeft');
-    animateCardTransition(-1, gotoNextCard);
-  }
-
-  const handlePrevCard = () => {
-    if (flashcards.length === 0) {
-      console.log('フラッシュカードが存在しません');
-      return;
-    }
-    setCurrentCardIndex(prevIndex => {
-      const newIndex = prevIndex === 0 ? flashcards.length - 1 : prevIndex - 1;
-      resetCardAnimation();
-      return newIndex;
-    });
-  }
-
-  const gotoNextCard = () => {
-    if (flashcards.length === 0) {
-      console.log('フラッシュカードが存在しません');
-      return;
-    }
-    setCurrentCardIndex(prevIndex => {
-      const newIndex = (prevIndex + 1) % flashcards.length;
-      resetCardAnimation();
-      return newIndex;
-    });
-  }
-
-  // カードのアニメーション状態をリセット
-  const resetCardAnimation = () => {
-    setShowBack(false);
-    animatedValue.setValue(0);
-    swipeValue.setValue({ x: 0, y: 0 });
-    // No need to reset cardTransitionValue
-  };
-
-  // カードの遷移アニメーション
-  const animateCardTransition = (direction: number, callback: () => void) => {
-    console.log('カード遷移アニメーション開始:', {
-      direction,
-      currentIndex: currentCardIndex,
-      nextIndex: (currentCardIndex + 1) % flashcards.length
-    });
-
-    setIsAnimating(true);
-    Animated.parallel([
-      Animated.timing(swipeValue, {
-        toValue: { x: direction * screenWidth, y: 0 },
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacityValue, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      })
-    ]).start(() => {
-      console.log('アニメーション完了、コールバック実行');
-      callback();
-      // アニメーション値をリセット
-      swipeValue.setValue({ x: 0, y: 0 });
-      opacityValue.setValue(1);
-      setIsAnimating(false);
-    });
-  };
-
-  // カードの遷移スタイル
   const cardTransitionStyle = {
     transform: [
       { translateX: swipeValue.x },
       { translateY: swipeValue.y },
     ],
+    opacity: 1, // ★コメントアウト継続
   };
 
-  // currentCardIndexが変更された後に再表示する
   useEffect(() => {
-    console.log('currentCardIndexが変更:', {
-      newIndex: currentCardIndex,
-      card: flashcards[currentCardIndex]
-    });
-    
-    if (isAnimating) {
-      Animated.timing(opacityValue, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: true,
-      }).start(() => {
-        setIsAnimating(false);
-      });
-    }
-    // カードが切り替わったらフィードバックメッセージを非表示にする
     setFeedbackMessage(null);
+    feedbackOpacity.setValue(0);
+    // ★ currentCardIndex が変わった時に animatedValue をリセットすることも可能だが、
+    //   コールバック内でリセットする方がアニメーション完了直後で確実なため、ここでは不要。
+    // animatedValue.setValue(0);
+    // setShowBack(false);
   }, [currentCardIndex]);
+
+  // カード操作のハンドラー
+  const handleNextCard = () => {
+    if (isAnimating || isFlipping) return;
+    setIsAnimating(true);
+    showFeedback('Good!', '#77dd77', 'topRight');
+
+    Animated.parallel([
+      Animated.timing(swipeValue, {
+        toValue: { x: screenWidth, y: 0 },
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      // ★コメントアウト: opacity のアニメーション
+      // Animated.timing(opacityValue, {
+      //   toValue: 0,
+      //   duration: 200,
+      //   useNativeDriver: true,
+      // })
+    ]).start(() => {
+      setCurrentCardIndex(prevIndex => {
+        const currentLength = flashcards.length;
+        const newIndex = currentLength > 0 ? (prevIndex + 1) % currentLength : 0;
+        return newIndex;
+      });
+      swipeValue.setValue({ x: 0, y: 0 });
+      // ★コメントアウト: opacity のリセット
+      // opacityValue.setValue(1);
+      setShowBack(false); // 表面に戻す
+      animatedValue.setValue(0); // ★ フリップアニメーションもリセット
+      setIsAnimating(false);
+    });
+  };
+
+  const handleUnknown = () => {
+    if (isAnimating || isFlipping) return;
+    setIsAnimating(true);
+    showFeedback('Try again', '#ff6961', 'topLeft');
+
+    Animated.parallel([
+      Animated.timing(swipeValue, {
+        toValue: { x: -screenWidth, y: 0 },
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      // ★コメントアウト: opacity のアニメーション
+      // Animated.timing(opacityValue, {
+      //   toValue: 0,
+      //   duration: 200,
+      //   useNativeDriver: true,
+      // })
+    ]).start(() => {
+      setCurrentCardIndex(prevIndex => {
+        const currentLength = flashcards.length;
+        const newIndex = currentLength > 0 ? (prevIndex + 1) % currentLength : 0;
+        return newIndex;
+      });
+      swipeValue.setValue({ x: 0, y: 0 });
+      // ★コメントアウト: opacity のリセット
+      // opacityValue.setValue(1);
+      setShowBack(false); // 表面に戻す
+      animatedValue.setValue(0); // ★ フリップアニメーションもリセット
+      setIsAnimating(false);
+    });
+  };
+
+  // (ローディング、エラー、空表示、メイン return 文は前回のコードと同じ)
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4a90e2" />
+        <Text style={styles.loadingText}>フラッシュカードを読み込み中...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={fetchFlashcards}
+        >
+          <Text style={styles.retryButtonText}>再試行</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+   if (!isLoading && (!flashcards || flashcards.length === 0)) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.emptyText}>登録されたフレーズがありません</Text>
+      </View>
+    );
+  }
+
+   if (!currentCard) {
+     console.error("Error: currentCard is invalid. Index:", currentCardIndex, "Flashcards length:", flashcards.length);
+     setCurrentCardIndex(0);
+     return null;
+   }
 
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
         <Text style={styles.progressText}>{currentCardIndex + 1}/{flashcards.length}</Text>
       </View>
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4a90e2" />
-          <Text style={styles.loadingText}>フラッシュカードを読み込み中...</Text>
+      <View style={styles.progressBarContainer}>
+        <View style={styles.progressBarBackground}>
+          <Animated.View
+            style={[
+              styles.progressBarFill,
+              { width: `${((currentCardIndex + 1) / flashcards.length) * 100}%` }
+            ]}
+          />
         </View>
-      ) : error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity 
-            style={styles.retryButton}
-            onPress={() => {
-              setIsLoading(true);
-              setError(null);
-              fetchFlashcards();
-            }}
-          >
-            <Text style={styles.retryButtonText}>再試行</Text>
-          </TouchableOpacity>
-        </View>
-      ) : flashcards.length > 0 ? (
-        <>
-          {/* プログレスバー */}
-          <View style={styles.progressBarContainer}>
-            <View style={styles.progressBarBackground}>
-              <Animated.View 
-                style={[
-                  styles.progressBarFill,
-                  {
-                    width: `${((currentCardIndex + 1) / flashcards.length) * 100}%`
-                  }
-                ]} 
-              />
+      </View>
+
+      <Animated.View style={[styles.cardContainer, cardTransitionStyle, {opacity: 1}]} {...panResponder.panHandlers}>
+        {/* カードの表面 */}
+        <Animated.View
+          style={[styles.card, styles.cardFront, frontAnimatedStyle/*, showBack ? styles.hidden : {}*/]} // hidden はコメントアウト
+          onTouchEnd={flipCard}
+        >
+          <Text style={styles.cardWord}>{currentCard.vocabulary}</Text>
+          <Text style={styles.cardPronunciation}>{currentCard.part_of_speech}</Text>
+          <Text style={styles.cardExample}>{currentCard.examples[0]?.en || '例文なし'}</Text>
+        </Animated.View>
+
+        {/* カードの裏面 */}
+        <Animated.View
+          style={[styles.card, styles.cardBack, backAnimatedStyle/*, !showBack ? styles.hidden : {}*/]} // hidden はコメントアウト
+          onTouchEnd={flipCard}
+        >
+          <Text style={styles.cardBackText}>{currentCard.meanings[0] || '意味なし'}</Text>
+          {currentCard.synonyms.length > 0 && (
+            <View style={styles.synonymsContainer}>
+              <Text style={styles.synonymsTitle}>類義語:</Text>
+              <Text style={styles.synonymsText}>{currentCard.synonyms.join(', ')}</Text>
             </View>
-          </View>
-
-          <Animated.View style={[styles.cardContainer, cardTransitionStyle, { opacity: opacityValue }]} {...panResponder.panHandlers}>
-            {/* カードの表面 */}
-            <Animated.View 
-              style={[styles.card, styles.cardFront, frontAnimatedStyle, showBack ? styles.hidden : {}]}
-              onTouchEnd={flipCard}
-            >
-              <Text style={styles.cardWord}>{currentCard.vocabulary}</Text>
-              <Text style={styles.cardPronunciation}>{currentCard.part_of_speech}</Text>
-              <Text style={styles.cardExample}>{currentCard.examples[0]?.en || '例文なし'}</Text>
-            </Animated.View>
-
-            {/* カードの裏面 */}
-            <Animated.View 
-              style={[styles.card, styles.cardBack, backAnimatedStyle, !showBack ? styles.hidden : {}]}
-              onTouchEnd={flipCard}
-            >
-              <Text style={styles.cardBackText}>{currentCard.meanings[0] || '意味なし'}</Text>
-              {currentCard.synonyms.length > 0 && (
-                <View style={styles.synonymsContainer}>
-                  <Text style={styles.synonymsTitle}>類義語:</Text>
-                  <Text style={styles.synonymsText}>{currentCard.synonyms.join(', ')}</Text>
-                </View>
-              )}
-            </Animated.View>
-          </Animated.View>
-
-          {/* フィードバックメッセージ */}
-          {feedbackMessage && (
-            <Animated.View 
-              style={[
-                styles.feedbackContainer,
-                { 
-                  opacity: feedbackOpacity,
-                  top: 100,
-                  [feedbackMessage.position === 'topLeft' ? 'left' : 'right']: 40,
-                }
-              ]}
-            >
-              <Text style={[styles.feedbackText, { color: feedbackMessage.color }]}>
-                {feedbackMessage.text}
-              </Text>
-            </Animated.View>
           )}
+        </Animated.View>
+      </Animated.View>
 
-          {/* 操作ボタン */}
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity 
-              style={[styles.button, styles.buttonRed]} 
-              onPress={handleUnknown}
-              disabled={isAnimating}
-            >
-              <Text style={styles.buttonText}>？</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.button, styles.buttonGreen]} 
-              onPress={handleNextCard}
-              disabled={isAnimating}
-            >
-              <Ionicons name="checkmark-circle" size={24} color="white" />
-            </TouchableOpacity>
-          </View>
-        </>
-      ) : (
-        <Text style={styles.emptyText}>登録されたフレーズがありません</Text>
+      {/* フィードバックメッセージ */}
+      {feedbackMessage && (
+        <Animated.View
+          style={[
+            styles.feedbackContainer,
+            {
+              opacity: feedbackOpacity,
+              top: 100,
+              [feedbackMessage.position === 'topLeft' ? 'left' : 'right']: 40,
+            }
+          ]}
+           pointerEvents="none"
+        >
+          <Text style={[styles.feedbackText, { color: feedbackMessage.color }]}>
+            {feedbackMessage.text}
+          </Text>
+        </Animated.View>
       )}
+
+      {/* 操作ボタン */}
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity
+          style={[styles.button, styles.buttonRed]}
+          onPress={handleUnknown}
+          disabled={isAnimating || isFlipping}
+        >
+          <Text style={styles.buttonText}>？</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, styles.buttonGreen]}
+          onPress={handleNextCard}
+          disabled={isAnimating || isFlipping}
+        >
+          <Ionicons name="checkmark-circle" size={24} color="white" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
 
+// (スタイル定義は前回のコードと同じ)
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -536,17 +507,10 @@ const styles = StyleSheet.create({
         fontSize: 24,
         fontWeight: 'bold',
     },
-    hidden: {
-        opacity: 0,
-        pointerEvents: 'none',
-    },
-    invisible: {
-        opacity: 0,
-        pointerEvents: 'none',
-    },
     emptyText: {
         fontSize: 18,
         color: '#777',
+        marginTop: 50,
     },
     progressBarContainer: {
         width: '100%',
