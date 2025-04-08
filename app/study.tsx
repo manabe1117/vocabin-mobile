@@ -259,68 +259,88 @@ const StudyScreen = () => {
   }, [currentCardIndex]);
 
   // カード操作のハンドラー
-  const handleNextCard = () => {
+  const handleNextCard = async () => {
     if (isAnimating || isFlipping) return;
     setIsAnimating(true);
     showFeedback('Good!', '#77dd77', 'topRight');
 
-    Animated.parallel([
-      Animated.timing(swipeValue, {
-        toValue: { x: screenWidth, y: 0 },
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      // ★コメントアウト: opacity のアニメーション
-      // Animated.timing(opacityValue, {
-      //   toValue: 0,
-      //   duration: 200,
-      //   useNativeDriver: true,
-      // })
-    ]).start(() => {
-      setCurrentCardIndex(prevIndex => {
-        const currentLength = flashcards.length;
-        const newIndex = currentLength > 0 ? (prevIndex + 1) % currentLength : 0;
-        return newIndex;
+    try {
+      console.log('currentCard', currentCard);
+      const { error } = await supabase.functions.invoke('update-study-status', {
+        method: 'PUT',
+        body: {
+          vocabularyId: currentCard.vocabulary_id,
+          isCorrect: true,
+          studyDate: new Date().toISOString(),
+          type: 3
+        }
       });
-      swipeValue.setValue({ x: 0, y: 0 });
-      // ★コメントアウト: opacity のリセット
-      // opacityValue.setValue(1);
-      setShowBack(false); // 表面に戻す
-      animatedValue.setValue(0); // ★ フリップアニメーションもリセット
+
+      if (error) throw error;
+
+      Animated.parallel([
+        Animated.timing(swipeValue, {
+          toValue: { x: screenWidth, y: 0 },
+          duration: 300,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        setCurrentCardIndex(prevIndex => {
+          const currentLength = flashcards.length;
+          const newIndex = currentLength > 0 ? (prevIndex + 1) % currentLength : 0;
+          return newIndex;
+        });
+        swipeValue.setValue({ x: 0, y: 0 });
+        setShowBack(false);
+        animatedValue.setValue(0);
+        setIsAnimating(false);
+      });
+    } catch (err) {
+      console.error('学習状態の更新に失敗しました:', err);
       setIsAnimating(false);
-    });
+    }
   };
 
-  const handleUnknown = () => {
+  const handleUnknown = async () => {
     if (isAnimating || isFlipping) return;
     setIsAnimating(true);
     showFeedback('Try again', '#ff6961', 'topLeft');
 
-    Animated.parallel([
-      Animated.timing(swipeValue, {
-        toValue: { x: -screenWidth, y: 0 },
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      // ★コメントアウト: opacity のアニメーション
-      // Animated.timing(opacityValue, {
-      //   toValue: 0,
-      //   duration: 200,
-      //   useNativeDriver: true,
-      // })
-    ]).start(() => {
-      setCurrentCardIndex(prevIndex => {
-        const currentLength = flashcards.length;
-        const newIndex = currentLength > 0 ? (prevIndex + 1) % currentLength : 0;
-        return newIndex;
+    try {
+      console.log('currentCard', currentCard);
+      const { error } = await supabase.functions.invoke('update-study-status', {
+        method: 'PUT',
+        body: {
+          vocabularyId: currentCard.vocabulary_id,
+          isCorrect: false,
+          studyDate: new Date().toISOString(),
+          type: 3
+        }
       });
-      swipeValue.setValue({ x: 0, y: 0 });
-      // ★コメントアウト: opacity のリセット
-      // opacityValue.setValue(1);
-      setShowBack(false); // 表面に戻す
-      animatedValue.setValue(0); // ★ フリップアニメーションもリセット
+
+      if (error) throw error;
+
+      Animated.parallel([
+        Animated.timing(swipeValue, {
+          toValue: { x: -screenWidth, y: 0 },
+          duration: 300,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        setCurrentCardIndex(prevIndex => {
+          const currentLength = flashcards.length;
+          const newIndex = currentLength > 0 ? (prevIndex + 1) % currentLength : 0;
+          return newIndex;
+        });
+        swipeValue.setValue({ x: 0, y: 0 });
+        setShowBack(false);
+        animatedValue.setValue(0);
+        setIsAnimating(false);
+      });
+    } catch (err) {
+      console.error('学習状態の更新に失敗しました:', err);
       setIsAnimating(false);
-    });
+    }
   };
 
   // (ローディング、エラー、空表示、メイン return 文は前回のコードと同じ)
