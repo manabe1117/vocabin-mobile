@@ -337,7 +337,9 @@ const TranslateScreen = () => {
 
 const styles = StyleSheet.create({
   translateContainer: {
-    // 翻訳画面固有のスタイル
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    padding: 0,
   },
   container: {
     flex: 1,
@@ -346,7 +348,7 @@ const styles = StyleSheet.create({
   searchBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 16,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
