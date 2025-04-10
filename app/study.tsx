@@ -350,14 +350,14 @@ const StudyScreen = () => {
   return (
     <View style={[COMMON_STYLES.container, styles.studyContainer]}>
       <View style={styles.topBar}>
-        <Text style={styles.progressText}>{currentCardIndex + 1}/{flashcards.length}</Text>
+        <Text style={styles.progressText}>{currentCardIndex}/{flashcards.length}</Text>
       </View>
       <View style={styles.progressBarContainer}>
         <View style={styles.progressBarBackground}>
           <Animated.View
             style={[
               styles.progressBarFill,
-              { width: `${((currentCardIndex + 1) / flashcards.length) * 100}%` }
+              { width: `${(currentCardIndex / flashcards.length) * 100}%` }
             ]}
           />
         </View>
