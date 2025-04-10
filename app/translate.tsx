@@ -12,7 +12,9 @@ import {
 import { Ionicons, Feather } from '@expo/vector-icons'; // アイコンをインポート
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
-import { Audio } from 'expo-av';
+import { useAudio } from '../hooks/useAudio';
+import { COMMON_STYLES, COLORS } from '../constants/styles';
+import { handleApiError } from '../utils/errorHandler';
 
 interface VocabularyResult {
   id: number;
@@ -112,15 +114,7 @@ const TranslateScreen = () => {
   const [displayText, setDisplayText] = useState('');
   const { vocabulary, suggestion, loading, error, translate, setVocabulary, setSuggestion, isSaved, setIsSaved } = useVocabulary();
   const { session } = useAuth();
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-
-  useEffect(() => {
-    return sound
-      ? () => {
-          sound.unloadAsync();
-        }
-      : undefined;
-  }, [sound]);
+  const { playSound } = useAudio();
 
   const handleTranslate = () => {
     setDisplayText(inputText);
@@ -160,11 +154,9 @@ const TranslateScreen = () => {
 
       if (error) throw error;
 
-      // 保存状態を反転させる
       setIsSaved(!isSaved);
     } catch (error) {
-      console.error('保存エラー:', error);
-      Alert.alert('エラー', '単語の保存に失敗しました');
+      handleApiError(error, '単語の保存');
     }
   };
 
@@ -176,25 +168,31 @@ const TranslateScreen = () => {
     setIsSaved(false);
   };
 
-  const playSound = async (text: string) => {
-    try {
-      if (sound) {
-        await sound.unloadAsync();
-      }
+  if (loading) {
+    return (
+      <View style={COMMON_STYLES.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.PRIMARY} />
+        <Text style={COMMON_STYLES.loadingText}>翻訳中...</Text>
+      </View>
+    );
+  }
 
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=en&client=tw-ob` },
-        { shouldPlay: true }
-      );
-      setSound(newSound);
-    } catch (error) {
-      console.error('音声再生エラー:', error);
-      Alert.alert('エラー', '音声の再生に失敗しました');
-    }
-  };
+  if (error) {
+    return (
+      <View style={COMMON_STYLES.errorContainer}>
+        <Text style={COMMON_STYLES.errorText}>{error.message}</Text>
+        <TouchableOpacity
+          style={COMMON_STYLES.retryButton}
+          onPress={clearInput}
+        >
+          <Text style={COMMON_STYLES.retryButtonText}>再試行</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
+    <View style={[COMMON_STYLES.container, styles.translateContainer]}>
       <View style={styles.searchBarContainer}>
         <View style={styles.inputContainer}>
           <TextInput
@@ -239,12 +237,6 @@ const TranslateScreen = () => {
       </View>
 
       <ScrollView style={styles.scrollView}>
-        {loading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4a90e2" />
-          </View>
-        )}
-
         {suggestion && (
           <View style={styles.suggestionContainer}>
             <View style={styles.suggestionContent}>
@@ -344,6 +336,9 @@ const TranslateScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  translateContainer: {
+    // 翻訳画面固有のスタイル
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
@@ -386,10 +381,6 @@ const styles = StyleSheet.create({
   },
   magicButtonDisabled: {
     opacity: 0.7,
-  },
-  loadingContainer: {
-    padding: 20,
-    alignItems: 'center',
   },
   scrollView: {
     flex: 1,

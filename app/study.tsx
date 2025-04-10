@@ -3,6 +3,10 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, PanResponde
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { useAudio } from '../hooks/useAudio';
+import { ANIMATION } from '../constants/animation';
+import { COMMON_STYLES, COLORS } from '../constants/styles';
+import { handleApiError } from '../utils/errorHandler';
 
 // フラッシュカードの型定義
 interface Flashcard {
@@ -21,13 +25,12 @@ interface Flashcard {
 
 const StudyScreen = () => {
   const { session } = useAuth();
+  const { playSound } = useAudio();
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const flashcardsRef = useRef(flashcards);
-
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // (fetchFlashcards, useEffect は前回のコードと同じ)
   const fetchFlashcards = async () => {
     setIsLoading(true);
     setError(null);
@@ -65,7 +68,6 @@ const StudyScreen = () => {
     flashcardsRef.current = flashcards;
   }, [flashcards]);
 
-
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [showBack, setShowBack] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -73,7 +75,6 @@ const StudyScreen = () => {
   const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; color: string; position: 'topLeft' | 'topRight' } | null>(null);
   const animatedValue = useRef(new Animated.Value(0)).current; // フリップアニメーション用
   const swipeValue = useRef(new Animated.ValueXY()).current;
-  // const opacityValue = useRef(new Animated.Value(1)).current; // コメントアウト中
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
   const screenWidth = Dimensions.get('window').width;
   const [swipeDistance, setSwipeDistance] = useState(0);
@@ -82,7 +83,21 @@ const StudyScreen = () => {
   const [touchStartX, setTouchStartX] = useState(0);
   const [touchStartY, setTouchStartY] = useState(0);
 
-  // (showFeedback は前回のコードと同じ)
+  // currentCardIndexの参照を追加
+  const currentCardIndexRef = useRef(currentCardIndex);
+
+  // currentCardIndexが更新されたときにrefも更新
+  useEffect(() => {
+    currentCardIndexRef.current = currentCardIndex;
+  }, [currentCardIndex]);
+
+  useEffect(() => {
+    console.log('Current card index updated:', {
+      state: currentCardIndex,
+      ref: currentCardIndexRef.current
+    });
+  }, [currentCardIndex]);
+
   const showFeedback = (text: string, color: string, position: 'topLeft' | 'topRight') => {
     setFeedbackMessage({ text, color, position });
     feedbackOpacity.setValue(0);
@@ -101,8 +116,59 @@ const StudyScreen = () => {
     ]).start();
   };
 
+  const handleCardAction = (isCorrect: boolean) => {
+    if (isAnimating || isFlipping) return;
+    setIsAnimating(true);
+    showFeedback(isCorrect ? 'Good!' : 'Try again', isCorrect ? '#77dd77' : '#ff6961', isCorrect ? 'topRight' : 'topLeft');
 
-  // スワイプジェスチャーの設定
+    try {
+      const currentIndex = currentCardIndexRef.current;
+      const currentCard = flashcardsRef.current[currentIndex];
+      if (!currentCard) return;
+
+      // 音声再生とエッジ関数の呼び出しを並列実行
+      Promise.all([
+        supabase.functions.invoke('update-study-status', {
+          method: 'PUT',
+          body: {
+            vocabularyId: currentCard.vocabulary_id,
+            isCorrect,
+            studyDate: new Date().toISOString(),
+            type: 3
+          }
+        }).catch(err => {
+          console.error('学習状態の更新に失敗しました:', err);
+        }),
+        playSound(currentCard.vocabulary).catch(err => {
+          console.error('音声再生に失敗しました:', err);
+        })
+      ]);
+
+      Animated.parallel([
+        Animated.timing(swipeValue, {
+          toValue: { x: isCorrect ? screenWidth : -screenWidth, y: 0 },
+          duration: 300,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        setCurrentCardIndex(prevIndex => {
+          const currentLength = flashcardsRef.current.length;
+          const newIndex = currentLength > 0 ? (prevIndex + 1) % currentLength : 0;
+          return newIndex;
+        });
+        swipeValue.setValue({ x: 0, y: 0 });
+        if (showBack) {
+          setShowBack(false);
+          animatedValue.setValue(0);
+        }
+        setIsAnimating(false);
+      });
+    } catch (err) {
+      console.error('学習状態の更新に失敗しました:', err);
+      setIsAnimating(false);
+    }
+  };
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !isAnimating && !isFlipping,
@@ -115,13 +181,21 @@ const StudyScreen = () => {
         setTouchStartX(gestureState.x0);
         setTouchStartY(gestureState.y0);
         swipeValue.setOffset({ x: 0, y: 0 });
+        
+        const currentIndex = currentCardIndexRef.current;
+        const currentCard = flashcardsRef.current[currentIndex];
+        console.log('Current card on swipe start:', {
+          index: currentIndex,
+          card: currentCard,
+          vocabulary: currentCard?.vocabulary,
+          meanings: currentCard?.meanings
+        });
       },
       onPanResponderMove: (evt, gestureState) => {
         if (isAnimating || isFlipping) return;
         const dx = Math.abs(gestureState.moveX - touchStartX);
         const dy = Math.abs(gestureState.moveY - touchStartY);
         setSwipeDistance(dx);
-        // 移動距離が一定以上の場合のみスワイプと判定
         if (dx > 10 || dy > 10) {
           setIsSwiping(true);
         }
@@ -131,6 +205,7 @@ const StudyScreen = () => {
         });
       },
       onPanResponderRelease: (evt, gestureState) => {
+        console.log('onPanResponderRelease');
         if (isAnimating || isFlipping) return;
         setSwipeDistance(0);
         setIsSwiping(false);
@@ -147,33 +222,7 @@ const StudyScreen = () => {
         }
 
         if (direction !== 0) {
-          setIsAnimating(true);
-          if (direction === 1) {
-            showFeedback('Good!', '#77dd77', 'topRight');
-          } else {
-            showFeedback('Try again', '#ff6961', 'topLeft');
-          }
-
-          Animated.parallel([
-            Animated.timing(swipeValue, {
-              toValue: { x: direction * screenWidth, y: 0 },
-              duration: 300,
-              useNativeDriver: true,
-            })
-          ]).start(() => {
-            setCurrentCardIndex(prevIndex => {
-              const currentLength = flashcardsRef.current.length;
-              const newIndex = currentLength > 0 ? (prevIndex + 1) % currentLength : 0;
-              return newIndex;
-            });
-            swipeValue.setValue({ x: 0, y: 0 });
-            // 裏面を向いている場合のみ表面に戻す
-            if (showBack) {
-              setShowBack(false);
-              animatedValue.setValue(0);
-            }
-            setIsAnimating(false);
-          });
+          handleCardAction(direction === 1);
         } else {
           Animated.spring(swipeValue, {
             toValue: { x: 0, y: 0 },
@@ -186,33 +235,36 @@ const StudyScreen = () => {
     })
   ).current;
 
+  const handleNextCard = () => {
+    handleCardAction(true);
+  };
+
+  const handleUnknown = () => {
+    handleCardAction(false);
+  };
+
   const currentCard = flashcards[currentCardIndex];
 
-  // (flipCard, アニメーション補間値, スタイル定義などは前回のコードと同じ)
   const flipCard = () => {
     if (!currentCard || isAnimating || isFlipping || isSwiping) {
       console.log('Cannot flip card now.');
       return;
     }
 
-    // スワイプの移動距離をチェック
-    const SWIPE_THRESHOLD = 20; // 20ピクセル以上の移動でスワイプと判定
-    if (swipeDistance > SWIPE_THRESHOLD) {
+    if (swipeDistance > ANIMATION.THRESHOLD.SWIPE) {
       console.log('Cannot flip while swiping.');
       return;
     }
 
-    // タップ時間が短い場合のみ反転を許可
-    const TAP_DURATION_THRESHOLD = 200; // 200ms未満をタップと判定
-    if (Date.now() - touchStartTime > TAP_DURATION_THRESHOLD) {
+    if (Date.now() - touchStartTime > ANIMATION.THRESHOLD.TAP_DURATION) {
       console.log('Not a tap.');
       return;
     }
 
     setIsFlipping(true);
     Animated.timing(animatedValue, {
-      toValue: showBack ? 0 : 180,
-      duration: 200,
+      toValue: showBack ? ANIMATION.VALUES.FLIP.START : ANIMATION.VALUES.FLIP.END,
+      duration: ANIMATION.DURATION.SHORT,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start(() => {
@@ -258,110 +310,24 @@ const StudyScreen = () => {
     animatedValue.setValue(0); // アニメーションの値もリセット
   }, [currentCardIndex]);
 
-  // カード操作のハンドラー
-  const handleNextCard = async () => {
-    if (isAnimating || isFlipping) return;
-    setIsAnimating(true);
-    showFeedback('Good!', '#77dd77', 'topRight');
-
-    try {
-      console.log('currentCard', currentCard);
-      const { error } = await supabase.functions.invoke('update-study-status', {
-        method: 'PUT',
-        body: {
-          vocabularyId: currentCard.vocabulary_id,
-          isCorrect: true,
-          studyDate: new Date().toISOString(),
-          type: 3
-        }
-      });
-
-      if (error) throw error;
-
-      Animated.parallel([
-        Animated.timing(swipeValue, {
-          toValue: { x: screenWidth, y: 0 },
-          duration: 300,
-          useNativeDriver: true,
-        })
-      ]).start(() => {
-        setCurrentCardIndex(prevIndex => {
-          const currentLength = flashcards.length;
-          const newIndex = currentLength > 0 ? (prevIndex + 1) % currentLength : 0;
-          return newIndex;
-        });
-        swipeValue.setValue({ x: 0, y: 0 });
-        setShowBack(false);
-        animatedValue.setValue(0);
-        setIsAnimating(false);
-      });
-    } catch (err) {
-      console.error('学習状態の更新に失敗しました:', err);
-      setIsAnimating(false);
-    }
-  };
-
-  const handleUnknown = async () => {
-    if (isAnimating || isFlipping) return;
-    setIsAnimating(true);
-    showFeedback('Try again', '#ff6961', 'topLeft');
-
-    try {
-      console.log('currentCard', currentCard);
-      const { error } = await supabase.functions.invoke('update-study-status', {
-        method: 'PUT',
-        body: {
-          vocabularyId: currentCard.vocabulary_id,
-          isCorrect: false,
-          studyDate: new Date().toISOString(),
-          type: 3
-        }
-      });
-
-      if (error) throw error;
-
-      Animated.parallel([
-        Animated.timing(swipeValue, {
-          toValue: { x: -screenWidth, y: 0 },
-          duration: 300,
-          useNativeDriver: true,
-        })
-      ]).start(() => {
-        setCurrentCardIndex(prevIndex => {
-          const currentLength = flashcards.length;
-          const newIndex = currentLength > 0 ? (prevIndex + 1) % currentLength : 0;
-          return newIndex;
-        });
-        swipeValue.setValue({ x: 0, y: 0 });
-        setShowBack(false);
-        animatedValue.setValue(0);
-        setIsAnimating(false);
-      });
-    } catch (err) {
-      console.error('学習状態の更新に失敗しました:', err);
-      setIsAnimating(false);
-    }
-  };
-
-  // (ローディング、エラー、空表示、メイン return 文は前回のコードと同じ)
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4a90e2" />
-        <Text style={styles.loadingText}>フラッシュカードを読み込み中...</Text>
+      <View style={COMMON_STYLES.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.PRIMARY} />
+        <Text style={COMMON_STYLES.loadingText}>フラッシュカードを読み込み中...</Text>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error}</Text>
+      <View style={COMMON_STYLES.errorContainer}>
+        <Text style={COMMON_STYLES.errorText}>{error}</Text>
         <TouchableOpacity
-          style={styles.retryButton}
+          style={COMMON_STYLES.retryButton}
           onPress={fetchFlashcards}
         >
-          <Text style={styles.retryButtonText}>再試行</Text>
+          <Text style={COMMON_STYLES.retryButtonText}>再試行</Text>
         </TouchableOpacity>
       </View>
     );
@@ -369,8 +335,8 @@ const StudyScreen = () => {
 
    if (!isLoading && (!flashcards || flashcards.length === 0)) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.emptyText}>登録されたフレーズがありません</Text>
+      <View style={COMMON_STYLES.container}>
+        <Text style={COMMON_STYLES.emptyText}>登録されたフレーズがありません</Text>
       </View>
     );
   }
@@ -382,7 +348,7 @@ const StudyScreen = () => {
    }
 
   return (
-    <View style={styles.container}>
+    <View style={[COMMON_STYLES.container, styles.studyContainer]}>
       <View style={styles.topBar}>
         <Text style={styles.progressText}>{currentCardIndex + 1}/{flashcards.length}</Text>
       </View>
@@ -463,175 +429,139 @@ const StudyScreen = () => {
   );
 };
 
-// (スタイル定義は前回のコードと同じ)
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f8f8ff',
-        padding: 20,
-        alignItems: 'center',
-    },
-    topBar: {
-        width: '100%',
-        paddingTop: 10,
-        alignItems: 'center',
-    },
-    progressText: {
-        fontSize: 16,
-        color: '#666',
-    },
-    cardContainer: {
-        width: '100%',
-        height: 400,
-        marginBottom: 20,
-    },
-    card: {
-        position: 'absolute',
-        width: '100%',
-        height: '100%',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderRadius: 20,
-        padding: 20,
-        backfaceVisibility: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 6,
-        elevation: 5,
-    },
-    cardFront: {
-        backgroundColor: 'white',
-    },
-    cardBack: {
-        backgroundColor: 'white',
-        transform: [{ rotateY: '180deg' }],
-    },
-    cardWord: {
-        fontSize: 48,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 10,
-    },
-    cardPronunciation: {
-        fontSize: 20,
-        color: '#666',
-        marginBottom: 20,
-    },
-    cardExample: {
-        fontSize: 18,
-        color: '#444',
-        textAlign: 'center',
-        marginBottom: 40,
-    },
-    cardBackText: {
-        fontSize: 36,
-        textAlign: 'center',
-        color: '#333',
-    },
-    buttonContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        width: '100%',
-        paddingHorizontal: 10,
-    },
-    button: {
-        paddingVertical: 15,
-        paddingHorizontal: 20,
-        borderRadius: 30,
-        alignItems: 'center',
-        flex: 1,
-        marginHorizontal: 5,
-    },
-    buttonRed: {
-        backgroundColor: '#ff6961',
-    },
-    buttonGreen: {
-        backgroundColor: '#77dd77',
-    },
-    buttonText: {
-        color: 'white',
-        fontSize: 24,
-        fontWeight: 'bold',
-    },
-    emptyText: {
-        fontSize: 18,
-        color: '#777',
-        marginTop: 50,
-    },
-    progressBarContainer: {
-        width: '100%',
-        paddingHorizontal: 10,
-        marginBottom: 20,
-    },
-    progressBarBackground: {
-        height: 4,
-        backgroundColor: '#e0e0e0',
-        borderRadius: 2,
-        overflow: 'hidden',
-    },
-    progressBarFill: {
-        height: '100%',
-        backgroundColor: '#4a90e2',
-        borderRadius: 2,
-    },
-    feedbackContainer: {
-        position: 'absolute',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-    },
-    feedbackText: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        textAlign: 'center',
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    loadingText: {
-        marginTop: 10,
-        fontSize: 16,
-        color: '#666',
-    },
-    errorContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    errorText: {
-        fontSize: 16,
-        color: '#ff6961',
-        textAlign: 'center',
-        marginBottom: 20,
-    },
-    retryButton: {
-        backgroundColor: '#4a90e2',
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: 5,
-    },
-    retryButtonText: {
-        color: 'white',
-        fontSize: 16,
-    },
-    synonymsContainer: {
-        marginTop: 20,
-        alignItems: 'center',
-    },
-    synonymsTitle: {
-        fontSize: 16,
-        color: '#666',
-        marginBottom: 5,
-    },
-    synonymsText: {
-        fontSize: 14,
-        color: '#444',
-        textAlign: 'center',
-    },
+  studyContainer: {
+    // スタディ画面固有のスタイル
+  },
+  topBar: {
+    width: '100%',
+    paddingTop: 10,
+    alignItems: 'center',
+  },
+  progressText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  cardContainer: {
+    width: '100%',
+    height: 400,
+    marginBottom: 20,
+  },
+  card: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    padding: 20,
+    backfaceVisibility: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  cardFront: {
+    backgroundColor: 'white',
+  },
+  cardBack: {
+    backgroundColor: 'white',
+    transform: [{ rotateY: '180deg' }],
+  },
+  cardWord: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  cardPronunciation: {
+    fontSize: 20,
+    color: '#666',
+    marginBottom: 20,
+  },
+  cardExample: {
+    fontSize: 18,
+    color: '#444',
+    textAlign: 'center',
+    marginBottom: 40,
+  },
+  cardBackText: {
+    fontSize: 36,
+    textAlign: 'center',
+    color: '#333',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 10,
+  },
+  button: {
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderRadius: 30,
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 5,
+  },
+  buttonRed: {
+    backgroundColor: '#ff6961',
+  },
+  buttonGreen: {
+    backgroundColor: '#77dd77',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#777',
+    marginTop: 50,
+  },
+  progressBarContainer: {
+    width: '100%',
+    paddingHorizontal: 10,
+    marginBottom: 20,
+  },
+  progressBarBackground: {
+    height: 4,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#4a90e2',
+    borderRadius: 2,
+  },
+  feedbackContainer: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  feedbackText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  synonymsContainer: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  synonymsTitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 5,
+  },
+  synonymsText: {
+    fontSize: 14,
+    color: '#444',
+    textAlign: 'center',
+  },
 });
 
 export default StudyScreen;
