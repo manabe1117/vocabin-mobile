@@ -21,6 +21,7 @@ interface Flashcard {
     box_level: number;
     lastStudied: string;
     reviewCount: number;
+    isCorrect: boolean;
 }
 
 const StudyScreen = () => {
@@ -42,7 +43,10 @@ const StudyScreen = () => {
         body: { type: 3 }
       });
       if (error) throw error;
-      const fetchedFlashcards = data || [];
+      const fetchedFlashcards = (data || []).map((card: Flashcard) => ({
+        ...card,
+        isCorrect: false
+      }));
       setFlashcards(fetchedFlashcards);
       flashcardsRef.current = fetchedFlashcards;
     } catch (err) {
@@ -144,6 +148,16 @@ const StudyScreen = () => {
         })
       ]);
 
+      // カードの正解状態を更新
+      setFlashcards(prev => {
+        const newFlashcards = [...prev];
+        newFlashcards[currentIndex] = {
+          ...newFlashcards[currentIndex],
+          isCorrect
+        };
+        return newFlashcards;
+      });
+
       Animated.parallel([
         Animated.timing(swipeValue, {
           toValue: { x: isCorrect ? screenWidth : -screenWidth, y: 0 },
@@ -153,7 +167,18 @@ const StudyScreen = () => {
       ]).start(() => {
         setCurrentCardIndex(prevIndex => {
           const currentLength = flashcardsRef.current.length;
-          const newIndex = currentLength > 0 ? (prevIndex + 1) % currentLength : 0;
+          let count = 0;
+          let newIndex = 0;
+
+          // 次のisCorrect=falseのカードを探す
+          for (let i = (prevIndex + 1) % currentLength; count < currentLength; i = (i + 1) % currentLength) {
+            if (!flashcardsRef.current[i].isCorrect) {
+              newIndex = i;
+              break;
+            }
+            count++;
+          }
+
           return newIndex;
         });
         swipeValue.setValue({ x: 0, y: 0 });
@@ -341,23 +366,25 @@ const StudyScreen = () => {
     );
   }
 
-   if (!currentCard) {
-     console.error("Error: currentCard is invalid. Index:", currentCardIndex, "Flashcards length:", flashcards.length);
-     setCurrentCardIndex(0);
-     return null;
-   }
+  if (!currentCard) {
+    console.error("Error: currentCard is invalid. Index:", currentCardIndex, "Flashcards length:", flashcards.length);
+    setCurrentCardIndex(0);
+    return null;
+  }
 
   return (
     <View style={[COMMON_STYLES.container, styles.studyContainer]}>
       <View style={styles.topBar}>
-        <Text style={styles.progressText}>{currentCardIndex}/{flashcards.length}</Text>
+        <Text style={styles.progressText}>
+          {flashcards.filter(card => card.isCorrect).length}/{flashcards.length}
+        </Text>
       </View>
       <View style={styles.progressBarContainer}>
         <View style={styles.progressBarBackground}>
           <Animated.View
             style={[
               styles.progressBarFill,
-              { width: `${(currentCardIndex / flashcards.length) * 100}%` }
+              { width: `${(flashcards.filter(card => card.isCorrect).length / flashcards.length) * 100}%` }
             ]}
           />
         </View>
