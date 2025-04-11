@@ -559,19 +559,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#4a90e2',
-    padding: 16,
-    borderRadius: 12,
+    padding: 12,
+    borderRadius: 8,
     marginTop: 8,
-    shadowColor: '#4a90e2',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    height: 44,
   },
   savedButton: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#f8f9fa',
     borderWidth: 1,
-    borderColor: '#4CAF50',
+    borderColor: '#4a90e2',
+    height: 44,
+    padding: 11,
   },
   saveButtonIcon: {
     marginRight: 8,
@@ -579,10 +577,12 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
+    lineHeight: 20,
   },
   savedButtonText: {
-    color: '#4CAF50',
+    color: '#4a90e2',
+    lineHeight: 20,
   },
 });
 
