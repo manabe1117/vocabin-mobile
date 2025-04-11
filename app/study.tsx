@@ -6,7 +6,6 @@ import { supabase } from '../lib/supabase';
 import { useAudio } from '../hooks/useAudio';
 import { ANIMATION } from '../constants/animation';
 import { COMMON_STYLES, COLORS } from '../constants/styles';
-import { handleApiError } from '../utils/errorHandler';
 
 // フラッシュカードの型定義
 interface Flashcard {
@@ -31,6 +30,7 @@ const StudyScreen = () => {
   const flashcardsRef = useRef(flashcards);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCompletionMessage, setShowCompletionMessage] = useState(false);
 
   const fetchFlashcards = async () => {
     setIsLoading(true);
@@ -165,27 +165,39 @@ const StudyScreen = () => {
           useNativeDriver: true,
         })
       ]).start(() => {
-        setCurrentCardIndex(prevIndex => {
+        const newIndex = (() => {
           const currentLength = flashcardsRef.current.length;
           let count = 0;
-          let newIndex = 0;
+          let nextIndex = 0;
 
           // 次のisCorrect=falseのカードを探す
-          for (let i = (prevIndex + 1) % currentLength; count < currentLength; i = (i + 1) % currentLength) {
+          for (let i = (currentIndex + 1) % currentLength; count < currentLength; i = (i + 1) % currentLength) {
             if (!flashcardsRef.current[i].isCorrect) {
-              newIndex = i;
+              nextIndex = i;
               break;
             }
             count++;
           }
 
-          return newIndex;
-        });
+          // すべてのカードが正解になったかチェック
+          const allCorrect = flashcardsRef.current.every(card => card.isCorrect);
+          if (allCorrect) {
+            setShowCompletionMessage(true);
+          }
+
+          return nextIndex;
+        })();
+
+        // カードの状態をリセット
+        setFeedbackMessage(null);
+        feedbackOpacity.setValue(0);
+        setShowBack(false);
+        animatedValue.setValue(0);
+        currentCardIndexRef.current = newIndex;
+
+        // 最後にcurrentCardIndexを更新
+        setCurrentCardIndex(newIndex);
         swipeValue.setValue({ x: 0, y: 0 });
-        if (showBack) {
-          setShowBack(false);
-          animatedValue.setValue(0);
-        }
         setIsAnimating(false);
       });
     } catch (err) {
@@ -335,6 +347,14 @@ const StudyScreen = () => {
     animatedValue.setValue(0); // アニメーションの値もリセット
   }, [currentCardIndex]);
 
+  if (showCompletionMessage) {
+    return (
+      <View style={[COMMON_STYLES.container, styles.completionContainer]}>
+        <Text style={styles.completionText}>You Did It!</Text>
+      </View>
+    );
+  }
+
   if (isLoading) {
     return (
       <View style={COMMON_STYLES.loadingContainer}>
@@ -393,7 +413,7 @@ const StudyScreen = () => {
       <Animated.View style={[styles.cardContainer, cardTransitionStyle, {opacity: 1}]} {...panResponder.panHandlers}>
         {/* カードの表面 */}
         <Animated.View
-          style={[styles.card, styles.cardFront, frontAnimatedStyle/*, showBack ? styles.hidden : {}*/]} // hidden はコメントアウト
+          style={[styles.card, styles.cardFront, frontAnimatedStyle]}
           onTouchEnd={flipCard}
         >
           <Text style={styles.cardWord}>{currentCard.vocabulary}</Text>
@@ -403,7 +423,7 @@ const StudyScreen = () => {
 
         {/* カードの裏面 */}
         <Animated.View
-          style={[styles.card, styles.cardBack, backAnimatedStyle/*, !showBack ? styles.hidden : {}*/]} // hidden はコメントアウト
+          style={[styles.card, styles.cardBack, backAnimatedStyle]}
           onTouchEnd={flipCard}
         >
           <Text style={styles.cardBackText}>{currentCard.meanings[0] || '意味なし'}</Text>
@@ -588,6 +608,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#444',
     textAlign: 'center',
+  },
+  completionContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  completionText: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: COLORS.PRIMARY,
   },
 });
 
