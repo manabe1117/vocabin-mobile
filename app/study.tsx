@@ -165,40 +165,40 @@ const StudyScreen = () => {
           useNativeDriver: true,
         })
       ]).start(() => {
-        const newIndex = (() => {
-          const currentLength = flashcardsRef.current.length;
-          let count = 0;
-          let nextIndex = 0;
+        // 次のカードのインデックスを計算
+        const currentLength = flashcardsRef.current.length;
+        let nextIndex = (currentIndex + 1) % currentLength;
+        let count = 0;
 
-          // 次のisCorrect=falseのカードを探す
-          for (let i = (currentIndex + 1) % currentLength; count < currentLength; i = (i + 1) % currentLength) {
-            if (!flashcardsRef.current[i].isCorrect) {
-              nextIndex = i;
-              break;
-            }
-            count++;
+        // 次の未正解のカードを探す
+        while (count < currentLength) {
+          if (!flashcardsRef.current[nextIndex].isCorrect) {
+            break;
           }
+          nextIndex = (nextIndex + 1) % currentLength;
+          count++;
+        }
 
-          // すべてのカードが正解になったかチェック
-          const allCorrect = flashcardsRef.current.every(card => card.isCorrect);
-          if (allCorrect) {
-            setShowCompletionMessage(true);
-          }
-
-          return nextIndex;
-        })();
+        // すべてのカードが正解になったかチェック
+        const allCorrect = flashcardsRef.current.every(card => card.isCorrect);
+        if (allCorrect) {
+          setShowCompletionMessage(true);
+          return;
+        }
 
         // カードの状態をリセット
         setFeedbackMessage(null);
         feedbackOpacity.setValue(0);
         setShowBack(false);
         animatedValue.setValue(0);
-        currentCardIndexRef.current = newIndex;
-
-        // 最後にcurrentCardIndexを更新
-        setCurrentCardIndex(newIndex);
-        swipeValue.setValue({ x: 0, y: 0 });
-        setIsAnimating(false);
+        
+        // 状態の更新を確実に行う
+        requestAnimationFrame(() => {
+          currentCardIndexRef.current = nextIndex;
+          setCurrentCardIndex(nextIndex);
+          swipeValue.setValue({ x: 0, y: 0 });
+          setIsAnimating(false);
+        });
       });
     } catch (err) {
       console.error('学習状態の更新に失敗しました:', err);
@@ -351,6 +351,18 @@ const StudyScreen = () => {
     return (
       <View style={[COMMON_STYLES.container, styles.completionContainer]}>
         <Text style={styles.completionText}>You Did It!</Text>
+        <Text style={styles.completionDescription}>
+          すべての学習が終了しました！
+        </Text>
+        <TouchableOpacity
+          style={styles.reloadButton}
+          onPress={() => {
+            setShowCompletionMessage(false);
+            fetchFlashcards();
+          }}
+        >
+          <Text style={styles.reloadButtonText}>もう一度学習する</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -618,6 +630,30 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: 'bold',
     color: COLORS.PRIMARY,
+    marginBottom: 20,
+  },
+  completionDescription: {
+    fontSize: 18,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 24,
+  },
+  reloadButton: {
+    backgroundColor: COLORS.PRIMARY,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  reloadButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 
