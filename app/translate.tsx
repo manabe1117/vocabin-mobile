@@ -170,9 +170,53 @@ const TranslateScreen = () => {
 
   if (loading) {
     return (
-      <View style={COMMON_STYLES.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.PRIMARY} />
-        <Text style={COMMON_STYLES.loadingText}>翻訳中...</Text>
+      <View style={[COMMON_STYLES.container, styles.translateContainer]}>
+        <View style={styles.searchBarContainer}>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="単語を入力"
+              value={inputText}
+              onChangeText={setInputText}
+              onSubmitEditing={handleTranslate}
+              placeholderTextColor="#999"
+              textContentType="none"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
+              multiline={false}
+              returnKeyType="search"
+              enablesReturnKeyAutomatically={true}
+              blurOnSubmit={true}
+              keyboardType="default"
+              keyboardAppearance="light"
+              inputMode="text"
+            />
+            {inputText.length > 0 && (
+              <TouchableOpacity 
+                style={styles.clearButton} 
+                onPress={clearInput}
+              >
+                <Ionicons name="close-circle" size={20} color="#999" />
+              </TouchableOpacity>
+            )}
+          </View>
+          <TouchableOpacity 
+            style={[styles.magicButton, inputText.length === 0 && styles.magicButtonDisabled]} 
+            onPress={handleTranslate}
+            disabled={inputText.length === 0}
+          >
+            <Ionicons 
+              name="search" 
+              size={20} 
+              color={inputText.length === 0 ? "#ccc" : "#4a90e2"} 
+            />
+          </TouchableOpacity>
+        </View>
+        <View style={COMMON_STYLES.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.PRIMARY} />
+          <Text style={COMMON_STYLES.loadingText}>翻訳中...</Text>
+        </View>
       </View>
     );
   }
@@ -340,6 +384,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
     padding: 0,
+    width: '100%',
   },
   container: {
     flex: 1,
@@ -387,12 +432,14 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     padding: 16,
+    width: '100%',
   },
   resultCard: {
     backgroundColor: 'white',
     borderRadius: 16,
     padding: 20,
     marginBottom: 20,
+    width: '100%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -470,15 +517,15 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   suggestionContainer: {
-    backgroundColor: '#fff3e0',
+    backgroundColor: 'white',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   suggestionContent: {
     flexDirection: 'column',
@@ -491,18 +538,16 @@ const styles = StyleSheet.create({
   },
   suggestionText: {
     fontSize: 14,
-    color: '#666',
+    color: '#4a90e2',
     fontWeight: '500',
   },
   suggestionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'white',
+    backgroundColor: '#f8f9fa',
     padding: 12,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ffb74d',
   },
   suggestionWord: {
     fontSize: 16,
