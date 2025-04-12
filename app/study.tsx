@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, PanResponder, Dimensions, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useAudio } from '../hooks/useAudio';
@@ -21,11 +22,11 @@ interface Flashcard {
     lastStudied: string;
     reviewCount: number;
     isCorrect: boolean;
+    audioData: string;
 }
 
 const StudyScreen = () => {
   const { session } = useAuth();
-  const { playSound } = useAudio();
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const flashcardsRef = useRef(flashcards);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,7 +41,7 @@ const StudyScreen = () => {
         throw new Error('認証トークンがありません');
       }
       const { data, error } = await supabase.functions.invoke('get-flashcards', {
-        body: { type: 3 }
+        body: { type: 3, includeAudio: true }
       });
       if (error) throw error;
       const fetchedFlashcards = (data || []).map((card: Flashcard) => ({
@@ -130,23 +131,18 @@ const StudyScreen = () => {
       const currentCard = flashcardsRef.current[currentIndex];
       if (!currentCard) return;
 
-      // 音声再生とエッジ関数の呼び出しを並列実行
-      Promise.all([
-        supabase.functions.invoke('update-study-status', {
-          method: 'PUT',
-          body: {
-            vocabularyId: currentCard.vocabulary_id,
-            isCorrect,
-            studyDate: new Date().toISOString(),
-            type: 3
-          }
-        }).catch(err => {
-          console.error('学習状態の更新に失敗しました:', err);
-        }),
-        playSound(currentCard.vocabulary).catch(err => {
-          console.error('音声再生に失敗しました:', err);
-        })
-      ]);
+      // 音声再生を削除し、学習状態の更新のみを実行
+      supabase.functions.invoke('update-study-status', {
+        method: 'PUT',
+        body: {
+          vocabularyId: currentCard.vocabulary_id,
+          isCorrect,
+          studyDate: new Date().toISOString(),
+          type: 3
+        }
+      }).catch(err => {
+        console.error('学習状態の更新に失敗しました:', err);
+      });
 
       // カードの正解状態を更新
       setFlashcards(prev => {
@@ -343,8 +339,30 @@ const StudyScreen = () => {
   useEffect(() => {
     setFeedbackMessage(null);
     feedbackOpacity.setValue(0);
-    setShowBack(false); // カードが切り替わった時に必ず表面を表示
-    animatedValue.setValue(0); // アニメーションの値もリセット
+    setShowBack(false);
+    animatedValue.setValue(0);
+
+    // 新しいカードがセットされたときに音声を再生
+    if (currentCard?.audioData && typeof currentCard.audioData === 'string') {
+      const playAudio = async () => {
+        try {
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: currentCard.audioData },
+            { shouldPlay: true }
+          );
+          // 再生が終わったらリソースを解放
+          sound.setOnPlaybackStatusUpdate(async (status) => {
+            if (!status.isLoaded) return;
+            if (status.isPlaying === false && status.positionMillis === status.durationMillis) {
+              await sound.unloadAsync();
+            }
+          });
+        } catch (err) {
+          console.error('音声再生に失敗しました:', err);
+        }
+      };
+      playAudio();
+    }
   }, [currentCardIndex]);
 
   if (showCompletionMessage) {
