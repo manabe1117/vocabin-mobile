@@ -21,6 +21,7 @@ interface VocabularyResult {
   vocabulary: string;
   meaning: string;
   pronunciation: string;
+  part_of_speech: string;
   examples: { en: string; ja: string }[];
   synonyms: string[];
   notes: string;
@@ -88,6 +89,7 @@ const useVocabulary = () => {
           vocabulary: data.vocabulary || '',
           meaning: data.meanings ? data.meanings.join(', ') : '',
           pronunciation: data.pronunciation || '',
+          part_of_speech: data.partOfSpeech || '',
           examples: data.examples ? data.examples.map((ex: { en: string; ja: string }) => ex) : [],
           synonyms: data.synonyms || [],
           notes: data.notes || ''
@@ -305,6 +307,7 @@ const TranslateScreen = () => {
               <View style={styles.wordContainer}>
                 <Text style={styles.wordText}>{vocabulary.vocabulary}</Text>
                 <Text style={styles.pronunciation}>{vocabulary.pronunciation}</Text>
+                <Text style={styles.partOfSpeech}>{vocabulary.part_of_speech}</Text>
               </View>
               <TouchableOpacity 
                 style={styles.soundButton}
@@ -583,6 +586,11 @@ const styles = StyleSheet.create({
   savedButtonText: {
     color: '#4a90e2',
     lineHeight: 20,
+  },
+  partOfSpeech: {
+    fontSize: 16,
+    color: '#6c757d',
+    marginBottom: 4,
   },
 });
 

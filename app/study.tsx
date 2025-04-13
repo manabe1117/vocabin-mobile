@@ -1,10 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, PanResponder, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, PanResponder, Dimensions, ActivityIndicator, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { useAudio } from '../hooks/useAudio';
 import { ANIMATION } from '../constants/animation';
 import { COMMON_STYLES, COLORS } from '../constants/styles';
 
@@ -50,6 +49,27 @@ const StudyScreen = () => {
       }));
       setFlashcards(fetchedFlashcards);
       flashcardsRef.current = fetchedFlashcards;
+
+      // 最初のカードの音声を再生
+      if (fetchedFlashcards.length > 0 && fetchedFlashcards[0].audioData) {
+        const playAudio = async () => {
+          try {
+            const { sound } = await Audio.Sound.createAsync(
+              { uri: fetchedFlashcards[0].audioData },
+              { shouldPlay: true }
+            );
+            sound.setOnPlaybackStatusUpdate(async (status) => {
+              if (!status.isLoaded) return;
+              if (status.isPlaying === false && status.positionMillis === status.durationMillis) {
+                await sound.unloadAsync();
+              }
+            });
+          } catch (err) {
+            console.error('音声再生に失敗しました:', err);
+          }
+        };
+        playAudio();
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '予期せぬエラーが発生しました';
       setError(errorMessage);
@@ -408,7 +428,7 @@ const StudyScreen = () => {
     );
   }
 
-   if (!isLoading && (!flashcards || flashcards.length === 0)) {
+  if (!isLoading && (!flashcards || flashcards.length === 0)) {
     return (
       <View style={COMMON_STYLES.container}>
         <Text style={COMMON_STYLES.emptyText}>登録されたフレーズがありません</Text>
@@ -447,8 +467,7 @@ const StudyScreen = () => {
           onTouchEnd={flipCard}
         >
           <Text style={styles.cardWord}>{currentCard.vocabulary}</Text>
-          <Text style={styles.cardPronunciation}>{currentCard.part_of_speech}</Text>
-          <Text style={styles.cardExample}>{currentCard.examples[0]?.en || '例文なし'}</Text>
+          <Text style={styles.cardExample}>{currentCard.examples[0]?.en || ''}</Text>
         </Animated.View>
 
         {/* カードの裏面 */}
@@ -456,13 +475,58 @@ const StudyScreen = () => {
           style={[styles.card, styles.cardBack, backAnimatedStyle]}
           onTouchEnd={flipCard}
         >
-          <Text style={styles.cardBackText}>{currentCard.meanings[0] || '意味なし'}</Text>
-          {currentCard.synonyms.length > 0 && (
-            <View style={styles.synonymsContainer}>
-              <Text style={styles.synonymsTitle}>類義語:</Text>
-              <Text style={styles.synonymsText}>{currentCard.synonyms.join(', ')}</Text>
+          <View style={styles.cardBackContent}>
+            <View style={styles.meaningContainer}>
+              <Text style={styles.meaningText} numberOfLines={2}>
+                {currentCard.meanings.join('、')}
+              </Text>
+              <Text style={styles.partOfSpeech}>{currentCard.part_of_speech}</Text>
             </View>
-          )}
+
+            {currentCard.synonyms.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>類義語</Text>
+                <View style={styles.synonymContainer}>
+                  {currentCard.synonyms.map((synonym, index) => (
+                    <View key={index} style={styles.synonym}>
+                      <Text style={styles.synonymText}>{synonym}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {currentCard.examples.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>例文</Text>
+                <View style={styles.examplesContainer}>
+                  {(() => {
+                    // 最初の2つの例文の日本語の文字数をチェック
+                    const firstExampleLength = currentCard.examples[0]?.ja?.length || 0;
+                    const secondExampleLength = currentCard.examples[1]?.ja?.length || 0;
+                    
+                    // 両方とも20文字を超える場合は1つ目のみ表示
+                    if (firstExampleLength > 20 && secondExampleLength > 20) {
+                      return (
+                        <View style={styles.exampleItem}>
+                          <Text style={styles.exampleEn}>{currentCard.examples[0].en}</Text>
+                          <Text style={styles.exampleJa}>{currentCard.examples[0].ja}</Text>
+                        </View>
+                      );
+                    }
+                    
+                    // それ以外の場合は2つ表示
+                    return currentCard.examples.slice(0, 2).map((example, index) => (
+                      <View key={index} style={styles.exampleItem}>
+                        <Text style={styles.exampleEn}>{example.en}</Text>
+                        <Text style={styles.exampleJa}>{example.ja}</Text>
+                      </View>
+                    ));
+                  })()}
+                </View>
+              </View>
+            )}
+          </View>
         </Animated.View>
       </Animated.View>
 
@@ -477,7 +541,7 @@ const StudyScreen = () => {
               [feedbackMessage.position === 'topLeft' ? 'left' : 'right']: 40,
             }
           ]}
-           pointerEvents="none"
+          pointerEvents="none"
         >
           <Text style={[styles.feedbackText, { color: feedbackMessage.color }]}>
             {feedbackMessage.text}
@@ -552,21 +616,84 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 10,
   },
-  cardPronunciation: {
-    fontSize: 20,
-    color: '#666',
-    marginBottom: 20,
-  },
   cardExample: {
     fontSize: 18,
     color: '#444',
     textAlign: 'center',
     marginBottom: 40,
   },
-  cardBackText: {
-    fontSize: 36,
-    textAlign: 'center',
-    color: '#333',
+  cardBackContent: {
+    flex: 1,
+    width: '100%',
+    padding: 16,
+  },
+  wordHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  wordContainer: {
+    flex: 1,
+  },
+  wordText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#212529',
+    marginBottom: 4,
+  },
+  pronunciation: {
+    fontSize: 16,
+    color: '#6c757d',
+  },
+  soundButton: {
+    padding: 8,
+  },
+  section: {
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4a90e2',
+    marginBottom: 4,
+  },
+  sectionText: {
+    fontSize: 16,
+    color: '#212529',
+    lineHeight: 20,
+  },
+  synonymContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    overflow: 'hidden',
+    maxHeight: 28, // 1行分の高さに制限
+  },
+  synonym: {
+    backgroundColor: '#e9ecef',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 16,
+    height: 28,
+    justifyContent: 'center',
+  },
+  synonymText: {
+    fontSize: 14,
+    color: '#212529',
+    lineHeight: 20,
+  },
+  exampleItem: {
+    marginBottom: 8,
+  },
+  exampleEn: {
+    fontSize: 16,
+    color: '#212529',
+    marginBottom: 2,
+  },
+  exampleJa: {
+    fontSize: 14,
+    color: '#6c757d',
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -625,20 +752,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  synonymsContainer: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  synonymsTitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 5,
-  },
-  synonymsText: {
-    fontSize: 14,
-    color: '#444',
-    textAlign: 'center',
-  },
   completionContainer: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -672,6 +785,23 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  meaningContainer: {
+    marginBottom: 16,
+  },
+  meaningText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#212529',
+    marginBottom: 4,
+  },
+  partOfSpeech: {
+    fontSize: 16,
+    color: '#6c757d',
+    marginBottom: 4,
+  },
+  examplesContainer: {
+    overflow: 'hidden',
   },
 });
 
