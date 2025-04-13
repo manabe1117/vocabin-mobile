@@ -37,7 +37,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="person" size={28} color={color} />,
         }}
       />
-      {/* ★ translate と study の Tabs.Screen 定義は削除する */}
+      {/* ★ dictionary と study の Tabs.Screen 定義は削除する */}
     </Tabs>
   );
 }

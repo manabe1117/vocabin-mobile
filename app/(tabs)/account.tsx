@@ -10,7 +10,7 @@ export default function AccountScreen() {
   const handleSignOut = async () => {
     try {
       await signOut();
-      router.replace('/login');
+      router.replace('/auth/login');
     } catch (error) {
       console.error('ログアウトエラー:', error);
     }
