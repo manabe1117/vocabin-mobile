@@ -1,13 +1,14 @@
-// app/index.tsx
+// app/(tabs)/index.tsx
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Link } from 'expo-router';
+import { Link } from 'expo-router'; // Link はそのまま使用可能
 import { MaterialIcons } from '@expo/vector-icons';
 
 const HomeScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.buttonContainer}>
+        {/* Linkのhrefはルートからの絶対パスを指定 */}
         <Link href="/translate" asChild>
           <TouchableOpacity style={styles.button}>
             <MaterialIcons name="translate" size={32} color="#fff" />
