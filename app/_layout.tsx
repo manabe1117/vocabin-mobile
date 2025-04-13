@@ -68,37 +68,22 @@ function MainLayout() {
       }}>
       {/* === 各タブスクリーンの定義 === */}
       <Tabs.Screen
-        name="index" // このファイルは app/index.tsx を指す
+        name="index"
         options={{
-          title: 'Home',
+          title: 'ホーム',
           tabBarIcon: ({ color }) => <MaterialCommunityIcons name="home" size={28} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="translate" // app/translate.tsx
-        options={{
-          title: '翻訳',
-          tabBarIcon: ({ color }) => <Ionicons name="language" size={28} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="study" // app/study.tsx
-        options={{
-          title: '学習',
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="cards" size={28} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="account" // app/account.tsx
+        name="account"
         options={{
           title: 'アカウント',
           tabBarIcon: ({ color }) => <Ionicons name="person" size={28} color={color} />,
         }}
       />
-      {/* ログイン画面はこのタブレイアウトの一部ではないので削除 */}
       <Tabs.Screen name="auth/login" options={{ href: null }} />
-      {/* 他にタブレイアウトに含めたくないファイルがある場合、それも削除または options={{ href: null }} を設定 */}
-      {/* 例: <Tabs.Screen name="otherScreenNotInTabs" options={{ href: null }} /> */}
+      <Tabs.Screen name="translate" options={{ href: null }} />
+      <Tabs.Screen name="study" options={{ href: null }} />
     </Tabs>
   );
 }
