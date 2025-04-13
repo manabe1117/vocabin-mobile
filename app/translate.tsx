@@ -15,6 +15,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useAudio } from '../hooks/useAudio';
 import { COMMON_STYLES, COLORS } from '../constants/styles';
 import { handleApiError } from '../utils/errorHandler';
+import { Audio, AVPlaybackStatus } from 'expo-av';
 
 interface VocabularyResult {
   id: number;
@@ -25,6 +26,7 @@ interface VocabularyResult {
   examples: { en: string; ja: string }[];
   synonyms: string[];
   notes: string;
+  audio_url?: string;
 }
 
 interface SuggestionResponse {
@@ -92,7 +94,8 @@ const useVocabulary = () => {
           part_of_speech: data.partOfSpeech || '',
           examples: data.examples ? data.examples.map((ex: { en: string; ja: string }) => ex) : [],
           synonyms: data.synonyms || [],
-          notes: data.notes || ''
+          notes: data.notes || '',
+          audio_url: data.audio_url || undefined
         };
         setVocabulary(formattedData);
         // 保存状態を確認
@@ -162,6 +165,30 @@ const TranslateScreen = () => {
     }
   };
 
+  const handlePlaySound = async (text: string, audioUrl?: string) => {
+    if (audioUrl) {
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: audioUrl },
+          { shouldPlay: true }
+        );
+        // 再生が終わったらリソースを解放
+        sound.setOnPlaybackStatusUpdate(async (status: AVPlaybackStatus) => {
+          if (!status.isLoaded) return;
+          if (status.isPlaying === false && status.positionMillis === status.durationMillis) {
+            await sound.unloadAsync();
+          }
+        });
+      } catch (err) {
+        console.error('音声再生に失敗しました:', err);
+        // 音声URLが失敗した場合は通常のTTSを使用
+        playSound(text);
+      }
+    } else {
+      playSound(text);
+    }
+  };
+
   const clearInput = () => {
     setInputText('');
     setDisplayText('');
@@ -177,7 +204,7 @@ const TranslateScreen = () => {
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="単語を入力"
+              placeholder="英語または日本語を入力"
               value={inputText}
               onChangeText={setInputText}
               onSubmitEditing={handleTranslate}
@@ -243,7 +270,7 @@ const TranslateScreen = () => {
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
-            placeholder="単語を入力"
+            placeholder="英語または日本語を入力"
             value={inputText}
             onChangeText={setInputText}
             onSubmitEditing={handleTranslate}
@@ -311,7 +338,7 @@ const TranslateScreen = () => {
               </View>
               <TouchableOpacity 
                 style={styles.soundButton}
-                onPress={() => playSound(vocabulary.vocabulary)}
+                onPress={() => handlePlaySound(vocabulary.vocabulary, vocabulary.audio_url)}
               >
                 <Ionicons name="volume-high" size={24} color="#4a90e2" />
               </TouchableOpacity>
