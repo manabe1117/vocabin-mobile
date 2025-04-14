@@ -16,6 +16,7 @@ import { useAudio } from '../hooks/useAudio';
 import { COMMON_STYLES, COLORS } from '../constants/styles';
 import { handleApiError } from '../utils/errorHandler';
 import { Audio, AVPlaybackStatus } from 'expo-av';
+import { useSpeech } from '../hooks/useSpeech';
 
 interface VocabularyResult {
   id: number;
@@ -120,6 +121,7 @@ const TranslateScreen = () => {
   const { vocabulary, suggestion, loading, error, translate, setVocabulary, setSuggestion, isSaved, setIsSaved } = useVocabulary();
   const { session } = useAuth();
   const { playSound } = useAudio();
+  const { speakText } = useSpeech();
 
   const handleTranslate = () => {
     setDisplayText(inputText);
@@ -165,27 +167,9 @@ const TranslateScreen = () => {
     }
   };
 
-  const handlePlaySound = async (text: string, audioUrl?: string) => {
-    if (audioUrl) {
-      try {
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: audioUrl },
-          { shouldPlay: true }
-        );
-        // 再生が終わったらリソースを解放
-        sound.setOnPlaybackStatusUpdate(async (status: AVPlaybackStatus) => {
-          if (!status.isLoaded) return;
-          if (status.isPlaying === false && status.positionMillis === status.durationMillis) {
-            await sound.unloadAsync();
-          }
-        });
-      } catch (err) {
-        console.error('音声再生に失敗しました:', err);
-        // 音声URLが失敗した場合は通常のTTSを使用
-        playSound(text);
-      }
-    } else {
-      playSound(text);
+  const handlePlaySound = async (text: string) => {
+    if (text) {
+      speakText(text, '英語');
     }
   };
 
@@ -338,7 +322,7 @@ const TranslateScreen = () => {
               </View>
               <TouchableOpacity 
                 style={styles.soundButton}
-                onPress={() => handlePlaySound(vocabulary.vocabulary, vocabulary.audio_url)}
+                onPress={() => handlePlaySound(vocabulary.vocabulary)}
               >
                 <Ionicons name="volume-high" size={24} color="#4a90e2" />
               </TouchableOpacity>

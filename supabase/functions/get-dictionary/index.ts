@@ -27,7 +27,6 @@ interface VocabularyData {
   antonyms: string[]; // 対義語 (英語) の配列
   conjugations?: { [key: string]: string }; // 活用形 (オプショナル)
   notes?: string; // 補足情報 (日本語) (オプショナル)
-  audio_url?: string; // 音声URL (オプショナル)
 }
 
 // リクエストボディのスキーマ定義 (Zod を使用)
@@ -277,55 +276,6 @@ async function fetchVocabularyFromSupabase(vocabulary: string): Promise<Vocabula
 
   console.log('Supabase data found:', data);
 
-  // 音声データを取得
-  let audioData = null;
-  try {
-    const { data: audioCache } = await supabase
-      .from('audio_cache')
-      .select('url')
-      .eq('text', data.vocabulary)
-      .eq('language', 'en')
-      .limit(1)
-      .maybeSingle();
-
-    if (audioCache) {
-      audioData = audioCache.url;
-    } else {
-      // 音声データが存在しない場合は生成
-      const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(data.vocabulary)}&tl=en&client=tw-ob`;
-      const response = await fetch(ttsUrl);
-      const audioBlob = await response.blob();
-
-      const fileName = `${Date.now()}_${data.vocabulary}.mp3`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('audio')
-        .upload(fileName, audioBlob, {
-          contentType: 'audio/mpeg',
-        });
-
-      if (!uploadError) {
-        const { data: { publicUrl } } = supabase.storage
-          .from('audio')
-          .getPublicUrl(fileName);
-
-        await supabase
-          .from('audio_cache')
-          .insert([
-            {
-              text: data.vocabulary,
-              language: 'en',
-              url: publicUrl,
-              created_at: new Date().toISOString(),
-            },
-          ]);
-
-        audioData = publicUrl;
-      }
-    }
-  } catch (err) {
-    console.error('音声データの取得/生成に失敗:', err);
-  }
-
   // example_sentences のパース処理
   let parsedExamples: { en: string; ja: string; }[] = [];
   if (data.example_sentences) {
@@ -365,7 +315,6 @@ async function fetchVocabularyFromSupabase(vocabulary: string): Promise<Vocabula
     antonyms: data.antonyms,
     conjugations: parsedConjugations,
     notes: data.notes,
-    audio_url: audioData, // 音声URLを追加
   } as VocabularyData;
 }
 

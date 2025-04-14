@@ -20,6 +20,7 @@ import * as Speech from 'expo-speech';
 import { ThemedView } from '../components/ThemedView';
 import { ThemedText } from '../components/ThemedText';
 import { supabase } from '../lib/supabase';
+import { useSpeech } from '../hooks/useSpeech';
 
 /**
  * 音声データのインターフェース定義
@@ -93,6 +94,8 @@ const TranslateScreen = () => {
   // --- Ref定義 ---
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null); // 入力デバウンス用のタイマーID
   const inputRef = useRef<TextInput>(null); // TextInputへの参照
+
+  const { speakText } = useSpeech();
 
   /**
    * 表示用の言語名からGoogle Translate APIで使用する言語コードを取得する
@@ -219,55 +222,6 @@ const TranslateScreen = () => {
     }
   };
 
-   /**
-    * Expo Speechを使用してテキストを読み上げる
-    * @param text 読み上げるテキスト
-    * @param lang 読み上げる言語 ('日本語', '英語')
-    */
-   const speakText = async (text: string, lang: string) => {
-    if (!text) return; // テキストが空なら何もしない
-
-    // 現在読み上げ中であれば停止する
-    const isSpeaking = await Speech.isSpeakingAsync();
-    if (isSpeaking) {
-      await Speech.stop();
-      return;
-    }
-
-    // 言語名から適切な言語コード（BCP 47形式）を選択
-    let languageCode = 'en-US'; // デフォルトは英語(アメリカ)
-    if (lang === '日本語') languageCode = 'ja-JP';
-    else if (lang === '英語') languageCode = 'en-US'; // 必要であれば 'en-GB' など他の英語も考慮
-
-    try {
-        const availableVoices = await Speech.getAvailableVoicesAsync();
-        let voiceIdentifier: string | undefined;
-
-        // OSごとに最適なVoiceを探す (例: iOSのKyoko, Samantha)
-        if (Platform.OS === 'ios') {
-            if (languageCode === 'ja-JP') voiceIdentifier = availableVoices.find((v: Voice) => v.language === languageCode && v.name === 'Kyoko')?.identifier;
-            else if (languageCode === 'en-US') voiceIdentifier = availableVoices.find((v: Voice) => v.language === languageCode && v.name === 'Samantha')?.identifier;
-        }
-        // 特定のVoiceが見つからない場合、言語コードの前半部分が一致する最初のVoiceを使用
-        if (!voiceIdentifier) voiceIdentifier = availableVoices.find((v: Voice) => v.language.startsWith(languageCode.split('-')[0]))?.identifier;
-
-        // テキスト読み上げを実行
-        Speech.speak(text, { language: languageCode, voice: voiceIdentifier });
-    } catch (speechError) {
-        console.error("Speech error:", speechError);
-        Alert.alert("音声エラー", "テキストの読み上げ中にエラーが発生しました。");
-    }
-  };
-
-  /**
-   * マイク入力ボタンが押されたときの処理（現在は未実装のアラート表示）
-   */
-  const handleMicInput = () => { Alert.alert("未実装", "音声入力機能は現在開発中です。"); };
-  /**
-   * カメラ入力ボタンが押されたときの処理（現在は未実装のアラート表示）
-   */
-  const handleCameraInput = () => { Alert.alert("未実装", "カメラ入力機能は現在開発中です。"); };
-
   /**
    * inputTextまたはtargetLangが変更されたときにデバウンス処理を挟んで翻訳を実行するuseEffect
    */
@@ -298,6 +252,15 @@ const TranslateScreen = () => {
     };
   }, [inputText, targetLang]); // inputText または targetLang が変更されたら実行
 
+  /**
+   * マイク入力ボタンが押されたときの処理（現在は未実装のアラート表示）
+   */
+  const handleMicInput = () => { Alert.alert("未実装", "音声入力機能は現在開発中です。"); };
+
+  /**
+   * カメラ入力ボタンが押されたときの処理（現在は未実装のアラート表示）
+   */
+  const handleCameraInput = () => { Alert.alert("未実装", "カメラ入力機能は現在開発中です。"); };
 
   // --- JSXレンダリング ---
   return (

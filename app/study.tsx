@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ANIMATION } from '../constants/animation';
 import { COMMON_STYLES, COLORS } from '../constants/styles';
+import { useSpeech } from '../hooks/useSpeech';
 
 // フラッシュカードの型定義
 interface Flashcard {
@@ -26,6 +27,7 @@ interface Flashcard {
 
 const StudyScreen = () => {
   const { session } = useAuth();
+  const { speakText } = useSpeech();
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const flashcardsRef = useRef(flashcards);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,24 +53,8 @@ const StudyScreen = () => {
       flashcardsRef.current = fetchedFlashcards;
 
       // 最初のカードの音声を再生
-      if (fetchedFlashcards.length > 0 && fetchedFlashcards[0].audioData) {
-        const playAudio = async () => {
-          try {
-            const { sound } = await Audio.Sound.createAsync(
-              { uri: fetchedFlashcards[0].audioData },
-              { shouldPlay: true }
-            );
-            sound.setOnPlaybackStatusUpdate(async (status) => {
-              if (!status.isLoaded) return;
-              if (status.isPlaying === false && status.positionMillis === status.durationMillis) {
-                await sound.unloadAsync();
-              }
-            });
-          } catch (err) {
-            console.error('音声再生に失敗しました:', err);
-          }
-        };
-        playAudio();
+      if (fetchedFlashcards.length > 0) {
+        speakText(fetchedFlashcards[0].vocabulary, '英語');
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '予期せぬエラーが発生しました';
@@ -363,25 +349,8 @@ const StudyScreen = () => {
     animatedValue.setValue(0);
 
     // 新しいカードがセットされたときに音声を再生
-    if (currentCard?.audioData && typeof currentCard.audioData === 'string') {
-      const playAudio = async () => {
-        try {
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: currentCard.audioData },
-            { shouldPlay: true }
-          );
-          // 再生が終わったらリソースを解放
-          sound.setOnPlaybackStatusUpdate(async (status) => {
-            if (!status.isLoaded) return;
-            if (status.isPlaying === false && status.positionMillis === status.durationMillis) {
-              await sound.unloadAsync();
-            }
-          });
-        } catch (err) {
-          console.error('音声再生に失敗しました:', err);
-        }
-      };
-      playAudio();
+    if (currentCard?.vocabulary) {
+      speakText(currentCard.vocabulary, '英語');
     }
   }, [currentCardIndex]);
 
