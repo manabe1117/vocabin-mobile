@@ -52,7 +52,19 @@ function RootLayoutNav() {
       <Stack.Screen
         name="dictionary"
         options={{
-          title: '辞書検索', // ヘッダータイトル
+          title: '辞書', // ヘッダータイトル
+          headerShown: true, // ヘッダーを表示 (戻るボタンが自動でつく)
+          // headerBackTitle: 'ホーム', // iOS用に戻るボタンの隣のテキスト
+          // headerTintColor: Colors[colorScheme ?? 'light'].text, // ヘッダーの色などカスタマイズ可能
+          // headerStyle: { backgroundColor: Colors[colorScheme ?? 'light'].background },
+        }}
+      />
+
+      {/* translate スクリーン */}
+      <Stack.Screen
+        name="translate"
+        options={{
+          title: '翻訳', // ヘッダータイトル
           headerShown: true, // ヘッダーを表示 (戻るボタンが自動でつく)
           // headerBackTitle: 'ホーム', // iOS用に戻るボタンの隣のテキスト
           // headerTintColor: Colors[colorScheme ?? 'light'].text, // ヘッダーの色などカスタマイズ可能
