@@ -1,3 +1,4 @@
+// app/translate.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -13,56 +14,44 @@ import {
   TouchableWithoutFeedback,
   ViewStyle,
   TextStyle,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import * as Speech from 'expo-speech';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 import { ThemedView } from '../components/ThemedView';
 import { ThemedText } from '../components/ThemedText';
 import { supabase } from '../lib/supabase';
 import { useSpeech } from '../hooks/useSpeech';
 
-/**
- * 音声データのインターフェース定義
- */
-interface Voice {
-  identifier: string; // 音声の一意な識別子
-  language: string; // 音声の言語コード (例: 'en-US', 'ja-JP')
-  name: string;     // 音声の名前 (例: 'Samantha', 'Kyoko')
-}
-
-/**
- * アプリケーション全体で使用する色の定義
- */
 const colors = {
-  background: '#f8f9fa',          // アプリ全体の背景色
-  inputBackground: '#ffffff',     // 入力エリアの背景色
-  outputBackground: '#ffffff',    // 出力エリアの背景色
-  textPrimary: '#202124',         // 主要なテキストの色
-  textSecondary: '#5f6368',       // 副次的なテキストやアイコンの色
-  accentBlue: '#1a73e8',          // アクセントカラー（ボタンなど）
-  iconColor: '#5f6368',           // 通常のアイコンの色
-  iconColorDisabled: '#bdbdbd',   // 無効状態のアイコンの色
-  borderColor: '#dadce0',         // ボーダーや区切り線の色
-  rippleColor: 'rgba(0, 0, 0, 0.1)', // タッチエフェクトの色 (Android)
-  errorColor: '#d93025',          // エラーメッセージの色
-  placeholderColor: '#9e9e9e',    // プレースホルダーテキストの色
-  bottomBarBackground: '#ffffff', // 下部バーの背景色
-  langButtonBackgroundOriginal: '#e8f0fe', // 言語選択ボタンの背景色
+  background: '#f8f9fa',
+  inputBackground: '#ffffff',
+  outputBackground: '#ffffff',
+  textPrimary: '#202124',
+  textSecondary: '#5f6368',
+  accentBlue: '#1a73e8',
+  iconColor: '#5f6368',
+  iconColorDisabled: '#bdbdbd',
+  borderColor: '#dadce0',
+  rippleColor: 'rgba(0, 0, 0, 0.1)',
+  errorColor: '#d93025',
+  placeholderColor: '#9e9e9e',
+  bottomBarBackground: '#ffffff',
+  langButtonBackgroundOriginal: '#e8f0fe',
 };
 
-/**
- * 共通で使用するスタイル定義
- */
 const COMMON_STYLES: {
-  loadingContainer: ViewStyle; // ローディングインジケーター表示用コンテナ
-  errorContainer: ViewStyle;   // エラーメッセージ表示用コンテナ
-  errorText: TextStyle;        // エラーメッセージのテキストスタイル
+  loadingContainer: ViewStyle;
+  errorContainer: ViewStyle;
+  errorText: TextStyle;
 } = {
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 16,
   },
   errorContainer: {
     flex: 1,
@@ -78,469 +67,441 @@ const COMMON_STYLES: {
   },
 };
 
-
-/**
- * 翻訳画面のメインコンポーネント
- */
 const TranslateScreen = () => {
-  // --- State定義 ---
-  const [inputText, setInputText] = useState(''); // 入力されたテキスト
-  const [translatedText, setTranslatedText] = useState(''); // 翻訳結果のテキスト
-  const [sourceLang, setSourceLang] = useState('英語'); // 翻訳元の言語
-  const [targetLang, setTargetLang] = useState('日本語'); // 翻訳先の言語
-  const [isLoading, setIsLoading] = useState(false); // 翻訳処理中かどうかのフラグ
-  const [error, setError] = useState<string | null>(null); // エラーメッセージ
-
-  // --- Ref定義 ---
-  const debounceTimeout = useRef<NodeJS.Timeout | null>(null); // 入力デバウンス用のタイマーID
-  const inputRef = useRef<TextInput>(null); // TextInputへの参照
-
+  const [inputText, setInputText] = useState('');
+  const [translatedText, setTranslatedText] = useState('');
+  const [sourceLang, setSourceLang] = useState('英語');
+  const [targetLang, setTargetLang] = useState('日本語');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [permissionResponse, requestPermission] = Audio.usePermissions();
+  const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<TextInput>(null);
   const { speakText } = useSpeech();
 
-  /**
-   * 表示用の言語名からGoogle Translate APIで使用する言語コードを取得する
-   * @param lang 表示用の言語名 ('日本語', '英語')
-   * @returns 言語コード ('ja', 'en')
-   */
-  const getLanguageCode = (lang: string): string => {
-    switch (lang) {
-      case '日本語':
-        return 'ja';
-      case '英語':
-        return 'en';
-      default:
-        return 'en'; // デフォルトは英語
+  const getLanguageCode = (lang: string, type: 'translate' | 'voice' = 'translate'): string => {
+    if (type === 'voice') {
+      switch (lang) {
+        case '日本語': return 'ja-JP';
+        case '英語': return 'en-US';
+        default: return 'en-US';
+      }
+    } else {
+      switch (lang) {
+        case '日本語': return 'ja';
+        case '英語': return 'en';
+        default: return 'en';
+      }
     }
   };
 
-  /**
-   * Google Cloud Translate APIを使用してテキストを翻訳する
-   * @param textToTranslate 翻訳するテキスト
-   */
-  const handleTranslate = async (textToTranslate: string) => {
-    const trimmedText = textToTranslate.trim(); // 前後の空白を除去
+  async function startRecording() {
+    if (isRecording || isTranscribing) return;
+    try {
+      let currentStatus = permissionResponse?.status;
+      if (currentStatus !== 'granted') {
+        console.log('Requesting microphone permission..');
+        const { status } = await requestPermission();
+        currentStatus = status;
+      }
+      if (currentStatus !== 'granted') {
+        Alert.alert(
+          '権限が必要です',
+          '音声入力のためにマイクへのアクセスを許可してください。',
+          [
+            {
+              text: '許可する',
+              onPress: async () => {
+                const { status: newStatus } = await requestPermission();
+                if (newStatus !== 'granted') {
+                  Alert.alert( '権限が必要です', '音声入力を使用するにはマイクへのアクセスを許可する必要があります。設定画面から許可してください。',
+                    [ { text: '設定を開く', onPress: () => Linking.openSettings() }, { text: 'キャンセル', style: 'cancel' } ], { cancelable: false }
+                  );
+                } else { startRecording(); }
+              },
+            },
+            { text: 'キャンセル', style: 'cancel' },
+          ],
+          { cancelable: false }
+        );
+        return;
+      }
 
-    // テキストが空の場合は翻訳せず、状態をリセット
-    if (!trimmedText) {
-      setTranslatedText('');
+      console.log('Starting recording with expo-av...');
+      setIsRecording(true);
       setError(null);
-      setIsLoading(false);
+      setInputText('');
+      setTranslatedText('');
+      Keyboard.dismiss();
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const recordingOptions: Audio.RecordingOptions = {
+          android: {
+            extension: '.amr',
+            outputFormat: Audio.AndroidOutputFormat.AMR_NB,
+            audioEncoder: Audio.AndroidAudioEncoder.AMR_NB,
+            sampleRate: 8000,
+            numberOfChannels: 1,
+          },
+          ios: {
+            extension: '.wav',
+            outputFormat: Audio.IOSOutputFormat.LINEARPCM,
+            audioQuality: Audio.IOSAudioQuality.HIGH,
+            sampleRate: 16000,
+            numberOfChannels: 1,
+            bitRate: 256000,
+            linearPCMBitDepth: 16,
+            linearPCMIsBigEndian: false,
+            linearPCMIsFloat: false,
+          },
+          web: {},
+      };
+      console.log(`Attempting to record with options for ${Platform.OS}:`, Platform.OS === 'ios' ? recordingOptions.ios : recordingOptions.android);
+
+      const { recording: newRecording } = await Audio.Recording.createAsync(recordingOptions);
+      setRecording(newRecording);
+      console.log('Recording started');
+
+    } catch (err: any) {
+      console.error('Failed to start recording', err);
+      setError(`録音の開始に失敗しました: ${err.message || '不明なエラー'}`);
+      setIsRecording(false);
+      if (recording) { try { await recording.stopAndUnloadAsync(); } catch {} }
+      setRecording(null);
+    }
+  }
+
+  async function stopRecording() {
+    if (!recording) {
+      console.warn('Recording instance is null, cannot stop.');
+      setIsRecording(false);
       return;
     }
-
-    setIsLoading(true); // ローディング開始
-    setError(null);     // エラーをリセット
-    setTranslatedText(''); // 既存の翻訳結果をクリア
-
+    console.log('Stopping recording...');
+    setIsRecording(false);
+    setIsTranscribing(true);
+    setError(null);
     try {
-      // Supabase Edge Functionを呼び出し
-      const { data, error } = await supabase.functions.invoke('translate', {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      if (!uri) throw new Error('録音ファイルのURIが取得できませんでした。');
+      console.log('Recording stopped and stored at', uri);
+
+      const contentType = Platform.OS === 'ios' ? 'audio/wav' : 'audio/amr';
+      await sendAudioToSupabase(uri, contentType);
+
+    } catch (err: any) {
+      console.error('Failed to stop recording or transcribe', err);
+      setError(`録音の停止または文字起こしに失敗しました: ${err.message || '不明なエラー'}`);
+      setIsTranscribing(false);
+      setRecording(null);
+    }
+  }
+
+  async function sendAudioToSupabase(fileUri: string, contentType: string) {
+    let fileInfo;
+    try {
+      console.log('Checking file existence at:', fileUri);
+      fileInfo = await FileSystem.getInfoAsync(fileUri);
+      if (!fileInfo.exists) throw new Error("録音ファイルが見つかりません。");
+      console.log('File Info:', { uri: fileInfo.uri, size: fileInfo.size });
+
+      const base64Audio = await FileSystem.readAsStringAsync(fileInfo.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      console.log('Invoking Supabase function speech-to-text...');
+      const targetLanguageCode = getLanguageCode(sourceLang, 'voice');
+
+      console.log(`Sending audio with contentType: ${contentType}`);
+
+      const { data, error: invokeError } = await supabase.functions.invoke('speech-to-text', {
+        body: {
+          audioBase64: base64Audio,
+          languageCode: targetLanguageCode,
+          contentType: contentType,
+        },
+      });
+
+      if (invokeError) {
+          console.error('Supabase function invocation error:', invokeError);
+          throw new Error(invokeError.message || 'Function invocation failed');
+      }
+
+      if (data && typeof data.transcript === 'string') {
+        console.log('Transcription result:', data.transcript);
+        setInputText(data.transcript);
+        setError(null);
+      } else if (data && data.error) {
+        console.error('Supabase function returned an error:', data.error);
+        throw new Error(data.error);
+      } else {
+        console.warn('Transcription result is empty or invalid:', data);
+        setInputText('');
+        if (fileInfo.size < 10000 && data?.transcript === '') {
+          setError('録音時間が短いか、無音の可能性があります。');
+        } else {
+          setError('音声が認識できませんでした。');
+        }
+      }
+
+    } catch (err: any) {
+      console.error('Supabase function invocation or processing failed:', err);
+      setError(`文字起こしエラー: ${err.message || '不明なエラー'}`);
+      setInputText('');
+    } finally {
+      setIsTranscribing(false);
+      if (fileInfo && fileInfo.exists) {
+        try {
+          console.log('Deleting temporary audio file:', fileInfo.uri);
+          await FileSystem.deleteAsync(fileInfo.uri);
+          console.log('Temporary audio file deleted.');
+        } catch (e) {
+          console.warn("Failed to delete audio file", e);
+        }
+      } else if (fileUri && !fileInfo) {
+        try {
+          console.log('Attempting to delete audio file with original URI:', fileUri);
+          await FileSystem.deleteAsync(fileUri);
+          console.log('Temporary audio file deleted (fallback attempt).');
+        } catch (e) {
+          console.warn("Failed to delete audio file (fallback attempt)", e);
+        }
+      }
+    }
+  }
+
+  const handleMicButtonPress = () => { if (isRecording) stopRecording(); else startRecording(); };
+
+  const handleTranslate = async (textToTranslate: string) => {
+    const trimmedText = textToTranslate.trim();
+    if (!trimmedText || isRecording || isTranscribing) {
+      if (!trimmedText) {
+          setTranslatedText('');
+          setIsLoading(false);
+      }
+      return;
+    }
+    console.log('Starting translation...');
+    setIsLoading(true);
+    setError(null);
+    setTranslatedText('');
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('translate', {
         body: {
           text: trimmedText,
           sourceLang: sourceLang,
-          targetLang: targetLang,
+          targetLang: targetLang
         }
       });
-
-      if (error) throw error;
-
+      if (invokeError) throw invokeError;
       if (data && data.translatedText) {
         setTranslatedText(data.translatedText);
         setError(null);
+      } else if (data && data.error) {
+          throw new Error(data.error);
       } else {
         throw new Error('翻訳結果が取得できませんでした。');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Translation error:', error);
-      setError('翻訳中にエラーが発生しました。');
+      setError(`翻訳エラー: ${error.message || '不明なエラー'}`);
       setTranslatedText('');
     } finally {
       setIsLoading(false);
     }
   };
 
-  /**
-   * 翻訳元言語と翻訳先言語を入れ替える
-   * 入力テキストと翻訳結果テキストも入れ替える（翻訳結果がある場合）
-   */
   const swapLanguages = () => {
-    // ローディング中は処理しない
-    if (isLoading) return;
-
+    if (isLoading || isRecording || isTranscribing) return;
     const currentSource = sourceLang;
     const currentTarget = targetLang;
     const currentInput = inputText;
     const currentOutput = translatedText;
-
-    // 言語を入れ替え
     setSourceLang(currentTarget);
     setTargetLang(currentSource);
-
-    // 有効な翻訳結果がある場合、それを入力テキストに設定
-    // それ以外の場合、翻訳結果とエラーをクリア
-    if (currentOutput.trim() && !isLoading && !error) {
+    if (currentOutput.trim() && !error && !isLoading) {
       setInputText(currentOutput);
-      // setTranslatedText(''); // targetLangが変わるのでuseEffectで再翻訳される
     } else {
-        // 入力が空でもともと出力も空だった場合、またはエラーがあった場合など
-        setInputText(currentInput); // 元の入力を維持する
-        setTranslatedText('');
-        setError(null);
-        // 入力が空でなければuseEffectで再翻訳がトリガーされる
-        // 入力が空なら翻訳結果は空のまま
+      setInputText(currentInput);
     }
+    setTranslatedText('');
+    setError(null);
   };
 
-
-  /**
-   * 入力テキスト、翻訳結果、エラーメッセージをクリアし、入力フィールドにフォーカスする
-   */
   const clearInput = () => {
+    if (isRecording) { stopRecording(); return; }
+    if (isTranscribing || isLoading) return;
     setInputText('');
     setTranslatedText('');
     setError(null);
-    // デバウンス中のタイマーがあればクリア
-    if (debounceTimeout.current) {
-        clearTimeout(debounceTimeout.current);
-    }
-    setIsLoading(false); // ローディング状態もリセット
-    inputRef.current?.focus(); // TextInputにフォーカスを当てる
-  };
-
-  /**
-   * 指定されたテキストをクリップボードにコピーする
-   * @param text コピーするテキスト
-   */
-  const copyToClipboard = async (text: string) => {
-    if (!text) return; // テキストが空なら何もしない
-    try {
-        await Clipboard.setStringAsync(text); // クリップボードにコピー
-        Alert.alert('コピー完了', '翻訳結果をクリップボードにコピーしました。');
-    } catch (e) {
-        console.error('Clipboard copy error:', e);
-        Alert.alert('エラー', 'クリップボードへのコピーに失敗しました。');
-    }
-  };
-
-  /**
-   * inputTextまたはtargetLangが変更されたときにデバウンス処理を挟んで翻訳を実行するuseEffect
-   */
-  useEffect(() => {
-    // 既存のデバウンスタイマーがあればクリア
     if (debounceTimeout.current) { clearTimeout(debounceTimeout.current); }
+    setIsLoading(false);
+    inputRef.current?.focus();
+  };
 
-    const textToTranslate = inputText;
-
-    // 入力テキストが空、または空白のみの場合は翻訳せず状態をリセット
-    if (!textToTranslate.trim()) {
-        setTranslatedText('');
-        setError(null);
-        setIsLoading(false);
-        return; // 翻訳処理は行わない
+  const copyToClipboard = async (text: string) => {
+    if (!text || isRecording || isTranscribing || isLoading) return;
+    try {
+      await Clipboard.setStringAsync(text);
+      Alert.alert('コピー完了', '翻訳結果をクリップボードにコピーしました。');
+    } catch (e) {
+      console.error('Clipboard copy error:', e);
+      Alert.alert('エラー', 'クリップボードへのコピーに失敗しました。');
     }
+  };
 
-    // 新しいデバウンスタイマーを設定 (800ms後に翻訳を実行)
+  useEffect(() => {
+    if (debounceTimeout.current) { clearTimeout(debounceTimeout.current); }
+    const textToTranslate = inputText.trim();
+    if (isRecording || isTranscribing || !textToTranslate) {
+      setTranslatedText('');
+      setIsLoading(false);
+      return;
+    }
     debounceTimeout.current = setTimeout(() => {
-        handleTranslate(textToTranslate);
+      handleTranslate(textToTranslate);
     }, 800);
-
-    // クリーンアップ関数: コンポーネントのアンマウント時や依存配列の変更前にタイマーをクリア
     return () => {
-        if (debounceTimeout.current) {
-            clearTimeout(debounceTimeout.current);
-        }
+      if (debounceTimeout.current) { clearTimeout(debounceTimeout.current); }
     };
-  }, [inputText, targetLang]); // inputText または targetLang が変更されたら実行
+  }, [inputText, sourceLang, targetLang]);
 
-  /**
-   * マイク入力ボタンが押されたときの処理（現在は未実装のアラート表示）
-   */
-  const handleMicInput = () => { Alert.alert("未実装", "音声入力機能は現在開発中です。"); };
-
-  /**
-   * カメラ入力ボタンが押されたときの処理（現在は未実装のアラート表示）
-   */
   const handleCameraInput = () => { Alert.alert("未実装", "カメラ入力機能は現在開発中です。"); };
 
-  // --- JSXレンダリング ---
+  const handleSpeakInput = () => {
+      if (inputText && !isRecording && !isTranscribing && !isLoading) {
+          speakText(inputText, getLanguageCode(sourceLang, 'voice'));
+      }
+  };
+  const handleSpeakOutput = () => {
+      if (translatedText && !isRecording && !isTranscribing && !isLoading && !error) {
+          speakText(translatedText, getLanguageCode(targetLang, 'voice'));
+      }
+  };
+
   return (
-    // 画面全体を TouchableWithoutFeedback で囲み、キーボード外タップでキーボードを閉じる
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <ThemedView style={styles.container}>
-
-        {/* --- 入力エリア --- */}
+        {/* Input Area */}
         <View style={styles.inputArea}>
-          {/* 入力テキスト表示用ScrollView */}
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContentContainer}
-            keyboardShouldPersistTaps="handled" // スクロールビュー内のタップイベントをハンドリング
-          >
+            keyboardShouldPersistTaps="handled" >
             <TextInput
               ref={inputRef}
               style={styles.textInput}
-              multiline // 複数行入力許可
-              placeholder={sourceLang === '英語' ? "Enter text" : "テキストを入力"}
+              multiline
+              editable={!isRecording && !isTranscribing && !isLoading}
+              placeholder={ isRecording ? "録音中..." : isTranscribing ? "文字起こし中..." : (sourceLang === '英語' ? "Enter text" : "テキストを入力")}
               placeholderTextColor={colors.placeholderColor}
               value={inputText}
-              onChangeText={setInputText} // テキスト変更時にinputText Stateを更新
-              textAlignVertical="top" // Androidでテキストを上揃えにする
-              scrollEnabled={false} // TextInput自体のスクロールは無効化 (ScrollViewで制御)
-            />
+              onChangeText={setInputText}
+              textAlignVertical="top"
+              scrollEnabled={false} />
           </ScrollView>
-          {/* 入力エリアのアクションボタン (クリア、読み上げ) */}
           <View style={styles.inputActionsContainer}>
-            {/* 入力テキストがある場合のみ表示 */}
-            {inputText.length > 0 ? (
-                <React.Fragment>
-                    {/* 読み上げボタン */}
-                    <TouchableOpacity
-                        onPress={() => speakText(inputText, sourceLang)}
-                        style={styles.iconButton}
-                        disabled={!inputText} // テキストがない場合は無効
-                        >
-                        <Ionicons name="volume-high-outline" size={24} color={!inputText ? colors.iconColorDisabled : colors.iconColor} />
-                    </TouchableOpacity>
-                    {/* スペーサー */}
-                    <View style={{flex: 1}} />
-                    {/* クリアボタン */}
-                    <TouchableOpacity onPress={clearInput} style={styles.iconButton}>
-                        <Ionicons name="close-circle" size={24} color={colors.iconColor} />
-                    </TouchableOpacity>
-                </React.Fragment>
-            ) : <View style={{ height: 40 }}/> /* ボタンがない場合も高さを確保 */ }
+            {inputText.length > 0 && !isRecording && !isTranscribing && !isLoading ? (
+              <React.Fragment>
+                <TouchableOpacity onPress={handleSpeakInput} style={styles.iconButton} disabled={!inputText || isRecording || isTranscribing || isLoading} >
+                  <Ionicons name="volume-high-outline" size={24} color={!inputText || isRecording || isTranscribing || isLoading ? colors.iconColorDisabled : colors.iconColor} />
+                </TouchableOpacity>
+                <View style={{ flex: 1 }} />
+                <TouchableOpacity onPress={clearInput} style={styles.iconButton} disabled={isRecording || isTranscribing || isLoading} >
+                  <Ionicons name="close-circle" size={24} color={isRecording || isTranscribing || isLoading ? colors.iconColorDisabled : colors.iconColor} />
+                </TouchableOpacity>
+              </React.Fragment>
+            ) : <View style={{ height: 40 }} />}
           </View>
         </View>
-
-        {/* --- 区切り線 --- */}
         <View style={styles.divider} />
-
-        {/* --- 出力エリア --- */}
+        {/* Output Area */}
         <View style={styles.outputArea}>
-          {/* 翻訳先言語ラベル */}
           <View style={styles.outputLabelContainer}>
-                <ThemedText style={styles.targetLanguageLabel}>{targetLang}</ThemedText>
-           </View>
-           {/* 翻訳結果表示エリア (ローディング、エラー、結果、プレースホルダーを条件分岐で表示) */}
-            {isLoading ? (
-              // ローディング表示
-              <View style={COMMON_STYLES.loadingContainer}>
-                <ActivityIndicator size="large" color={colors.accentBlue} />
-              </View>
-            ) : error ? (
-              // エラー表示
-              <View style={COMMON_STYLES.errorContainer}>
-                <Ionicons name="warning-outline" size={30} color={colors.textSecondary} />
-                <ThemedText style={COMMON_STYLES.errorText}>{error}</ThemedText>
-              </View>
-            ) : translatedText ? (
-              // 翻訳結果表示
-              <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollContentContainer}
-                keyboardShouldPersistTaps="handled"
-              >
-                <ThemedText style={styles.outputText}>{translatedText}</ThemedText>
-              </ScrollView>
-            ) : (
-              // プレースホルダー表示
-              <View style={styles.placeholderContainer}>
-                <ThemedText style={styles.placeholderText}>翻訳結果がここに表示されます</ThemedText>
-              </View>
-            )}
-          {/* 出力エリアのアクションボタン (コピー、読み上げ) */}
+            <ThemedText style={styles.targetLanguageLabel}>{targetLang}</ThemedText>
+          </View>
+          {isTranscribing ? ( <View style={COMMON_STYLES.loadingContainer}><ActivityIndicator size="large" color={colors.accentBlue} /><ThemedText style={styles.loadingText}>音声をテキストに変換中...</ThemedText></View>
+          ) : isLoading ? ( <View style={COMMON_STYLES.loadingContainer}><ActivityIndicator size="large" color={colors.accentBlue} /><ThemedText style={styles.loadingText}>翻訳中...</ThemedText></View>
+          ) : error ? ( <View style={COMMON_STYLES.errorContainer}><Ionicons name="warning-outline" size={30} color={colors.errorColor} /><ThemedText style={[COMMON_STYLES.errorText, { color: colors.errorColor }]}>{error}</ThemedText></View>
+          ) : translatedText ? (
+            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContentContainer} keyboardShouldPersistTaps="handled" >
+              <TouchableOpacity activeOpacity={0.8} onLongPress={() => copyToClipboard(translatedText)}>
+                  <ThemedText style={styles.outputText}>{translatedText}</ThemedText>
+              </TouchableOpacity>
+            </ScrollView>
+          ) : ( <View style={styles.placeholderContainer}><ThemedText style={styles.placeholderText}>{inputText ? "翻訳結果がここに表示されます" : "テキストを入力するか、\nマイクボタンを押して音声入力"}</ThemedText></View> )}
           <View style={styles.outputActionsBottomContainer}>
-            {/* 翻訳結果があり、ローディング中でなく、エラーもない場合に表示 */}
-            {translatedText && !isLoading && !error ? (
-                <React.Fragment>
-                    {/* 読み上げボタン */}
-                    <TouchableOpacity
-                        onPress={() => speakText(translatedText, targetLang)}
-                        style={styles.iconButton}
-                    >
-                        <Ionicons name="volume-high-outline" size={24} color={colors.iconColor} />
-                    </TouchableOpacity>
-                    {/* スペーサー */}
-                    <View style={{flex: 1}} />
-                    {/* コピーボタン */}
-                    <TouchableOpacity
-                        onPress={() => copyToClipboard(translatedText)}
-                        style={styles.iconButton}
-                    >
-                        <Ionicons name="copy-outline" size={22} color={colors.iconColor} />
-                    </TouchableOpacity>
-                </React.Fragment>
-            ) : <View style={{ height: 40 }}/> /* ボタンがない場合も高さを確保 */ }
+            {translatedText && !isLoading && !error && !isTranscribing && !isRecording ? (
+              <React.Fragment>
+                <TouchableOpacity onPress={handleSpeakOutput} style={styles.iconButton} disabled={!translatedText || isLoading || !!error || isTranscribing || isRecording} >
+                  <Ionicons name="volume-high-outline" size={24} color={!translatedText || isLoading || !!error || isTranscribing || isRecording ? colors.iconColorDisabled : colors.iconColor} />
+                </TouchableOpacity>
+                <View style={{ flex: 1 }} />
+                <TouchableOpacity onPress={() => copyToClipboard(translatedText)} style={styles.iconButton} disabled={!translatedText || isLoading || !!error || isTranscribing || isRecording} >
+                  <Ionicons name="copy-outline" size={22} color={!translatedText || isLoading || !!error || isTranscribing || isRecording ? colors.iconColorDisabled : colors.iconColor} />
+                </TouchableOpacity>
+              </React.Fragment>
+            ) : <View style={{ height: 40 }} />}
           </View>
         </View>
-
-        {/* --- 下部バー (言語切り替え、マイク、カメラ) --- */}
+        {/* Bottom Bar */}
         <View style={styles.bottomBar}>
-            {/* 翻訳元言語表示ボタン (現在は表示のみで操作不可) */}
-            <TouchableOpacity style={styles.bottomLangButton} disabled>
-                <ThemedText style={styles.bottomLangText}>{sourceLang}</ThemedText>
-            </TouchableOpacity>
-            {/* 言語入れ替えボタン */}
-            <TouchableOpacity onPress={swapLanguages} style={styles.swapButton} disabled={isLoading}>
-                <Ionicons name="swap-horizontal" size={24} color={isLoading ? colors.iconColorDisabled : colors.accentBlue} />
-            </TouchableOpacity>
-            {/* 翻訳先言語表示ボタン (現在は表示のみで操作不可) */}
-            <TouchableOpacity style={styles.bottomLangButton} disabled>
-                <ThemedText style={styles.bottomLangText}>{targetLang}</ThemedText>
-            </TouchableOpacity>
-            {/* 右寄せのためのスペーサー */}
-             <View style={{ flex: 1 }} />
-             {/* マイク入力ボタン */}
-             <TouchableOpacity onPress={handleMicInput} style={styles.iconButtonMicCam}>
-                <Ionicons name="mic-outline" size={28} color={colors.iconColor} />
-            </TouchableOpacity>
-             {/* カメラ入力ボタン */}
-             <TouchableOpacity onPress={handleCameraInput} style={[styles.iconButtonMicCam, { marginLeft: 12 }]}>
-                <Ionicons name="camera-outline" size={28} color={colors.iconColor} />
-            </TouchableOpacity>
+          <TouchableOpacity style={styles.bottomLangButton} disabled={isRecording || isTranscribing || isLoading}>
+            <ThemedText style={[styles.bottomLangText, (isRecording || isTranscribing || isLoading) && styles.disabledText]}>{sourceLang}</ThemedText>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={swapLanguages} style={styles.swapButton} disabled={isLoading || isRecording || isTranscribing}>
+            <Ionicons name="swap-horizontal" size={24} color={isLoading || isRecording || isTranscribing ? colors.iconColorDisabled : colors.accentBlue} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.bottomLangButton} disabled={isRecording || isTranscribing || isLoading}>
+            <ThemedText style={[styles.bottomLangText, (isRecording || isTranscribing || isLoading) && styles.disabledText]}>{targetLang}</ThemedText>
+          </TouchableOpacity>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity onPress={handleMicButtonPress} disabled={isTranscribing} style={[styles.iconButtonMicCam, isRecording && styles.recordingButton, isTranscribing && styles.disabledButton]} >
+            <Ionicons name={isRecording ? "stop-circle-outline" : "mic-outline"} size={28} color={isRecording ? colors.errorColor : isTranscribing ? colors.iconColorDisabled : colors.iconColor} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleCameraInput} style={[styles.iconButtonMicCam, (isRecording || isTranscribing || isLoading) && styles.disabledButton, { marginLeft: 12 }]} disabled={isRecording || isTranscribing || isLoading} >
+            <Ionicons name="camera-outline" size={28} color={isRecording || isTranscribing || isLoading ? colors.iconColorDisabled : colors.iconColor} />
+          </TouchableOpacity>
         </View>
-
       </ThemedView>
     </TouchableWithoutFeedback>
   );
 };
 
-// --- スタイル定義 ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  inputArea: {
-    flex: 1, // 利用可能なスペースを占有
-    backgroundColor: colors.inputBackground,
-    paddingTop: Platform.OS === 'android' ? 10 : 20, // Android/iOSで上部パディング調整
-    paddingHorizontal: 16,
-    justifyContent: 'space-between', // TextInputとアクションボタンの間隔を調整
-  },
-  outputArea: {
-    flex: 1, // 利用可能なスペースを占有
-    backgroundColor: colors.outputBackground,
-    paddingHorizontal: 16,
-    paddingTop: 5,
-    paddingBottom: 5,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.borderColor,
-  },
-  scrollView: {
-    // ScrollView自体はflex: 1を持たない（コンテンツに応じて伸縮）
-  },
-  scrollContentContainer: {
-    flexGrow: 1, // コンテンツが少ない場合でもコンテナの高さを埋める
-    paddingBottom: 10, // スクロール終端の余白
-  },
-  textInput: {
-    fontSize: 22,
-    color: colors.textPrimary,
-    lineHeight: 30, // 行間
-    minHeight: 80, // 最小の高さ
-    paddingTop: Platform.OS === 'ios' ? 8 : 0, // iOSでの上部パディング調整
-  },
-  outputText: {
-    fontSize: 22,
-    color: colors.textPrimary,
-    lineHeight: 30,
-    paddingVertical: 8, // 上下のパディング
-  },
-  // 入力エリアのアクションボタン（クリア、読み上げ）用コンテナ
-  inputActionsContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingTop: 5,
-      height: 40, // 高さを固定
-  },
-  // 翻訳先言語ラベルのコンテナ
-  outputLabelContainer: {
-      minHeight: 30, // 最小の高さを確保
-      justifyContent: 'center',
-  },
-  // 出力エリアのアクションボタン（コピー、読み上げ）用コンテナ
-  outputActionsBottomContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingTop: 5,
-      height: 40, // 高さを固定
-  },
-  // 翻訳先言語ラベルのテキストスタイル
-  targetLanguageLabel: {
-      fontSize: 14,
-      fontWeight: '500',
-      color: colors.textSecondary,
-      marginLeft: 8,
-  },
-  // 汎用アイコンボタンスタイル
-  iconButton: {
-    padding: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 40,
-    height: 40,
-  },
-  // 翻訳結果がない場合のプレースホルダーコンテナ
-  placeholderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-   // プレースホルダーテキストのスタイル
-   placeholderText: {
-      fontSize: 16,
-      color: colors.placeholderColor,
-      textAlign: 'center',
-  },
-
-  // 下部バーのスタイル
-  bottomBar: {
-    flexDirection: 'row', // 要素を横並びにする
-    alignItems: 'center', // 要素を中央揃え（縦方向）にする
-    paddingHorizontal: 10, // 左右のパディング
-    paddingVertical: Platform.OS === 'ios' ? 10 : 8, // 上下のパディング (OS差考慮)
-    paddingBottom: Platform.OS === 'ios' ? 20 : 8, // 下部のパディング (特にiOSのSafeArea考慮)
-    borderTopWidth: 1, // 上部に境界線
-    borderColor: colors.borderColor, // 境界線の色
-    backgroundColor: colors.bottomBarBackground, // 背景色
-    minHeight: 55, // 最小の高さ
-  },
-  // 下部バーの言語表示ボタンのスタイル
-  bottomLangButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 18, // 角丸
-    backgroundColor: colors.langButtonBackgroundOriginal, // 背景色
-    minWidth: 80, // 最小の幅
-    alignItems: 'center', // テキストを中央揃え
-    marginHorizontal: 5, // 左右のマージン
-  },
-  // 下部バーの言語表示テキストのスタイル
-  bottomLangText: {
-    fontSize: 14,
-    fontWeight: '500', // やや太字
-    color: colors.accentBlue, // テキストの色
-  },
-  // 言語入れ替えボタンのスタイル
-  swapButton: {
-    padding: 8, // タップ領域確保のためのパディング
-  },
-  // 下部バーのマイク・カメラアイコンボタンのスタイル
-   iconButtonMicCam: {
-    padding: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 44, // ボタンの幅
-    height: 44, // ボタンの高さ
-    borderRadius: 22, // 円形にする
-    marginLeft: 5, // 左側のマージン
-   },
+    container: { flex: 1, backgroundColor: colors.background },
+    inputArea: { flex: 1, backgroundColor: colors.inputBackground, paddingTop: Platform.OS === 'android' ? 10 : 20, paddingHorizontal: 16, justifyContent: 'space-between' },
+    outputArea: { flex: 1, backgroundColor: colors.outputBackground, paddingHorizontal: 16, paddingTop: 5, paddingBottom: 5, justifyContent: 'space-between' },
+    divider: { height: 1, backgroundColor: colors.borderColor },
+    scrollView: { flex: 1 },
+    scrollContentContainer: { flexGrow: 1, paddingBottom: 10 },
+    textInput: { fontSize: 22, color: colors.textPrimary, lineHeight: 30, minHeight: 80, paddingTop: Platform.OS === 'ios' ? 8 : 0 },
+    outputText: { fontSize: 22, color: colors.textPrimary, lineHeight: 30, paddingVertical: 8 },
+    inputActionsContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 5, height: 40 },
+    outputLabelContainer: { minHeight: 30, justifyContent: 'center', paddingLeft: 8 },
+    outputActionsBottomContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 5, height: 40 },
+    targetLanguageLabel: { fontSize: 14, fontWeight: '500', color: colors.textSecondary },
+    iconButton: { padding: 8, justifyContent: 'center', alignItems: 'center', width: 40, height: 40, borderRadius: 20 },
+    placeholderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
+    placeholderText: { fontSize: 16, color: colors.placeholderColor, textAlign: 'center', lineHeight: 24 },
+    loadingText: { marginTop: 10, fontSize: 14, color: colors.textSecondary },
+    bottomBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: Platform.OS === 'ios' ? 10 : 8, paddingBottom: Platform.OS === 'ios' ? 25 : 10, borderTopWidth: 1, borderColor: colors.borderColor, backgroundColor: colors.bottomBarBackground, minHeight: 55 },
+    bottomLangButton: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 18, backgroundColor: colors.langButtonBackgroundOriginal, minWidth: 80, alignItems: 'center', marginHorizontal: 5 },
+    bottomLangText: { fontSize: 14, fontWeight: '500', color: colors.accentBlue },
+    disabledText: { color: colors.iconColorDisabled },
+    swapButton: { padding: 8 },
+    iconButtonMicCam: { padding: 8, justifyContent: 'center', alignItems: 'center', width: 44, height: 44, borderRadius: 22, marginLeft: 5 },
+    recordingButton: { backgroundColor: colors.errorColor + '20' },
+    disabledButton: { opacity: 0.5 },
 });
 
 export default TranslateScreen;
