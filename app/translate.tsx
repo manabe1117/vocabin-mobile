@@ -24,6 +24,7 @@ import { ThemedView } from '../components/ThemedView';
 import { ThemedText } from '../components/ThemedText';
 import { supabase } from '../lib/supabase';
 import { useSpeech } from '../hooks/useSpeech';
+import CameraModal from '../components/CameraModal';
 
 const colors = {
   background: '#f8f9fa',
@@ -81,6 +82,8 @@ const TranslateScreen = () => {
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<TextInput>(null);
   const { speakText } = useSpeech();
+  const [isCameraModalVisible, setIsCameraModalVisible] = useState(false);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   const getLanguageCode = (lang: string, type: 'translate' | 'voice' = 'translate'): string => {
     if (type === 'voice') {
@@ -375,7 +378,72 @@ const TranslateScreen = () => {
     };
   }, [inputText, sourceLang, targetLang]);
 
-  const handleCameraInput = () => { Alert.alert("未実装", "カメラ入力機能は現在開発中です。"); };
+  // カメラボタンが押されたときの処理
+  const handleCameraInput = () => {
+    if (isRecording || isTranscribing || isLoading || isProcessingImage) return;
+    Keyboard.dismiss(); // カメラ表示前にキーボードを閉じる
+    setIsCameraModalVisible(true);
+  };
+
+  // カメラモーダルを閉じる処理
+  const handleCloseCamera = () => {
+    setIsCameraModalVisible(false);
+  };
+
+  // 写真が撮影され、Base64データが渡されたときの処理
+  const handlePictureTaken = async (base64Image: string) => {
+    setIsCameraModalVisible(false); // カメラを閉じる
+    if (!base64Image) {
+      Alert.alert('エラー', '画像データの取得に失敗しました。');
+      return;
+    }
+    console.log('Picture taken, processing image...');
+    setIsProcessingImage(true);
+    setError(null);
+    setInputText(''); // 処理中は入力欄をクリア
+    setTranslatedText('');
+
+    try {
+      // Supabase Function (例: 'image-to-text') を呼び出す
+      console.log('Invoking Supabase function image-to-text...');
+      const { data, error: invokeError } = await supabase.functions.invoke('image-to-text', {
+        body: { imageBase64: base64Image },
+        // 必要であれば、言語ヒントなどを追加で送ることも可能
+        // body: { imageBase64: base64Image, languageHints: [getLanguageCode(sourceLang)] },
+      });
+
+      if (invokeError) {
+        console.error('Supabase function invocation error (image-to-text):', invokeError);
+        throw new Error(invokeError.message || 'Function invocation failed');
+      }
+
+      if (data && typeof data.text === 'string') {
+        console.log('OCR result:', data.text);
+        if (data.text.trim()) {
+          setInputText(data.text); // 抽出したテキストを入力欄にセット
+          setError(null);
+          // テキストがセットされると、useEffect内のhandleTranslateが自動で実行される
+        } else {
+          setError('画像からテキストを検出できませんでした。');
+          setInputText('');
+        }
+      } else if (data && data.error) {
+        console.error('Supabase function returned an error (image-to-text):', data.error);
+        throw new Error(data.error);
+      } else {
+        console.warn('OCR result is empty or invalid:', data);
+        setError('画像からテキストを検出できませんでした。');
+        setInputText('');
+      }
+
+    } catch (err: any) {
+      console.error('Image processing or OCR failed:', err);
+      setError(`画像処理エラー: ${err.message || '不明なエラー'}`);
+      setInputText('');
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
 
   const handleSpeakInput = () => {
       if (inputText && !isRecording && !isTranscribing && !isLoading) {
@@ -390,89 +458,97 @@ const TranslateScreen = () => {
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <ThemedView style={styles.container}>
-        {/* Input Area */}
-        <View style={styles.inputArea}>
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContentContainer}
-            keyboardShouldPersistTaps="handled" >
-            <TextInput
-              ref={inputRef}
-              style={styles.textInput}
-              multiline
-              editable={!isRecording && !isTranscribing && !isLoading}
-              placeholder={ isRecording ? "録音中..." : isTranscribing ? "文字起こし中..." : (sourceLang === '英語' ? "Enter text" : "テキストを入力")}
-              placeholderTextColor={colors.placeholderColor}
-              value={inputText}
-              onChangeText={setInputText}
-              textAlignVertical="top"
-              scrollEnabled={false} />
-          </ScrollView>
-          <View style={styles.inputActionsContainer}>
-            {inputText.length > 0 && !isRecording && !isTranscribing && !isLoading ? (
-              <React.Fragment>
-                <TouchableOpacity onPress={handleSpeakInput} style={styles.iconButton} disabled={!inputText || isRecording || isTranscribing || isLoading} >
-                  <Ionicons name="volume-high-outline" size={24} color={!inputText || isRecording || isTranscribing || isLoading ? colors.iconColorDisabled : colors.iconColor} />
-                </TouchableOpacity>
-                <View style={{ flex: 1 }} />
-                <TouchableOpacity onPress={clearInput} style={styles.iconButton} disabled={isRecording || isTranscribing || isLoading} >
-                  <Ionicons name="close-circle" size={24} color={isRecording || isTranscribing || isLoading ? colors.iconColorDisabled : colors.iconColor} />
-                </TouchableOpacity>
-              </React.Fragment>
-            ) : <View style={{ height: 40 }} />}
-          </View>
-        </View>
-        <View style={styles.divider} />
-        {/* Output Area */}
-        <View style={styles.outputArea}>
-          <View style={styles.outputLabelContainer}>
-            <ThemedText style={styles.targetLanguageLabel}>{targetLang}</ThemedText>
-          </View>
-          {isTranscribing ? ( <View style={COMMON_STYLES.loadingContainer}><ActivityIndicator size="large" color={colors.accentBlue} /><ThemedText style={styles.loadingText}>音声をテキストに変換中...</ThemedText></View>
-          ) : isLoading ? ( <View style={COMMON_STYLES.loadingContainer}><ActivityIndicator size="large" color={colors.accentBlue} /><ThemedText style={styles.loadingText}>翻訳中...</ThemedText></View>
-          ) : error ? ( <View style={COMMON_STYLES.errorContainer}><Ionicons name="warning-outline" size={30} color={colors.errorColor} /><ThemedText style={[COMMON_STYLES.errorText, { color: colors.errorColor }]}>{error}</ThemedText></View>
-          ) : translatedText ? (
-            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContentContainer} keyboardShouldPersistTaps="handled" >
-              <TouchableOpacity activeOpacity={0.8} onLongPress={() => copyToClipboard(translatedText)}>
-                  <ThemedText style={styles.outputText}>{translatedText}</ThemedText>
-              </TouchableOpacity>
+      <>
+        <ThemedView style={styles.container}>
+          {/* Input Area */}
+          <View style={styles.inputArea}>
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContentContainer}
+              keyboardShouldPersistTaps="handled" >
+              <TextInput
+                ref={inputRef}
+                style={styles.textInput}
+                multiline
+                editable={!isRecording && !isTranscribing && !isLoading}
+                placeholder={ isRecording ? "録音中..." : isTranscribing ? "文字起こし中..." : (sourceLang === '英語' ? "Enter text" : "テキストを入力")}
+                placeholderTextColor={colors.placeholderColor}
+                value={inputText}
+                onChangeText={setInputText}
+                textAlignVertical="top"
+                scrollEnabled={false} />
             </ScrollView>
-          ) : ( <View style={styles.placeholderContainer}><ThemedText style={styles.placeholderText}>{inputText ? "翻訳結果がここに表示されます" : "テキストを入力するか、\nマイクボタンを押して音声入力"}</ThemedText></View> )}
-          <View style={styles.outputActionsBottomContainer}>
-            {translatedText && !isLoading && !error && !isTranscribing && !isRecording ? (
-              <React.Fragment>
-                <TouchableOpacity onPress={handleSpeakOutput} style={styles.iconButton} disabled={!translatedText || isLoading || !!error || isTranscribing || isRecording} >
-                  <Ionicons name="volume-high-outline" size={24} color={!translatedText || isLoading || !!error || isTranscribing || isRecording ? colors.iconColorDisabled : colors.iconColor} />
-                </TouchableOpacity>
-                <View style={{ flex: 1 }} />
-                <TouchableOpacity onPress={() => copyToClipboard(translatedText)} style={styles.iconButton} disabled={!translatedText || isLoading || !!error || isTranscribing || isRecording} >
-                  <Ionicons name="copy-outline" size={22} color={!translatedText || isLoading || !!error || isTranscribing || isRecording ? colors.iconColorDisabled : colors.iconColor} />
-                </TouchableOpacity>
-              </React.Fragment>
-            ) : <View style={{ height: 40 }} />}
+            <View style={styles.inputActionsContainer}>
+              {inputText.length > 0 && !isRecording && !isTranscribing && !isLoading ? (
+                <React.Fragment>
+                  <TouchableOpacity onPress={handleSpeakInput} style={styles.iconButton} disabled={!inputText || isRecording || isTranscribing || isLoading} >
+                    <Ionicons name="volume-high-outline" size={24} color={!inputText || isRecording || isTranscribing || isLoading ? colors.iconColorDisabled : colors.iconColor} />
+                  </TouchableOpacity>
+                  <View style={{ flex: 1 }} />
+                  <TouchableOpacity onPress={clearInput} style={styles.iconButton} disabled={isRecording || isTranscribing || isLoading} >
+                    <Ionicons name="close-circle" size={24} color={isRecording || isTranscribing || isLoading ? colors.iconColorDisabled : colors.iconColor} />
+                  </TouchableOpacity>
+                </React.Fragment>
+              ) : <View style={{ height: 40 }} />}
+            </View>
           </View>
-        </View>
-        {/* Bottom Bar */}
-        <View style={styles.bottomBar}>
-          <TouchableOpacity style={styles.bottomLangButton} disabled={isRecording || isTranscribing || isLoading}>
-            <ThemedText style={[styles.bottomLangText, (isRecording || isTranscribing || isLoading) && styles.disabledText]}>{sourceLang}</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={swapLanguages} style={styles.swapButton} disabled={isLoading || isRecording || isTranscribing}>
-            <Ionicons name="swap-horizontal" size={24} color={isLoading || isRecording || isTranscribing ? colors.iconColorDisabled : colors.accentBlue} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.bottomLangButton} disabled={isRecording || isTranscribing || isLoading}>
-            <ThemedText style={[styles.bottomLangText, (isRecording || isTranscribing || isLoading) && styles.disabledText]}>{targetLang}</ThemedText>
-          </TouchableOpacity>
-          <View style={{ flex: 1 }} />
-          <TouchableOpacity onPress={handleMicButtonPress} disabled={isTranscribing} style={[styles.iconButtonMicCam, isRecording && styles.recordingButton, isTranscribing && styles.disabledButton]} >
-            <Ionicons name={isRecording ? "stop-circle-outline" : "mic-outline"} size={28} color={isRecording ? colors.errorColor : isTranscribing ? colors.iconColorDisabled : colors.iconColor} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleCameraInput} style={[styles.iconButtonMicCam, (isRecording || isTranscribing || isLoading) && styles.disabledButton, { marginLeft: 12 }]} disabled={isRecording || isTranscribing || isLoading} >
-            <Ionicons name="camera-outline" size={28} color={isRecording || isTranscribing || isLoading ? colors.iconColorDisabled : colors.iconColor} />
-          </TouchableOpacity>
-        </View>
-      </ThemedView>
+          <View style={styles.divider} />
+          {/* Output Area */}
+          <View style={styles.outputArea}>
+            <View style={styles.outputLabelContainer}>
+              <ThemedText style={styles.targetLanguageLabel}>{targetLang}</ThemedText>
+            </View>
+            {isTranscribing ? ( <View style={COMMON_STYLES.loadingContainer}><ActivityIndicator size="large" color={colors.accentBlue} /><ThemedText style={styles.loadingText}>音声をテキストに変換中...</ThemedText></View>
+            ) : isLoading ? ( <View style={COMMON_STYLES.loadingContainer}><ActivityIndicator size="large" color={colors.accentBlue} /><ThemedText style={styles.loadingText}>翻訳中...</ThemedText></View>
+            ) : error ? ( <View style={COMMON_STYLES.errorContainer}><Ionicons name="warning-outline" size={30} color={colors.errorColor} /><ThemedText style={[COMMON_STYLES.errorText, { color: colors.errorColor }]}>{error}</ThemedText></View>
+            ) : translatedText ? (
+              <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContentContainer} keyboardShouldPersistTaps="handled" >
+                <TouchableOpacity activeOpacity={0.8} onLongPress={() => copyToClipboard(translatedText)}>
+                    <ThemedText style={styles.outputText}>{translatedText}</ThemedText>
+                </TouchableOpacity>
+              </ScrollView>
+            ) : ( <View style={styles.placeholderContainer}><ThemedText style={styles.placeholderText}>{inputText ? "翻訳結果がここに表示されます" : "テキストを入力するか、\nマイクボタンを押して音声入力"}</ThemedText></View> )}
+            <View style={styles.outputActionsBottomContainer}>
+              {translatedText && !isLoading && !error && !isTranscribing && !isRecording ? (
+                <React.Fragment>
+                  <TouchableOpacity onPress={handleSpeakOutput} style={styles.iconButton} disabled={!translatedText || isLoading || !!error || isTranscribing || isRecording} >
+                    <Ionicons name="volume-high-outline" size={24} color={!translatedText || isLoading || !!error || isTranscribing || isRecording ? colors.iconColorDisabled : colors.iconColor} />
+                  </TouchableOpacity>
+                  <View style={{ flex: 1 }} />
+                  <TouchableOpacity onPress={() => copyToClipboard(translatedText)} style={styles.iconButton} disabled={!translatedText || isLoading || !!error || isTranscribing || isRecording} >
+                    <Ionicons name="copy-outline" size={22} color={!translatedText || isLoading || !!error || isTranscribing || isRecording ? colors.iconColorDisabled : colors.iconColor} />
+                  </TouchableOpacity>
+                </React.Fragment>
+              ) : <View style={{ height: 40 }} />}
+            </View>
+          </View>
+          {/* Bottom Bar */}
+          <View style={styles.bottomBar}>
+            <TouchableOpacity style={styles.bottomLangButton} disabled={isRecording || isTranscribing || isLoading}>
+              <ThemedText style={[styles.bottomLangText, (isRecording || isTranscribing || isLoading) && styles.disabledText]}>{sourceLang}</ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={swapLanguages} style={styles.swapButton} disabled={isLoading || isRecording || isTranscribing}>
+              <Ionicons name="swap-horizontal" size={24} color={isLoading || isRecording || isTranscribing ? colors.iconColorDisabled : colors.accentBlue} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.bottomLangButton} disabled={isRecording || isTranscribing || isLoading}>
+              <ThemedText style={[styles.bottomLangText, (isRecording || isTranscribing || isLoading) && styles.disabledText]}>{targetLang}</ThemedText>
+            </TouchableOpacity>
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity onPress={handleMicButtonPress} disabled={isTranscribing} style={[styles.iconButtonMicCam, isRecording && styles.recordingButton, isTranscribing && styles.disabledButton]} >
+              <Ionicons name={isRecording ? "stop-circle-outline" : "mic-outline"} size={28} color={isRecording ? colors.errorColor : isTranscribing ? colors.iconColorDisabled : colors.iconColor} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleCameraInput} style={[styles.iconButtonMicCam, (isRecording || isTranscribing || isLoading) && styles.disabledButton, { marginLeft: 12 }]} disabled={isRecording || isTranscribing || isLoading} >
+              <Ionicons name="camera-outline" size={28} color={isRecording || isTranscribing || isLoading ? colors.iconColorDisabled : colors.iconColor} />
+            </TouchableOpacity>
+          </View>
+        </ThemedView>
+        {/* カメラモーダル */}
+        <CameraModal
+          isVisible={isCameraModalVisible}
+          onClose={handleCloseCamera}
+          onPictureTaken={handlePictureTaken}
+        />
+      </>
     </TouchableWithoutFeedback>
   );
 };

@@ -10,14 +10,25 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.takumi.vocabin"
+      "bundleIdentifier": "com.takumi.vocabin",
+      "infoPlist": {
+        "NSCameraUsageDescription": "このアプリでは翻訳のためにカメラを使用します。",
+        "NSPhotoLibraryUsageDescription": "画像を選択するためにフォトライブラリへアクセスします。",
+        "NSMicrophoneUsageDescription": "音声入力のためにマイクを使用します。"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.takumi.vocabin"
+      "package": "com.takumi.vocabin",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "bundler": "metro",

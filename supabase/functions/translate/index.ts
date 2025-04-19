@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
 
     // Google Cloud Translation APIを使用して翻訳
     const response = await fetch(
-      `https://translation.googleapis.com/language/translate/v2?key=${Deno.env.get('GOOGLE_TRANSLATE_API_KEY')}`,
+      `https://translation.googleapis.com/language/translate/v2?key=${Deno.env.get('GOOGLE_API_KEY')}`,
       {
         method: 'POST',
         headers: {
