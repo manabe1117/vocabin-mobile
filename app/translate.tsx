@@ -15,6 +15,7 @@ import {
   ViewStyle,
   TextStyle,
   Linking,
+  Text,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -25,6 +26,8 @@ import { ThemedText } from '../components/ThemedText';
 import { supabase } from '../lib/supabase';
 import { useSpeech } from '../hooks/useSpeech';
 import CameraModal from '../components/CameraModal';
+import DictionaryModal from '../components/DictionaryModal';
+import DictionaryBanner from '../components/DictionaryBanner';
 
 const colors = {
   background: '#f8f9fa',
@@ -68,6 +71,19 @@ const COMMON_STYLES: {
   },
 };
 
+// VocabularyResult型をtranslate.tsx内で定義
+interface VocabularyResult {
+  id: number;
+  vocabulary: string;
+  meaning: string;
+  pronunciation: string;
+  part_of_speech: string;
+  examples: { en: string; ja: string }[];
+  synonyms: string[];
+  notes: string;
+  audio_url?: string;
+}
+
 const TranslateScreen = () => {
   const [inputText, setInputText] = useState('');
   const [translatedText, setTranslatedText] = useState('');
@@ -84,6 +100,14 @@ const TranslateScreen = () => {
   const { speakText } = useSpeech();
   const [isCameraModalVisible, setIsCameraModalVisible] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [dictModalVisible, setDictModalVisible] = useState(false);
+  const [selectedVocabularies, setSelectedVocabularies] = useState<VocabularyResult[]>([]);
+  const [selection, setSelection] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
+  const [bannerVisible, setBannerVisible] = useState(false);
+  const [bannerVocabularies, setBannerVocabularies] = useState<VocabularyResult[]>([]);
+  const [outputSelection, setOutputSelection] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
+  const [outputBannerVisible, setOutputBannerVisible] = useState(false);
+  const [outputBannerVocabularies, setOutputBannerVocabularies] = useState<VocabularyResult[]>([]);
 
   const getLanguageCode = (lang: string, type: 'translate' | 'voice' = 'translate'): string => {
     if (type === 'voice') {
@@ -136,7 +160,6 @@ const TranslateScreen = () => {
       console.log('Starting recording with expo-av...');
       setIsRecording(true);
       setError(null);
-      setInputText('');
       setTranslatedText('');
       Keyboard.dismiss();
 
@@ -400,7 +423,6 @@ const TranslateScreen = () => {
     console.log('Picture taken, processing image...');
     setIsProcessingImage(true);
     setError(null);
-    setInputText(''); // 処理中は入力欄をクリア
     setTranslatedText('');
 
     try {
@@ -456,6 +478,97 @@ const TranslateScreen = () => {
       }
   };
 
+  // ダミー辞書データ
+  const DUMMY_DICTIONARY: { [word: string]: VocabularyResult } = {
+    hello: {
+      id: 1,
+      vocabulary: 'hello',
+      meaning: 'こんにちは',
+      pronunciation: 'həˈloʊ',
+      part_of_speech: 'interjection',
+      examples: [
+        { en: 'Hello, how are you?', ja: 'こんにちは、お元気ですか？' },
+      ],
+      synonyms: ['hi', 'hey'],
+      notes: 'カジュアルな挨拶',
+    },
+    world: {
+      id: 2,
+      vocabulary: 'world',
+      meaning: '世界',
+      pronunciation: 'wɜːrld',
+      part_of_speech: 'noun',
+      examples: [
+        { en: 'The world is beautiful.', ja: '世界は美しい。' },
+      ],
+      synonyms: ['earth', 'globe'],
+      notes: '',
+    },
+    こんにちは: {
+      id: 3,
+      vocabulary: 'こんにちは',
+      meaning: 'hello',
+      pronunciation: 'kon-ni-chi-wa',
+      part_of_speech: '感動詞',
+      examples: [
+        { en: 'こんにちは、元気ですか？', ja: 'Hello, how are you?' },
+      ],
+      synonyms: ['やあ', 'もしもし'],
+      notes: '日常的な挨拶',
+    },
+    how: {
+      id: 4,
+      vocabulary: 'how',
+      meaning: 'どうやって、どのように',
+      pronunciation: 'haʊ',
+      part_of_speech: '副詞',
+      examples: [
+        { en: 'How are you?', ja: 'お元気ですか？' },
+      ],
+      synonyms: ['in what way', 'by what means'],
+      notes: '方法や状態を尋ねるときに使う',
+    },
+  };
+
+  // 選択範囲のテキスト取得
+  const selectedText = inputText.substring(selection.start, selection.end);
+
+  useEffect(() => {
+    if (selectedText && selectedText.trim().length > 0) {
+      const key = selectedText.trim().toLowerCase();
+      const vocab = DUMMY_DICTIONARY[key] || DUMMY_DICTIONARY[selectedText.trim()];
+      if (vocab) {
+        setBannerVocabularies([vocab]);
+        setBannerVisible(true);
+      } else {
+        setBannerVocabularies([]);
+        setBannerVisible(false);
+      }
+    } else {
+      setBannerVocabularies([]);
+      setBannerVisible(false);
+    }
+  }, [selectedText]);
+
+  const outputSelectedText = translatedText.substring(outputSelection.start, outputSelection.end);
+
+  useEffect(() => {
+    if (outputSelectedText && outputSelectedText.trim().length > 0) {
+      const key = outputSelectedText.trim().toLowerCase();
+      const vocab = DUMMY_DICTIONARY[key] || DUMMY_DICTIONARY[outputSelectedText.trim()];
+      if (vocab) {
+        setOutputBannerVocabularies([vocab]);
+        setOutputBannerVisible(true);
+      } else {
+        setOutputBannerVocabularies([]);
+        setOutputBannerVisible(false);
+      }
+    } else {
+      setOutputBannerVocabularies([]);
+      setOutputBannerVisible(false);
+    }
+  }, [outputSelectedText]);
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <>
@@ -470,13 +583,15 @@ const TranslateScreen = () => {
                 ref={inputRef}
                 style={styles.textInput}
                 multiline
-                editable={!isRecording && !isTranscribing && !isLoading}
+                editable={!isRecording && !isTranscribing}
                 placeholder={ isRecording ? "録音中..." : isTranscribing ? "文字起こし中..." : (sourceLang === '英語' ? "Enter text" : "テキストを入力")}
                 placeholderTextColor={colors.placeholderColor}
                 value={inputText}
                 onChangeText={setInputText}
                 textAlignVertical="top"
-                scrollEnabled={false} />
+                scrollEnabled={false}
+                onSelectionChange={e => setSelection(e.nativeEvent.selection)}
+              />
             </ScrollView>
             <View style={styles.inputActionsContainer}>
               {inputText.length > 0 && !isRecording && !isTranscribing && !isLoading ? (
@@ -503,9 +618,15 @@ const TranslateScreen = () => {
             ) : error ? ( <View style={COMMON_STYLES.errorContainer}><Ionicons name="warning-outline" size={30} color={colors.errorColor} /><ThemedText style={[COMMON_STYLES.errorText, { color: colors.errorColor }]}>{error}</ThemedText></View>
             ) : translatedText ? (
               <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContentContainer} keyboardShouldPersistTaps="handled" >
-                <TouchableOpacity activeOpacity={0.8} onLongPress={() => copyToClipboard(translatedText)}>
-                    <ThemedText style={styles.outputText}>{translatedText}</ThemedText>
-                </TouchableOpacity>
+                <TextInput
+                  style={styles.outputText}
+                  value={translatedText}
+                  editable={true}
+                  multiline
+                  onChangeText={() => setTranslatedText(translatedText)}
+                  onSelectionChange={e => setOutputSelection(e.nativeEvent.selection)}
+                  showSoftInputOnFocus={false}
+                />
               </ScrollView>
             ) : ( <View style={styles.placeholderContainer}><ThemedText style={styles.placeholderText}>{inputText ? "翻訳結果がここに表示されます" : "テキストを入力するか、\nマイクボタンを押して音声入力"}</ThemedText></View> )}
             <View style={styles.outputActionsBottomContainer}>
@@ -547,6 +668,17 @@ const TranslateScreen = () => {
           isVisible={isCameraModalVisible}
           onClose={handleCloseCamera}
           onPictureTaken={handlePictureTaken}
+        />
+        {/* DictionaryBanner */}
+        <DictionaryBanner
+          visible={bannerVisible}
+          vocabularies={bannerVocabularies}
+          onClose={() => setBannerVisible(false)}
+        />
+        <DictionaryBanner
+          visible={outputBannerVisible}
+          vocabularies={outputBannerVocabularies}
+          onClose={() => setOutputBannerVisible(false)}
         />
       </>
     </TouchableWithoutFeedback>
