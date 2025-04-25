@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Stack, SplashScreen, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // スプラッシュスクリーンが自動で隠れるのを防ぐ
 SplashScreen.preventAutoHideAsync();
@@ -80,6 +81,7 @@ function RootLayoutNav() {
       <Stack.Screen name="dictionary" options={{ headerShown: true, title: '辞書' }} />
       <Stack.Screen name="translate" options={{ headerShown: true, title: '翻訳' }} />
       <Stack.Screen name="study" options={{ headerShown: true, title: '学習' }} />
+      <Stack.Screen name="vocabulary" options={{ headerShown: true, title: '単語帳' }} />
       <Stack.Screen name="auth/login" options={{ title: 'ログイン' }} />
     </Stack>
   );
@@ -89,8 +91,10 @@ function RootLayoutNav() {
 export default function RootLayout() {
   console.log("RootLayout rendering. Wrapping with AuthProvider.");
   return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <RootLayoutNav />
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }

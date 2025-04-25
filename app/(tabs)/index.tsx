@@ -2,7 +2,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
 import { Link } from 'expo-router';
-import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons, Ionicons } from '@expo/vector-icons';
 
 // --- Layout Constants ---
 const { width } = Dimensions.get('window');
@@ -52,6 +52,17 @@ const HomeScreen = () => {
               </View>
               <Text style={styles.cardTitle}>翻訳</Text>
               {/* <Text style={styles.cardDescription}>テキストを翻訳</Text> */}
+            </TouchableOpacity>
+          </Link>
+
+          {/* 単語帳カード */}
+          <Link href="/vocabulary" asChild>
+            <TouchableOpacity style={[styles.card, { width: cardWidth }]}>
+              <View style={[styles.iconCircle, { backgroundColor: colors.accentOrangeLight }]}>
+                <Ionicons name="book" size={32} color={colors.accentOrange} />
+              </View>
+              <Text style={styles.cardTitle}>単語帳</Text>
+              {/* <Text style={styles.cardDescription}>保存された単語</Text> */}
             </TouchableOpacity>
           </Link>
         </View>
