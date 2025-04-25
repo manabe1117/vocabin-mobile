@@ -28,6 +28,7 @@ import { useSpeech } from '../hooks/useSpeech';
 import CameraModal from '../components/CameraModal';
 import DictionaryModal from '../components/DictionaryModal';
 import DictionaryBanner from '../components/DictionaryBanner';
+import { useAuth } from '../context/AuthContext';
 
 const colors = {
   background: '#f8f9fa',
@@ -108,6 +109,9 @@ const TranslateScreen = () => {
   const [outputSelection, setOutputSelection] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
   const [outputBannerVisible, setOutputBannerVisible] = useState(false);
   const [outputBannerVocabularies, setOutputBannerVocabularies] = useState<VocabularyResult[]>([]);
+  const { session } = useAuth();
+  const [bannerSaved, setBannerSaved] = useState<boolean>(false);
+  const [outputBannerSaved, setOutputBannerSaved] = useState<boolean>(false);
 
   const getLanguageCode = (lang: string, type: 'translate' | 'voice' = 'translate'): string => {
     if (type === 'voice') {
@@ -478,96 +482,172 @@ const TranslateScreen = () => {
       }
   };
 
-  // ダミー辞書データ
-  const DUMMY_DICTIONARY: { [word: string]: VocabularyResult } = {
-    hello: {
-      id: 1,
-      vocabulary: 'hello',
-      meaning: 'こんにちは',
-      pronunciation: 'həˈloʊ',
-      part_of_speech: 'interjection',
-      examples: [
-        { en: 'Hello, how are you?', ja: 'こんにちは、お元気ですか？' },
-      ],
-      synonyms: ['hi', 'hey'],
-      notes: 'カジュアルな挨拶',
-    },
-    world: {
-      id: 2,
-      vocabulary: 'world',
-      meaning: '世界',
-      pronunciation: 'wɜːrld',
-      part_of_speech: 'noun',
-      examples: [
-        { en: 'The world is beautiful.', ja: '世界は美しい。' },
-      ],
-      synonyms: ['earth', 'globe'],
-      notes: '',
-    },
-    こんにちは: {
-      id: 3,
-      vocabulary: 'こんにちは',
-      meaning: 'hello',
-      pronunciation: 'kon-ni-chi-wa',
-      part_of_speech: '感動詞',
-      examples: [
-        { en: 'こんにちは、元気ですか？', ja: 'Hello, how are you?' },
-      ],
-      synonyms: ['やあ', 'もしもし'],
-      notes: '日常的な挨拶',
-    },
-    how: {
-      id: 4,
-      vocabulary: 'how',
-      meaning: 'どうやって、どのように',
-      pronunciation: 'haʊ',
-      part_of_speech: '副詞',
-      examples: [
-        { en: 'How are you?', ja: 'お元気ですか？' },
-      ],
-      synonyms: ['in what way', 'by what means'],
-      notes: '方法や状態を尋ねるときに使う',
-    },
-  };
-
   // 選択範囲のテキスト取得
   const selectedText = inputText.substring(selection.start, selection.end);
 
   useEffect(() => {
-    if (selectedText && selectedText.trim().length > 0) {
-      const key = selectedText.trim().toLowerCase();
-      const vocab = DUMMY_DICTIONARY[key] || DUMMY_DICTIONARY[selectedText.trim()];
-      if (vocab) {
-        setBannerVocabularies([vocab]);
-        setBannerVisible(true);
+    let ignore = false;
+    const fetchVocabulary = async () => {
+      if (selectedText && selectedText.trim().length > 0) {
+        setBannerVisible(false);
+        setBannerVocabularies([]);
+        setBannerSaved(false);
+        try {
+          const { data, error } = await supabase.functions.invoke('get-dictionary', {
+            body: { vocabulary: selectedText.trim() },
+            headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+          });
+          if (error) throw error;
+          if (data && !('suggestion' in data)) {
+            const formatted: VocabularyResult = {
+              id: data.id,
+              vocabulary: data.vocabulary || '',
+              meaning: data.meanings ? data.meanings.join(', ') : '',
+              pronunciation: data.pronunciation || '',
+              part_of_speech: data.partOfSpeech || '',
+              examples: data.examples ? data.examples.map((ex: { en: string; ja: string }) => ex) : [],
+              synonyms: data.synonyms || [],
+              notes: data.notes || '',
+              audio_url: data.audio_url || undefined,
+            };
+            if (!ignore) {
+              setBannerVocabularies([formatted]);
+              setBannerVisible(true);
+              // 保存状態取得
+              if (session?.access_token && formatted.id) {
+                try {
+                  const { data: statusData, error: statusError } = await supabase.functions.invoke(`get-study-status?vocabularyId=${formatted.id}&type=3`, {
+                    method: 'GET',
+                    headers: { Authorization: `Bearer ${session.access_token}` },
+                  });
+                  if (statusError) throw statusError;
+                  setBannerSaved(!!statusData?.isSaved);
+                } catch {
+                  setBannerSaved(false);
+                }
+              } else {
+                setBannerSaved(false);
+              }
+            }
+          } else {
+            if (!ignore) {
+              setBannerVocabularies([]);
+              setBannerVisible(false);
+              setBannerSaved(false);
+            }
+          }
+        } catch (e) {
+          setBannerVocabularies([]);
+          setBannerVisible(false);
+          setBannerSaved(false);
+        }
       } else {
         setBannerVocabularies([]);
         setBannerVisible(false);
+        setBannerSaved(false);
       }
-    } else {
-      setBannerVocabularies([]);
-      setBannerVisible(false);
+    };
+    fetchVocabulary();
+    return () => { ignore = true; };
+  }, [selectedText, session]);
+
+  const handleBannerSave = async (vocabularyId: number, next: boolean) => {
+    if (!session?.access_token) return;
+    try {
+      const { error } = await supabase.functions.invoke('update-study-status', {
+        method: 'POST',
+        body: { vocabularyId, type: 3 },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (error) throw error;
+      setBannerSaved(next);
+    } catch {
+      // エラー時は何もしない
     }
-  }, [selectedText]);
+  };
 
   const outputSelectedText = translatedText.substring(outputSelection.start, outputSelection.end);
 
   useEffect(() => {
-    if (outputSelectedText && outputSelectedText.trim().length > 0) {
-      const key = outputSelectedText.trim().toLowerCase();
-      const vocab = DUMMY_DICTIONARY[key] || DUMMY_DICTIONARY[outputSelectedText.trim()];
-      if (vocab) {
-        setOutputBannerVocabularies([vocab]);
-        setOutputBannerVisible(true);
+    let ignore = false;
+    const fetchVocabulary = async () => {
+      if (outputSelectedText && outputSelectedText.trim().length > 0) {
+        setOutputBannerVisible(false);
+        setOutputBannerVocabularies([]);
+        setOutputBannerSaved(false);
+        try {
+          const { data, error } = await supabase.functions.invoke('get-dictionary', {
+            body: { vocabulary: outputSelectedText.trim() },
+            headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+          });
+          if (error) throw error;
+          if (data && !('suggestion' in data)) {
+            const formatted: VocabularyResult = {
+              id: data.id,
+              vocabulary: data.vocabulary || '',
+              meaning: data.meanings ? data.meanings.join(', ') : '',
+              pronunciation: data.pronunciation || '',
+              part_of_speech: data.partOfSpeech || '',
+              examples: data.examples ? data.examples.map((ex: { en: string; ja: string }) => ex) : [],
+              synonyms: data.synonyms || [],
+              notes: data.notes || '',
+              audio_url: data.audio_url || undefined,
+            };
+            if (!ignore) {
+              setOutputBannerVocabularies([formatted]);
+              setOutputBannerVisible(true);
+              // 保存状態取得
+              if (session?.access_token && formatted.id) {
+                try {
+                  const { data: statusData, error: statusError } = await supabase.functions.invoke(`get-study-status?vocabularyId=${formatted.id}&type=3`, {
+                    method: 'GET',
+                    headers: { Authorization: `Bearer ${session.access_token}` },
+                  });
+                  if (statusError) throw statusError;
+                  setOutputBannerSaved(!!statusData?.isSaved);
+                } catch {
+                  setOutputBannerSaved(false);
+                }
+              } else {
+                setOutputBannerSaved(false);
+              }
+            }
+          } else {
+            if (!ignore) {
+              setOutputBannerVocabularies([]);
+              setOutputBannerVisible(false);
+              setOutputBannerSaved(false);
+            }
+          }
+        } catch (e) {
+          setOutputBannerVocabularies([]);
+          setOutputBannerVisible(false);
+          setOutputBannerSaved(false);
+        }
       } else {
         setOutputBannerVocabularies([]);
         setOutputBannerVisible(false);
+        setOutputBannerSaved(false);
       }
-    } else {
-      setOutputBannerVocabularies([]);
-      setOutputBannerVisible(false);
+    };
+    fetchVocabulary();
+    return () => { ignore = true; };
+  }, [outputSelectedText, session]);
+
+  const handleOutputBannerSave = async (vocabularyId: number, next: boolean) => {
+    if (!session?.access_token) return;
+    try {
+      const { error } = await supabase.functions.invoke('update-study-status', {
+        method: 'POST',
+        body: { vocabularyId, type: 3 },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (error) throw error;
+      setOutputBannerSaved(next);
+    } catch {
+      // エラー時は何もしない
     }
-  }, [outputSelectedText]);
+  };
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
@@ -674,11 +754,15 @@ const TranslateScreen = () => {
           visible={bannerVisible}
           vocabularies={bannerVocabularies}
           onClose={() => setBannerVisible(false)}
+          isSaved={bannerSaved}
+          onSave={handleBannerSave}
         />
         <DictionaryBanner
           visible={outputBannerVisible}
           vocabularies={outputBannerVocabularies}
           onClose={() => setOutputBannerVisible(false)}
+          isSaved={outputBannerSaved}
+          onSave={handleOutputBannerSave}
         />
       </>
     </TouchableWithoutFeedback>

@@ -18,13 +18,14 @@ interface DictionaryBannerProps {
   visible: boolean;
   vocabularies: VocabularyResult[];
   onClose: () => void;
+  isSaved?: boolean;
+  onSave?: (vocabularyId: number, next: boolean) => void;
 }
 
 const { width, height } = Dimensions.get('window');
 
-const DictionaryBanner: React.FC<DictionaryBannerProps> = ({ visible, vocabularies, onClose }) => {
+const DictionaryBanner: React.FC<DictionaryBannerProps> = ({ visible, vocabularies, onClose, isSaved, onSave }) => {
   const [expanded, setExpanded] = useState<{ [id: number]: boolean }>({});
-  const [isSaved, setIsSaved] = useState<{ [id: number]: boolean }>({});
   // バナーが表示されるたびに展開状態をリセット
   useEffect(() => {
     setExpanded({});
@@ -33,9 +34,11 @@ const DictionaryBanner: React.FC<DictionaryBannerProps> = ({ visible, vocabulari
   // 1単語のみ表示前提
   const v = vocabularies[0];
   const isExpanded = expanded[v.id] === true;
-  const saved = isSaved[v.id] === true;
+  const saved = typeof isSaved === 'boolean' ? isSaved : false;
   const handleSave = () => {
-    setIsSaved(prev => ({ ...prev, [v.id]: !prev[v.id] }));
+    if (onSave) {
+      onSave(v.id, !saved);
+    }
   };
   return (
     <View style={[styles.bannerContainer, isExpanded && styles.bannerContainerExpanded]} pointerEvents={isExpanded ? 'box-none' : 'auto'}>
