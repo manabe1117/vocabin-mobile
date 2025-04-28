@@ -1,4 +1,15 @@
 -- study_statusに存在しないvocabularyを取得するストアドプロシージャ
+-- 削除用DROP文
+DROP FUNCTION IF EXISTS get_unregistered_vocabulary(
+  UUID,
+  INTEGER,
+  INTEGER,
+  INTEGER,
+  TEXT,
+  TEXT[],
+  TEXT
+);
+
 -- ユーザーごと・typeごとに未登録の単語一覧を取得する
 CREATE OR REPLACE FUNCTION get_unregistered_vocabulary(
   p_user_id UUID,
@@ -11,8 +22,8 @@ CREATE OR REPLACE FUNCTION get_unregistered_vocabulary(
 )
 RETURNS TABLE (
   id INTEGER,
-  word TEXT,
-  translation TEXT,
+  vocabulary TEXT,
+  meanings TEXT[],
   part_of_speech TEXT,
   pronunciation TEXT,
   examples JSONB,
@@ -29,8 +40,8 @@ BEGIN
   RETURN QUERY
   SELECT
     v.id,
-    v.vocabulary AS word,
-    COALESCE(v.meanings[1], '') AS translation,
+    v.vocabulary,
+    v.meanings,
     v.part_of_speech,
     v.pronunciation,
     v.example_sentences AS examples,
@@ -63,4 +74,4 @@ BEGIN
   OFFSET (p_page - 1) * p_page_size
   LIMIT p_page_size;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER; 
+$$ LANGUAGE plpgsql SECURITY DEFINER;

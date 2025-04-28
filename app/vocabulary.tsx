@@ -24,10 +24,14 @@ import { useSpeech } from '@/hooks/useSpeech';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 
 // 単語の型定義
+/**
+ * 単語アイテムの型定義
+ * meaningsは意味の配列
+ */
 interface VocabularyItem {
   id: number;
-  word: string;
-  translation: string;
+  vocabulary: string;
+  meanings: string[];
   partOfSpeech: string;
   pronunciation: string;
   examples: { en: string; ja: string }[];
@@ -234,8 +238,14 @@ export default function VocabularyScreen() {
 
       const mapped: VocabularyItem[] = (data || []).map((v: any) => ({
         id: v.id,
-        word: v.word,
-        translation: v.translation,
+        vocabulary: v.vocabulary,
+        meanings: Array.isArray(v.meanings)
+          ? v.meanings
+          : typeof v.meanings === 'string' && v.meanings.includes(';')
+            ? v.meanings.split(';').map((t: string) => t.trim()).filter(Boolean)
+            : typeof v.meanings === 'string'
+              ? [v.meanings]
+              : [],
         partOfSpeech: v.part_of_speech,
         pronunciation: v.pronunciation || '',
         examples: Array.isArray(v.examples)
@@ -367,7 +377,7 @@ export default function VocabularyScreen() {
               >
                 <View style={styles.itemHeader}>
                   <View style={styles.wordContainer}>
-                    <ThemedText style={styles.word}>{item.word}</ThemedText>
+                    <ThemedText style={styles.word}>{item.vocabulary}</ThemedText>
                     <ThemedText style={styles.partOfSpeech}>
                       {item.partOfSpeech === 'noun' ? '名詞' : 
                       item.partOfSpeech === 'verb' ? '動詞' : 
@@ -376,11 +386,11 @@ export default function VocabularyScreen() {
                     </ThemedText>
                   </View>
                   <View style={styles.rightContainer}>
-                    <ThemedText style={styles.translation}>{item.translation}</ThemedText>
+                    {/* 意味は未展開時は表示しない */}
                     <View style={styles.actionButtonsContainer}>
                       <TouchableOpacity 
                         style={styles.soundButton}
-                        onPress={() => handlePlaySound(item.word)}
+                        onPress={() => handlePlaySound(item.vocabulary)}
                       >
                         <Ionicons name="volume-high" size={24} color={COLORS.PRIMARY} />
                       </TouchableOpacity>
@@ -391,8 +401,13 @@ export default function VocabularyScreen() {
                 {isExpanded && (
                   <View style={styles.expandedContent}>
                     <View style={styles.divider} />
-                    
-                    <ThemedText style={styles.pronunciation}>{item.pronunciation}</ThemedText>
+                    {/* 展開時のみ意味を「、」区切りで表示 */}
+                    {item.meanings.length > 0 && (
+                      <View style={styles.section}>
+                        <ThemedText style={styles.sectionTitle}>意味</ThemedText>
+                        <ThemedText style={styles.translation}>{item.meanings.join('、')}</ThemedText>
+                      </View>
+                    )}
                     
                     {item.synonyms.length > 0 && (
                       <View style={styles.section}>
