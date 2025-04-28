@@ -32,13 +32,12 @@ interface VocabularyItem {
   examples: { en: string; ja: string }[];
   synonyms: string[];
   notes: string;
-  isSaved: boolean;
   date_added?: string; // 追加日
   learningStatus: 'known' | 'unknown'; // 知ってるか知らないかの状態
 }
 
 // フィルタータイプの定義
-type FilterType = 'all' | 'saved' | 'unsaved' | 'noun' | 'verb' | 'adjective' | 'adverb' | 'known' | 'unknown';
+type FilterType = 'all' | 'noun' | 'verb' | 'adjective' | 'adverb' | 'known' | 'unknown';
 
 // ソート順の定義
 type SortOrder = 'alphabetical_asc' | 'alphabetical_desc';
@@ -179,97 +178,57 @@ export default function VocabularyScreen() {
     }
     setError(null);
 
-    // 実際のアプリでは、以下のようにAPIからデータを取得します
-    // try {
-    //   if (!session?.access_token) {
-    //     throw new Error('認証トークンがありません');
-    //   }
-    //   const { data, error } = await supabase.functions.invoke('get-vocabulary', {
-    //     body: { 
-    //       userId: session.user.id,
-    //       page: page,
-    //       pageSize: pageSize,
-    //       sortOrder: sortOrder
-    //     }
-    //   });
-    //   if (error) throw error;
-    //   
-    //   if (data.length < pageSize) {
-    //     setHasMore(false);
-    //   }
-    //   
-    //   if (reset) {
-    //     setVocabulary(data || []);
-    //   } else {
-    //     setVocabulary(prev => [...prev, ...data]);
-    //   }
-    // } catch (err) {
-    //   const errorMessage = err instanceof Error ? err.message : '予期せぬエラーが発生しました';
-    //   setError(errorMessage);
-    //   console.log('fetchVocabulary error', err);
-    // } finally {
-    //   setLoading(false);
-    //   setRefreshing(false);
-    // }
+    try {
+      if (!session?.access_token) {
+        throw new Error('認証トークンがありません');
+      }
+      const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/get-vocabulary`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          page: reset ? 1 : page,
+          pageSize: pageSize,
+          sortOrder: sortOrder,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'APIエラー');
 
-    // ダミーデータを使用（実際のアプリではAPIからデータを取得します）
-    setTimeout(() => {
-      // ダミーデータを生成
-      const generateDummyData = (currentPage: number, perPage: number) => {
-        const partOfSpeechOptions = ['noun', 'verb', 'adjective', 'adverb'];
-        
-        const items: VocabularyItem[] = [];
-        const startIdx = (currentPage - 1) * perPage;
-        
-        // 最大5ページまで（現実的なサンプル用）
-        if (currentPage > 5) {
-          setHasMore(false);
-          setRefreshing(false);
-          return [];
-        }
-        
-        for (let i = 0; i < perPage; i++) {
-          const idx = startIdx + i;
-          // ランダムな日付（過去30日以内）
-          const daysAgo = Math.floor(Math.random() * 30);
-          const date = new Date();
-          date.setDate(date.getDate() - daysAgo);
-          
-          items.push({
-            id: idx + 1,
-            word: `word${idx + 1}`,
-            translation: `単語${idx + 1}`,
-            partOfSpeech: partOfSpeechOptions[idx % partOfSpeechOptions.length],
-            pronunciation: `/wɜːrd${idx + 1}/`,
-            examples: [
-              { en: `This is a sample sentence for word${idx + 1}.`, ja: `これは単語${idx + 1}のサンプル文です。` },
-              { en: `We use word${idx + 1} in many contexts.`, ja: `私たちは多くの文脈で単語${idx + 1}を使います。` }
-            ],
-            synonyms: [`synonym${idx + 1}`, `similar${idx + 1}`],
-            notes: `単語${idx + 1}に関する補足説明です。`,
-            isSaved: idx % 3 === 0, // 3つに1つは保存済み
-            date_added: date.toISOString(),
-            learningStatus: idx % 2 === 0 ? 'known' : 'unknown'
-          });
-        }
-        return items;
-      };
+      const mapped: VocabularyItem[] = (data || []).map((v: any) => ({
+        id: v.id,
+        word: v.word,
+        translation: v.translation,
+        partOfSpeech: v.part_of_speech,
+        pronunciation: v.pronunciation || '',
+        examples: Array.isArray(v.examples)
+          ? v.examples.map((ex: any) => ({ en: ex.english || ex.en || '', ja: ex.japanese || ex.ja || '' }))
+          : [],
+        synonyms: v.synonyms || [],
+        notes: v.notes || '',
+        date_added: v.date_added,
+        learningStatus: v.box_level > 0 ? 'known' : 'unknown',
+      }));
 
-      const dummyData = generateDummyData(page, pageSize);
-      
-      if (dummyData.length < pageSize) {
+      if ((data || []).length < pageSize) {
         setHasMore(false);
       }
-      
+
       if (reset || page === 1) {
-        setVocabulary(dummyData);
+        setVocabulary(mapped);
       } else {
-        setVocabulary(prev => [...prev, ...dummyData]);
+        setVocabulary(prev => [...prev, ...mapped]);
       }
-      
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '予期せぬエラーが発生しました';
+      setError(errorMessage);
+      console.log('fetchVocabulary error', err);
+    } finally {
       setLoading(false);
       setRefreshing(false);
-    }, 800); // 読み込み時間をシミュレート
+    }
   };
 
   // 初回ロード
@@ -292,20 +251,6 @@ export default function VocabularyScreen() {
     if (activeFilters.includes('all')) {
       // 「すべて」が選択されている場合は全件表示
     } else {
-      // 保存状態によるフィルタリング
-      const savedFilter = activeFilters.includes('saved');
-      const unsavedFilter = activeFilters.includes('unsaved');
-      
-      if (savedFilter && !unsavedFilter) {
-        // 「保存済み」のみ選択されている場合
-        filtered = filtered.filter(item => item.isSaved);
-      } else if (!savedFilter && unsavedFilter) {
-        // 「未保存」のみ選択されている場合
-        filtered = filtered.filter(item => !item.isSaved);
-      } else if (!savedFilter && !unsavedFilter) {
-        // どちらも選択されていない場合は品詞フィルターだけを適用
-      }
-      
       // 学習状態（知ってる/知らない）によるフィルタリング
       const knownFilter = activeFilters.includes('known');
       const unknownFilter = activeFilters.includes('unknown');
@@ -317,7 +262,7 @@ export default function VocabularyScreen() {
         // 「知らない」のみ選択されている場合
         filtered = filtered.filter(item => item.learningStatus === 'unknown');
       } else if (!knownFilter && !unknownFilter) {
-        // どちらも選択されていない場合は他のフィルターだけを適用
+        // どちらも選択されていない場合は品詞フィルターだけを適用
       }
       
       // 品詞によるフィルタリング
@@ -348,25 +293,6 @@ export default function VocabularyScreen() {
   const onRefresh = useCallback(() => {
     fetchVocabulary(true);
   }, []);
-
-  // 単語の保存状態を切り替える関数
-  const toggleSave = (id: number) => {
-    setVocabulary(prevVocabulary => 
-      prevVocabulary.map(item => 
-        item.id === id ? { ...item, isSaved: !item.isSaved } : item
-      )
-    );
-    
-    // 実際のアプリでは、以下のようにAPIを呼び出して保存状態を更新します
-    // supabase.functions.invoke('update-vocabulary-save-status', {
-    //   body: { 
-    //     vocabularyId: id,
-    //     isSaved: !vocabulary.find(item => item.id === id)?.isSaved
-    //   }
-    // }).catch(err => {
-    //   console.error('単語の保存状態の更新に失敗しました:', err);
-    // });
-  };
 
   // 音声を再生する関数
   const handlePlaySound = (text: string) => {
@@ -470,17 +396,6 @@ export default function VocabularyScreen() {
                       >
                         <Ionicons name="volume-high" size={24} color={COLORS.PRIMARY} />
                       </TouchableOpacity>
-                      
-                      <TouchableOpacity 
-                        style={styles.saveButton}
-                        onPress={() => toggleSave(item.id)}
-                      >
-                        <Ionicons
-                          name={item.isSaved ? "bookmark" : "bookmark-outline"}
-                          size={24}
-                          color={COLORS.PRIMARY}
-                        />
-                      </TouchableOpacity>
                     </View>
                   </View>
                 </View>
@@ -550,14 +465,13 @@ export default function VocabularyScreen() {
       }
       
       const labels = [];
-      if (activeFilters.includes('saved')) labels.push('保存済み');
-      if (activeFilters.includes('unsaved')) labels.push('未保存');
-      if (activeFilters.includes('known')) labels.push('知ってる');
-      if (activeFilters.includes('unknown')) labels.push('知らない');
       if (activeFilters.includes('noun')) labels.push('名詞');
       if (activeFilters.includes('verb')) labels.push('動詞');
       if (activeFilters.includes('adjective')) labels.push('形容詞');
       if (activeFilters.includes('adverb')) labels.push('副詞');
+      
+      if (activeFilters.includes('known')) labels.push('知ってる');
+      if (activeFilters.includes('unknown')) labels.push('知らない');
       
       if (labels.length === 0) return 'すべて';
       if (labels.length <= 2) return labels.join('・');
@@ -608,8 +522,6 @@ export default function VocabularyScreen() {
   const renderFilterModal = () => {
     const filters: { label: string; value: FilterType; icon: string }[] = [
       { label: 'すべて', value: 'all', icon: 'apps' },
-      { label: '保存済み', value: 'saved', icon: 'bookmark' },
-      { label: '未保存', value: 'unsaved', icon: 'bookmark-outline' },
       { label: '名詞', value: 'noun', icon: 'cube' },
       { label: '動詞', value: 'verb', icon: 'bicycle' },
       { label: '形容詞', value: 'adjective', icon: 'color-palette' },
@@ -952,9 +864,6 @@ const styles = StyleSheet.create({
   soundButton: {
     padding: 6,
     marginRight: 4,
-  },
-  saveButton: {
-    padding: 6,
   },
   expandedContent: {
     marginTop: 12,
