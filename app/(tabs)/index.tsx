@@ -1,8 +1,11 @@
 // app/(tabs)/index.tsx
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView, ActivityIndicator } from 'react-native';
 import { Link } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
 
 // --- Layout Constants ---
 const { width } = Dimensions.get('window');
@@ -27,8 +30,70 @@ const colors = {
 };
 
 const HomeScreen = () => {
+  const { session } = useAuth();
+  const [completedCount, setCompletedCount] = useState<number | null>(null);
+  const [learningCount, setLearningCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchCounts = async () => {
+        if (!session?.access_token) return;
+        setLoading(true);
+        setError(null);
+        try {
+          const { data, error } = await supabase.functions.invoke('count-study-status', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          });
+          if (error) throw error;
+          setCompletedCount(data.completedCount ?? 0);
+          setLearningCount(data.learningCount ?? 0);
+        } catch (e: any) {
+          setError(e.message || '件数の取得に失敗しました');
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchCounts();
+    }, [session?.access_token])
+  );
+
   return (
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
+      {/* --- フレーズ統計バー --- */}
+      <View style={styles.statsBar}>
+        <View style={styles.statsItem}>
+          <View style={styles.statsLabelRow}>
+            <MaterialIcons name="check-circle" size={24} color={colors.accentGreen} style={styles.statsIcon} />
+            <Text style={styles.statsLabel}>学習済み</Text>
+          </View>
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.accentGreen} />
+          ) : error ? (
+            <Text style={{ color: 'red', fontSize: 12 }}>取得失敗</Text>
+          ) : (
+            <Text style={styles.statsValue}>{completedCount}</Text>
+          )}
+        </View>
+        <View style={styles.statsDivider} />
+        <View style={styles.statsItem}>
+          <View style={styles.statsLabelRow}>
+            <MaterialIcons name="hourglass-bottom" size={24} color={colors.accentOrange} style={styles.statsIcon} />
+            <Text style={styles.statsLabel}>学習中</Text>
+          </View>
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.accentOrange} />
+          ) : error ? (
+            <Text style={{ color: 'red', fontSize: 12 }}>取得失敗</Text>
+          ) : (
+            <Text style={styles.statsValue}>{learningCount}</Text>
+          )}
+        </View>
+      </View>
       {/* --- 言語ツールセクション --- */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>言語ツール</Text>
@@ -176,6 +241,53 @@ const styles = StyleSheet.create({
     // borderStyle: 'dashed',
   }
   */
+  statsBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.cardBackground,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    gap: 0,
+  },
+  statsItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  statsIcon: {
+    marginRight: 2,
+  },
+  statsLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  statsValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.accentBlue,
+  },
+  statsDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: '#e5e7eb',
+    marginHorizontal: 12,
+    borderRadius: 1,
+  },
+  statsLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
 });
 
 export default HomeScreen;
