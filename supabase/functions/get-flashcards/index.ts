@@ -32,15 +32,10 @@ Deno.serve(async (req) => {
     }
 
     const userId = user.id;
-    
-    // リクエストボディからtypeを取得
-    const body = await req.json();
-    const type = parseInt(body.type || '3');
 
     // フラッシュカードを取得
-    const { data: flashcards, error } = await supabase.rpc('get_flashcards', {
-      p_user_id: userId,
-      p_type: type
+    const { data: flashcards, error } = await supabase.rpc('get_flashcards_vocabulary', {
+      p_user_id: userId
     });
 
     if (error) throw error;

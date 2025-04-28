@@ -516,7 +516,7 @@ const TranslateScreen = () => {
               // 保存状態取得
               if (session?.access_token && formatted.id) {
                 try {
-                  const { data: statusData, error: statusError } = await supabase.functions.invoke(`get-study-status?vocabularyId=${formatted.id}&type=3`, {
+                  const { data: statusData, error: statusError } = await supabase.functions.invoke(`get-study-status?vocabularyId=${formatted.id}`, {
                     method: 'GET',
                     headers: { Authorization: `Bearer ${session.access_token}` },
                   });
@@ -599,7 +599,7 @@ const TranslateScreen = () => {
               // 保存状態取得
               if (session?.access_token && formatted.id) {
                 try {
-                  const { data: statusData, error: statusError } = await supabase.functions.invoke(`get-study-status?vocabularyId=${formatted.id}&type=3`, {
+                  const { data: statusData, error: statusError } = await supabase.functions.invoke(`get-study-status?vocabularyId=${formatted.id}`, {
                     method: 'GET',
                     headers: { Authorization: `Bearer ${session.access_token}` },
                   });

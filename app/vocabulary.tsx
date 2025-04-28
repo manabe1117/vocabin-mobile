@@ -11,7 +11,8 @@ import {
   ScrollView,
   RefreshControl,
   Modal,
-  Dimensions
+  Dimensions,
+  Alert
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
@@ -37,10 +38,10 @@ interface VocabularyItem {
 }
 
 // フィルタータイプの定義
-type FilterType = 'all' | 'noun' | 'verb' | 'adjective' | 'adverb' | 'known' | 'unknown';
+type FilterType = 'all' | '名詞' | '動詞' | '形容詞' | '副詞';
 
 // ソート順の定義
-type SortOrder = 'alphabetical_asc' | 'alphabetical_desc';
+type SortOrder = 'alphabetical_asc' | 'alphabetical_desc' | 'random';
 
 export default function VocabularyScreen() {
   const { session } = useAuth();
@@ -57,10 +58,12 @@ export default function VocabularyScreen() {
   const [hasMore, setHasMore] = useState(true);
   const pageSize = 30; // 1ページあたりのアイテム数
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [sortModalVisible, setSortModalVisible] = useState(false);
   // スワイプで削除された単語IDリスト
   const [removedIds, setRemovedIds] = useState<number[]>([]);
   // スワイプで削除中のIDリスト
   const [removingIds, setRemovingIds] = useState<number[]>([]);
+  const [randomSeed, setRandomSeed] = useState<string | null>(null);
   
   const screenWidth = Dimensions.get('window').width;
   
@@ -84,7 +87,26 @@ export default function VocabularyScreen() {
   };
   
   // アイテムを削除し学習状態も同時に更新する関数
-  const removeAndUpdateStatus = (id: number, status: 'known' | 'unknown') => {
+  const removeAndUpdateStatus = async (id: number, status: 'known' | 'unknown') => {
+    try {
+      if (!session?.access_token) {
+        throw new Error('認証トークンがありません');
+      }
+      const { error } = await supabase.functions.invoke('swipe-update-study-status', {
+        method: 'POST',
+        body: {
+          vocabularyId: id,
+          type: 2,
+          direction: status
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      Alert.alert('エラー', err.message || '学習状態の更新に失敗しました');
+    }
     setVocabulary(prev =>
       prev.reduce((acc, item) => {
         if (item.id === id) {
@@ -117,7 +139,7 @@ export default function VocabularyScreen() {
         [{ nativeEvent: { translationX: translateX } }],
         { useNativeDriver: true }
       );
-      const handleStateChange = (event: any) => {
+      const handleStateChange = async (event: any) => {
         if (event.nativeEvent.oldState === State.ACTIVE) {
           const { translationX, velocityX } = event.nativeEvent;
           const translateThreshold = 120; // スワイプのしきい値
@@ -168,7 +190,7 @@ export default function VocabularyScreen() {
   };
 
   // 初期データロード時にページネーションを考慮
-  const fetchVocabulary = async (reset = false) => {
+  const fetchVocabulary = async (reset = false, customSortOrder?: SortOrder, customRandomSeed?: string | null) => {
     if (reset) {
       setLoading(true);
       setPage(1);
@@ -177,6 +199,15 @@ export default function VocabularyScreen() {
       setRefreshing(true);
     }
     setError(null);
+
+    // activeFiltersからAPI用filtersを組み立て
+    let partOfSpeech: string[] = [];
+    if (!activeFilters.includes('all')) {
+      partOfSpeech = activeFilters.filter(f => ['名詞', '動詞', '形容詞', '副詞'].includes(f));
+    }
+    const filters = {
+      partOfSpeech: partOfSpeech.length > 0 ? partOfSpeech : undefined,
+    };
 
     try {
       if (!session?.access_token) {
@@ -191,10 +222,14 @@ export default function VocabularyScreen() {
         body: JSON.stringify({
           page: reset ? 1 : page,
           pageSize: pageSize,
-          sortOrder: sortOrder,
+          sortOrder: customSortOrder ?? sortOrder,
+          filters,
+          randomSeed: (customSortOrder ?? sortOrder) === 'random' ? (customRandomSeed ?? randomSeed) : undefined,
+          unregistered: true,
         }),
       });
       const data = await response.json();
+      console.log('APIレスポンス（単語リスト）:', data);
       if (!response.ok) throw new Error(data.error || 'APIエラー');
 
       const mapped: VocabularyItem[] = (data || []).map((v: any) => ({
@@ -219,7 +254,11 @@ export default function VocabularyScreen() {
       if (reset || page === 1) {
         setVocabulary(mapped);
       } else {
-        setVocabulary(prev => [...prev, ...mapped]);
+        setVocabulary(prev => {
+          const existingIds = new Set(prev.map(item => item.id));
+          const newItems = mapped.filter(item => !existingIds.has(item.id));
+          return [...prev, ...newItems];
+        });
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '予期せぬエラーが発生しました';
@@ -242,57 +281,6 @@ export default function VocabularyScreen() {
       fetchVocabulary(false);
     }
   }, [page]);
-
-  // フィルタリングとソートを適用
-  useEffect(() => {
-    let filtered = vocabulary.filter(item => !removedIds.includes(item.id));
-    
-    // フィルタリングロジック
-    if (activeFilters.includes('all')) {
-      // 「すべて」が選択されている場合は全件表示
-    } else {
-      // 学習状態（知ってる/知らない）によるフィルタリング
-      const knownFilter = activeFilters.includes('known');
-      const unknownFilter = activeFilters.includes('unknown');
-      
-      if (knownFilter && !unknownFilter) {
-        // 「知ってる」のみ選択されている場合
-        filtered = filtered.filter(item => item.learningStatus === 'known');
-      } else if (!knownFilter && unknownFilter) {
-        // 「知らない」のみ選択されている場合
-        filtered = filtered.filter(item => item.learningStatus === 'unknown');
-      } else if (!knownFilter && !unknownFilter) {
-        // どちらも選択されていない場合は品詞フィルターだけを適用
-      }
-      
-      // 品詞によるフィルタリング
-      const partOfSpeechFilters = activeFilters.filter(f => 
-        ['noun', 'verb', 'adjective', 'adverb'].includes(f)
-      );
-      
-      if (partOfSpeechFilters.length > 0) {
-        filtered = filtered.filter(item => 
-          partOfSpeechFilters.includes(item.partOfSpeech as FilterType)
-        );
-      }
-    }
-    
-    // ソート順を適用
-    filtered.sort((a, b) => {
-      if (sortOrder === 'alphabetical_asc') {
-        return a.word.localeCompare(b.word);
-      } else { // alphabetical_desc
-        return b.word.localeCompare(a.word);
-      }
-    });
-    
-    setFilteredVocabulary(filtered);
-  }, [vocabulary, activeFilters, sortOrder, removedIds]);
-
-  // リフレッシュハンドラー
-  const onRefresh = useCallback(() => {
-    fetchVocabulary(true);
-  }, []);
 
   // 音声を再生する関数
   const handlePlaySound = (text: string) => {
@@ -451,28 +439,76 @@ export default function VocabularyScreen() {
     );
   };
 
+  // 並び替えオプション
+  const sortOptions: { label: string; value: SortOrder }[] = [
+    { label: 'Aから順', value: 'alphabetical_asc' },
+    { label: 'Zから順', value: 'alphabetical_desc' },
+    { label: 'ランダム', value: 'random' }
+  ];
+
+  // 現在のソートラベル取得
+  const getSortLabel = () => {
+    const found = sortOptions.find(opt => opt.value === sortOrder);
+    return found ? found.label : '';
+  };
+
+  // 並び替えモーダル
+  const renderSortModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={sortModalVisible}
+      onRequestClose={() => setSortModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <ThemedText style={styles.modalTitle}>並び替えを選択</ThemedText>
+            <TouchableOpacity
+              style={styles.closeModalButton}
+              onPress={() => setSortModalVisible(false)}
+            >
+              <Ionicons name="close" size={24} color={COLORS.TEXT_SECONDARY} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.filtersContainer}>
+            {sortOptions.map(option => (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.filterOption,
+                  sortOrder === option.value && styles.filterItemActive
+                ]}
+                onPress={() => handleSortSelect(option)}
+              >
+                <ThemedText
+                  style={[
+                    styles.filterItemText,
+                    sortOrder === option.value && styles.filterItemTextActive
+                  ]}
+                >
+                  {option.label}
+                </ThemedText>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   // フィルターとソートのオプションバーをレンダリングする関数
   const renderOptionBar = () => {
-    const sortOptions: { label: string; value: SortOrder }[] = [
-      { label: 'Aから順', value: 'alphabetical_asc' },
-      { label: 'Zから順', value: 'alphabetical_desc' }
-    ];
-    
     // アクティブなフィルターの表示名を取得
     const getActiveFiltersLabel = () => {
       if (activeFilters.includes('all')) {
         return 'すべて';
       }
-      
       const labels = [];
-      if (activeFilters.includes('noun')) labels.push('名詞');
-      if (activeFilters.includes('verb')) labels.push('動詞');
-      if (activeFilters.includes('adjective')) labels.push('形容詞');
-      if (activeFilters.includes('adverb')) labels.push('副詞');
-      
-      if (activeFilters.includes('known')) labels.push('知ってる');
-      if (activeFilters.includes('unknown')) labels.push('知らない');
-      
+      if (activeFilters.includes('名詞')) labels.push('名詞');
+      if (activeFilters.includes('動詞')) labels.push('動詞');
+      if (activeFilters.includes('形容詞')) labels.push('形容詞');
+      if (activeFilters.includes('副詞')) labels.push('副詞');
       if (labels.length === 0) return 'すべて';
       if (labels.length <= 2) return labels.join('・');
       return `${labels.length}個の条件`;
@@ -482,30 +518,17 @@ export default function VocabularyScreen() {
       <View style={styles.optionBarContainer}>
         <View style={styles.optionsRow}>
           {/* 並び替えボタン */}
-          <View style={styles.sortButtonsContainer}>
-            {sortOptions.map(option => (
-              <TouchableOpacity
-                key={option.value}
-                style={[
-                  styles.optionButton,
-                  sortOrder === option.value && styles.activeOptionButton
-                ]}
-                onPress={() => setSortOrder(option.value)}
-              >
-                <ThemedText 
-                  style={[
-                    styles.optionText, 
-                    sortOrder === option.value && styles.activeOptionText
-                  ]}
-                >
-                  {option.label}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <TouchableOpacity
+            style={styles.filterIconButton}
+            onPress={() => setSortModalVisible(true)}
+          >
+            <ThemedText style={styles.filterButtonLabel}>並び替え: </ThemedText>
+            <ThemedText style={styles.activeFilterLabel}>{getSortLabel()}</ThemedText>
+            <Ionicons name="swap-vertical" size={18} color={COLORS.PRIMARY} />
+          </TouchableOpacity>
 
           {/* フィルターボタン */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.filterIconButton}
             onPress={() => setFilterModalVisible(true)}
           >
@@ -522,12 +545,10 @@ export default function VocabularyScreen() {
   const renderFilterModal = () => {
     const filters: { label: string; value: FilterType; icon: string }[] = [
       { label: 'すべて', value: 'all', icon: 'apps' },
-      { label: '名詞', value: 'noun', icon: 'cube' },
-      { label: '動詞', value: 'verb', icon: 'bicycle' },
-      { label: '形容詞', value: 'adjective', icon: 'color-palette' },
-      { label: '副詞', value: 'adverb', icon: 'speedometer' },
-      { label: '知ってる', value: 'known', icon: 'thumbs-up' },
-      { label: '知らない', value: 'unknown', icon: 'thumbs-down' }
+      { label: '名詞', value: '名詞', icon: 'cube' },
+      { label: '動詞', value: '動詞', icon: 'bicycle' },
+      { label: '形容詞', value: '形容詞', icon: 'color-palette' },
+      { label: '副詞', value: '副詞', icon: 'speedometer' },
     ];
     
     // フィルターを切り替える関数
@@ -605,7 +626,10 @@ export default function VocabularyScreen() {
             <View style={styles.modalFooter}>
               <TouchableOpacity 
                 style={styles.applyButton}
-                onPress={() => setFilterModalVisible(false)}
+                onPress={() => {
+                  setFilterModalVisible(false);
+                  fetchVocabulary(true);
+                }}
               >
                 <ThemedText style={styles.applyButtonText}>適用</ThemedText>
               </TouchableOpacity>
@@ -614,6 +638,21 @@ export default function VocabularyScreen() {
         </View>
       </Modal>
     );
+  };
+
+  // 並び替えモーダルの選択肢タップ時
+  const handleSortSelect = (option: { label: string; value: SortOrder }) => {
+    setSortOrder(option.value);
+    setSortModalVisible(false);
+    if (option.value === 'random') {
+      // 新しいランダムシードを生成
+      const newSeed = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      setRandomSeed(newSeed);
+      fetchVocabulary(true, option.value, newSeed);
+    } else {
+      setRandomSeed(null);
+      fetchVocabulary(true, option.value);
+    }
   };
 
   // ローディング中の表示
@@ -646,13 +685,14 @@ export default function VocabularyScreen() {
     <ThemedView style={styles.container}>
       {/* フィルターとソートオプション */}
       {renderOptionBar()}
-      
+      {/* 並び替えモーダル */}
+      {renderSortModal()}
       {/* フィルターモーダル */}
       {renderFilterModal()}
       
       {/* 単語リスト */}
       <FlatList
-        data={filteredVocabulary}
+        data={vocabulary}
         renderItem={renderItem}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContainer}
@@ -660,7 +700,7 @@ export default function VocabularyScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
+            onRefresh={() => fetchVocabulary(true)}
             colors={[COLORS.PRIMARY]}
             tintColor={COLORS.PRIMARY}
           />

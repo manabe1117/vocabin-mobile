@@ -62,27 +62,32 @@ Deno.serve(async (req) => {
     if (req.method === 'GET') {
       const url = new URL(req.url);
       const vocabularyId = parseInt(url.searchParams.get('vocabularyId') || '');
-      const type = parseInt(url.searchParams.get('type') || '');
+      const typeParam = url.searchParams.get('type');
+      const type = typeParam ? parseInt(typeParam) : undefined;
 
-      if (!vocabularyId || !type) {
-        throw new Error('vocabularyId and type are required');
+      if (!vocabularyId) {
+        throw new Error('vocabularyId is required');
       }
 
-      const { data, error } = await supabase
+      let query = supabase
         .from<StudyStatus>('study_status')
         .select('id')
         .eq('user_id', userId)
         .eq('vocabulary_id', vocabularyId)
-        .eq('type', type) // type を追加
-        .eq('delete_flg', false) // 削除フラグが false のものを取得
-        .limit(1);
+        .eq('delete_flg', false);
+
+      if (type !== undefined && !isNaN(type)) {
+        query = query.eq('type', type);
+      }
+
+      const { data, error } = await query.limit(1);
 
       if (error) {
         throw error;
       }
 
       return new Response(
-        JSON.stringify({ isSaved: data.length > 0 }), // data が存在すれば true, 存在しなければ(null) false
+        JSON.stringify({ isSaved: data.length > 0 }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 200,

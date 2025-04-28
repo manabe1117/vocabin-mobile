@@ -38,17 +38,25 @@ const StudyScreen = () => {
     setIsLoading(true);
     setError(null);
     try {
+      console.log('fetchFlashcards: session', session);
       if (!session?.access_token) {
         throw new Error('認証トークンがありません');
       }
-      const { data, error } = await supabase.functions.invoke('get-flashcards', {
-        body: { type: 3, includeAudio: true }
-      });
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke('get-flashcards');
+      console.log('fetchFlashcards: API response', { data, error });
+      if (error) {
+        if (error.context && typeof error.context.json === 'function') {
+          const errorDetail = await error.context.json();
+          console.log('fetchFlashcards: error.context.json()', errorDetail);
+        }
+        throw error;
+      }
+      console.log('fetchFlashcards: data', data);
       const fetchedFlashcards = (data || []).map((card: Flashcard) => ({
         ...card,
         isCorrect: false
       }));
+      console.log('fetchFlashcards: fetchedFlashcards', fetchedFlashcards);
       setFlashcards(fetchedFlashcards);
       flashcardsRef.current = fetchedFlashcards;
 
@@ -144,7 +152,6 @@ const StudyScreen = () => {
           vocabularyId: currentCard.vocabulary_id,
           isCorrect,
           studyDate: new Date().toISOString(),
-          type: 3
         }
       }).catch(err => {
         console.error('学習状態の更新に失敗しました:', err);

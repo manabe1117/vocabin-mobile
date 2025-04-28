@@ -23,7 +23,6 @@ const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 // リクエストボディの型定義 (GET, POST 用)
 const requestBodySchema = z.object({
   vocabularyId: z.number(),
-  type: z.number(),
 });
 type RequestBody = z.infer<typeof requestBodySchema>;
 
@@ -32,7 +31,6 @@ const putRequestBodySchema = z.object({
   vocabularyId: z.number(),
   isCorrect: z.boolean(),
   studyDate: z.string().datetime(),
-  type: z.number(),
 });
 type PutRequestBody = z.infer<typeof putRequestBodySchema>;
 
@@ -75,7 +73,7 @@ Deno.serve(async (req) => {
         throw new Error('Invalid request body');
       }
       
-      const { vocabularyId, type } = validatedBody.data;
+      const { vocabularyId } = validatedBody.data;
 
       // 既に登録されているレコードを検索 (delete_flg の値に関わらず)
       const { data: existingRecord, error: fetchError } = await supabase
@@ -83,7 +81,6 @@ Deno.serve(async (req) => {
         .select('*')
         .eq('user_id', userId)
         .eq('vocabulary_id', vocabularyId)
-        .eq('type', type)
         .limit(1)
         .maybeSingle();
 
@@ -125,7 +122,6 @@ Deno.serve(async (req) => {
             vocabulary_id: vocabularyId,
             box_level: boxLevel,
             next_review_date: nextReviewDate.toISOString(),
-            type: type,
           });
         
         if (insertError) {
@@ -153,7 +149,7 @@ Deno.serve(async (req) => {
         throw new Error('Invalid request body');
       }
 
-      const { vocabularyId, isCorrect, studyDate, type } = validatedBody.data;
+      const { vocabularyId, isCorrect, studyDate } = validatedBody.data;
 
       // 既に登録されているレコードを検索 (delete_flg の値に関わらず)
       const { data: existingRecord, error: fetchError } = await supabase
@@ -161,7 +157,6 @@ Deno.serve(async (req) => {
         .select('*')
         .eq('user_id', userId)
         .eq('vocabulary_id', vocabularyId)
-        .eq('type', type)
         .limit(1)
         .maybeSingle();
 
@@ -188,7 +183,6 @@ Deno.serve(async (req) => {
             .select('study_date')
             .eq('user_id', userId)
             .eq('vocabulary_id', vocabularyId)
-            .eq('type', type)
             .limit(1)
             .maybeSingle();
 
@@ -245,9 +239,8 @@ Deno.serve(async (req) => {
             study_date: studyDate,
             is_completed: newBoxLevel === 6,
             updated_at: new Date().toISOString(),
-            type: type,
           },
-          { onConflict: "user_id, vocabulary_id, type" } // 複合キーを指定
+          { onConflict: "user_id, vocabulary_id" } // typeを除外
         );
 
       if (updateError) {

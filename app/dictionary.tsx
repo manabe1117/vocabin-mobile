@@ -47,7 +47,7 @@ const useVocabulary = () => {
     if (!session) return;
 
     try {
-      const { data, error } = await supabase.functions.invoke(`get-study-status?vocabularyId=${vocabularyId}&type=3`, {
+      const { data, error } = await supabase.functions.invoke(`get-study-status?vocabularyId=${vocabularyId}`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${session.access_token}`

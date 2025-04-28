@@ -1,14 +1,12 @@
--- vocabulary取得用ストアドプロシージャ（フィルター対応・品詞複数対応・ランダムシード対応）
-DROP FUNCTION IF EXISTS get_vocabulary(UUID, INTEGER, INTEGER, INTEGER, TEXT, TEXT[], TEXT[], TEXT);
-
-CREATE OR REPLACE FUNCTION get_vocabulary(
+-- study_statusに存在しないvocabularyを取得するストアドプロシージャ
+-- ユーザーごと・typeごとに未登録の単語一覧を取得する
+CREATE OR REPLACE FUNCTION get_unregistered_vocabulary(
   p_user_id UUID,
   p_type INTEGER,
   p_page INTEGER,
   p_page_size INTEGER,
   p_sort_order TEXT,
   p_part_of_speech TEXT[] DEFAULT NULL,
-  p_learning_status TEXT[] DEFAULT NULL,
   p_random_seed TEXT DEFAULT NULL
 )
 RETURNS TABLE (
@@ -20,8 +18,7 @@ RETURNS TABLE (
   examples JSONB,
   synonyms TEXT[],
   notes TEXT,
-  date_added TIMESTAMP WITH TIME ZONE,
-  box_level INTEGER
+  date_added TIMESTAMP WITH TIME ZONE
 ) AS $$
 BEGIN
   -- ランダムソート時のみシードをセット
@@ -39,28 +36,21 @@ BEGIN
     v.example_sentences AS examples,
     v.synonyms,
     v.notes,
-    v.created_at AS date_added,
-    COALESCE(ss.box_level, 0) AS box_level
+    v.created_at AS date_added
   FROM
+    vocabulary v
+  LEFT JOIN
     study_status ss
-  INNER JOIN
-    vocabulary v ON ss.vocabulary_id = v.id
+    ON ss.vocabulary_id = v.id
+    AND ss.user_id = p_user_id
   WHERE
-    ss.user_id = p_user_id
-    AND ss.delete_flg = FALSE
-    AND ss.type = p_type
+    v.type = p_type
+    AND (ss.vocabulary_id IS NULL OR ss.delete_flg = true)
     AND (
       p_part_of_speech IS NULL OR array_length(p_part_of_speech, 1) = 0
       OR EXISTS (
         SELECT 1 FROM unnest(p_part_of_speech) AS pos
         WHERE ',' || v.part_of_speech || ',' LIKE '%,' || pos || ',%'
-      )
-    )
-    AND (
-      p_learning_status IS NULL OR array_length(p_learning_status, 1) = 0 OR
-      (
-        ('知ってる' = ANY(p_learning_status) AND ss.box_level > 0) OR
-        ('知らない' = ANY(p_learning_status) AND ss.box_level = 0)
       )
     )
   ORDER BY
