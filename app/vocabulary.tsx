@@ -44,6 +44,9 @@ interface VocabularyItem {
 // フィルタータイプの定義
 type FilterType = 'all' | '名詞' | '動詞' | '形容詞' | '副詞';
 
+// 学習状態フィルターの定義
+type StudyStatusType = '未学習' | '学習中' | '学習済み' | null;
+
 // ソート順の定義
 type SortOrder = 'alphabetical_asc' | 'alphabetical_desc' | 'random';
 
@@ -57,6 +60,7 @@ export default function VocabularyScreen() {
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [activeFilters, setActiveFilters] = useState<FilterType[]>(['all']);
+  const [studyStatus, setStudyStatus] = useState<StudyStatusType>('未学習'); // 学習状態フィルター（デフォルト未学習）
   const [sortOrder, setSortOrder] = useState<SortOrder>('alphabetical_asc');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -209,28 +213,35 @@ export default function VocabularyScreen() {
     if (!activeFilters.includes('all')) {
       partOfSpeech = activeFilters.filter(f => ['名詞', '動詞', '形容詞', '副詞'].includes(f));
     }
-    const filters = {
+    const filters: any = {
       partOfSpeech: partOfSpeech.length > 0 ? partOfSpeech : undefined,
     };
+    if (studyStatus) {
+      filters.studyStatus = studyStatus;
+    }
 
     try {
       if (!session?.access_token) {
         throw new Error('認証トークンがありません');
       }
+      const requestBody: any = {
+        page: reset ? 1 : page,
+        pageSize: pageSize,
+        sortOrder: customSortOrder ?? sortOrder,
+        filters,
+        randomSeed: (customSortOrder ?? sortOrder) === 'random' ? (customRandomSeed ?? randomSeed) : undefined,
+      };
+      if (studyStatus === '未学習') {
+        requestBody.unregistered = true;
+      }
+
       const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/get-vocabulary`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          page: reset ? 1 : page,
-          pageSize: pageSize,
-          sortOrder: customSortOrder ?? sortOrder,
-          filters,
-          randomSeed: (customSortOrder ?? sortOrder) === 'random' ? (customRandomSeed ?? randomSeed) : undefined,
-          unregistered: true,
-        }),
+        body: JSON.stringify(requestBody),
       });
       const data = await response.json();
       console.log('APIレスポンス（単語リスト）:', data);
@@ -565,31 +576,31 @@ export default function VocabularyScreen() {
       { label: '形容詞', value: '形容詞', icon: 'color-palette' },
       { label: '副詞', value: '副詞', icon: 'speedometer' },
     ];
-    
+
     // フィルターを切り替える関数
     const toggleFilter = (value: FilterType) => {
       if (value === 'all') {
-        // 「すべて」を選択した場合は他のフィルターをクリア
         setActiveFilters(['all']);
       } else {
         setActiveFilters(prev => {
-          // 現在「すべて」が選択されている場合はクリア
           const newFilters = prev.includes('all') ? [] : [...prev];
-          
-          // 選択された値を切り替え
           if (newFilters.includes(value)) {
-            // 値を削除
             const filtered = newFilters.filter(f => f !== value);
-            // フィルターが空になった場合は「すべて」を選択
             return filtered.length === 0 ? ['all'] : filtered;
           } else {
-            // 値を追加し、「すべて」を削除
             return [...newFilters.filter(f => f !== 'all'), value];
           }
         });
       }
     };
-    
+
+    // 学習状態フィルターのUI
+    const studyStatusOptions: { label: string; value: StudyStatusType }[] = [
+      { label: '未学習', value: '未学習' },
+      { label: '学習中', value: '学習中' },
+      { label: '学習済み', value: '学習済み' },
+    ];
+
     return (
       <Modal
         animationType="slide"
@@ -608,7 +619,39 @@ export default function VocabularyScreen() {
                 <Ionicons name="close" size={24} color={COLORS.TEXT_SECONDARY} />
               </TouchableOpacity>
             </View>
-            
+
+            {/* 学習状態フィルター */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+              {studyStatusOptions.map(option => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingVertical: 8,
+                    marginHorizontal: 4,
+                    borderRadius: 16,
+                    backgroundColor: studyStatus === option.value ? COLORS.PRIMARY : '#f0f0f0',
+                  }}
+                  onPress={() => setStudyStatus(studyStatus === option.value ? null : option.value)}
+                >
+                  <Ionicons
+                    name={studyStatus === option.value ? 'radio-button-on' : 'radio-button-off'}
+                    size={20}
+                    color={studyStatus === option.value ? '#fff' : COLORS.TEXT_PRIMARY}
+                  />
+                  <ThemedText style={{
+                    marginLeft: 6,
+                    color: studyStatus === option.value ? '#fff' : COLORS.TEXT_PRIMARY,
+                    fontWeight: studyStatus === option.value ? 'bold' : 'normal',
+                  }}>{option.label}</ThemedText>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* 品詞フィルター */}
             <View style={styles.filtersContainer}>
               {filters.map(filter => (
                 <TouchableOpacity
@@ -637,7 +680,7 @@ export default function VocabularyScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            
+
             <View style={styles.modalFooter}>
               <TouchableOpacity 
                 style={styles.applyButton}

@@ -1,20 +1,19 @@
--- vocabulary取得用ストアドプロシージャ（フィルター対応・品詞複数対応・ランダムシード対応）
-DROP FUNCTION IF EXISTS get_vocabulary(UUID, INTEGER, INTEGER, INTEGER, TEXT, TEXT[], TEXT[], TEXT);
+-- vocabulary取得用ストアドプロシージャ（フィルター対応・品詞複数対応・ランダムシード対応・学習状態対応）
+DROP FUNCTION IF EXISTS get_vocabulary(UUID, INTEGER, INTEGER, INTEGER, TEXT, TEXT[], TEXT, TEXT);
 
 CREATE OR REPLACE FUNCTION get_vocabulary(
   p_user_id UUID,
-  p_type INTEGER,
   p_page INTEGER,
   p_page_size INTEGER,
   p_sort_order TEXT,
   p_part_of_speech TEXT[] DEFAULT NULL,
-  p_learning_status TEXT[] DEFAULT NULL,
-  p_random_seed TEXT DEFAULT NULL
+  p_random_seed TEXT DEFAULT NULL,
+  p_study_status TEXT DEFAULT NULL -- '学習中'|'学習済み'|NULL
 )
 RETURNS TABLE (
   id INTEGER,
-  word TEXT,
-  translation TEXT,
+  vocabulary TEXT,
+  meanings TEXT[],
   part_of_speech TEXT,
   pronunciation TEXT,
   examples JSONB,
@@ -32,8 +31,8 @@ BEGIN
   RETURN QUERY
   SELECT
     v.id,
-    v.vocabulary AS word,
-    COALESCE(v.meanings[1], '') AS translation,
+    v.vocabulary,
+    v.meanings,
     v.part_of_speech,
     v.pronunciation,
     v.example_sentences AS examples,
@@ -48,7 +47,6 @@ BEGIN
   WHERE
     ss.user_id = p_user_id
     AND ss.delete_flg = FALSE
-    AND ss.type = p_type
     AND (
       p_part_of_speech IS NULL OR array_length(p_part_of_speech, 1) = 0
       OR EXISTS (
@@ -57,11 +55,8 @@ BEGIN
       )
     )
     AND (
-      p_learning_status IS NULL OR array_length(p_learning_status, 1) = 0 OR
-      (
-        ('知ってる' = ANY(p_learning_status) AND ss.box_level > 0) OR
-        ('知らない' = ANY(p_learning_status) AND ss.box_level = 0)
-      )
+      (p_study_status = '学習中' AND ss.is_completed = FALSE)
+      OR (p_study_status = '学習済み' AND ss.is_completed = TRUE)
     )
   ORDER BY
     CASE WHEN p_sort_order = 'alphabetical_asc' THEN v.vocabulary END ASC,

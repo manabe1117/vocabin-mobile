@@ -29,10 +29,9 @@ Deno.serve(async (req) => {
     const page = parseInt(body.page || '1');
     const pageSize = parseInt(body.pageSize || '30');
     const sortOrder = body.sortOrder || 'alphabetical_asc';
-    const type = 2; // 固定
     const filters = body.filters || {};
     const partOfSpeech = filters.partOfSpeech || null;
-    const learningStatus = filters.learningStatus || null;
+    const studyStatus = filters.studyStatus || null;
     const randomSeed = body.randomSeed || null;
     const unregistered = body.unregistered === true;
 
@@ -41,7 +40,7 @@ Deno.serve(async (req) => {
     if (unregistered) {
       ({ data, error } = await supabase.rpc('get_unregistered_vocabulary', {
         p_user_id: userId,
-        p_type: type,
+        p_type: 2,
         p_page: page,
         p_page_size: pageSize,
         p_sort_order: sortOrder,
@@ -49,16 +48,15 @@ Deno.serve(async (req) => {
         p_random_seed: randomSeed
       }));
     } else {
-      // 登録済み単語取得（従来通り）
+      // 登録済み単語取得
       ({ data, error } = await supabase.rpc('get_vocabulary', {
         p_user_id: userId,
-        p_type: type,
         p_page: page,
         p_page_size: pageSize,
         p_sort_order: sortOrder,
         p_part_of_speech: partOfSpeech,
-        p_learning_status: learningStatus,
-        p_random_seed: randomSeed
+        p_random_seed: randomSeed,
+        p_study_status: studyStatus
       }));
     }
     if (error) throw error;
