@@ -39,6 +39,7 @@ interface VocabularyItem {
   notes: string;
   date_added?: string; // 追加日
   learningStatus: 'known' | 'unknown'; // 知ってるか知らないかの状態
+  appliedStudyStatus?: StudyStatusType; // 適用された学習状態フィルター
 }
 
 // フィルタータイプの定義
@@ -266,6 +267,7 @@ export default function VocabularyScreen() {
         notes: v.notes || '',
         date_added: v.date_added,
         learningStatus: v.box_level > 0 ? 'known' : 'unknown',
+        appliedStudyStatus: studyStatus,
       }));
 
       if ((data || []).length < pageSize) {
@@ -381,7 +383,9 @@ export default function VocabularyScreen() {
                 style={[
                   styles.itemContainer,
                   item.learningStatus === 'known' && styles.knownItemBorder,
-                  item.learningStatus === 'unknown' && styles.unknownItemBorder
+                  item.learningStatus === 'unknown' && styles.unknownItemBorder,
+                  item.appliedStudyStatus === '学習中' && { borderColor: '#eca775' },
+                  item.appliedStudyStatus === '学習済み' && { borderColor: '#7fc99e' }
                 ]}
                 onPress={() => toggleExpand(item.id)}
                 activeOpacity={0.7}
