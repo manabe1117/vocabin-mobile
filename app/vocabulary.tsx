@@ -40,6 +40,7 @@ interface VocabularyItem {
   date_added?: string; // 追加日
   learningStatus: 'known' | 'unknown'; // 知ってるか知らないかの状態
   appliedStudyStatus?: StudyStatusType; // 適用された学習状態フィルター
+  box_level?: number; // box_levelの追加
 }
 
 // フィルタータイプの定義
@@ -268,6 +269,7 @@ export default function VocabularyScreen() {
         date_added: v.date_added,
         learningStatus: v.box_level > 0 ? 'known' : 'unknown',
         appliedStudyStatus: studyStatus,
+        box_level: v.box_level || 0, // box_levelの追加
       }));
 
       if ((data || []).length < pageSize) {
@@ -384,8 +386,8 @@ export default function VocabularyScreen() {
                   styles.itemContainer,
                   item.learningStatus === 'known' && styles.knownItemBorder,
                   item.learningStatus === 'unknown' && styles.unknownItemBorder,
-                  item.appliedStudyStatus === '学習中' && { borderColor: '#eca775' },
-                  item.appliedStudyStatus === '学習済み' && { borderColor: '#7fc99e' }
+                  item.appliedStudyStatus === '学習中' && { borderColor: '#f57c00' },
+                  item.appliedStudyStatus === '学習済み' && { borderColor: '#388e3c' }
                 ]}
                 onPress={() => toggleExpand(item.id)}
                 activeOpacity={0.7}
@@ -393,12 +395,20 @@ export default function VocabularyScreen() {
                 <View style={styles.itemHeader}>
                   <View style={styles.wordContainer}>
                     <ThemedText style={styles.word}>{item.vocabulary}</ThemedText>
-                    <ThemedText style={styles.partOfSpeech}>
-                      {item.partOfSpeech === 'noun' ? '名詞' : 
-                      item.partOfSpeech === 'verb' ? '動詞' : 
-                      item.partOfSpeech === 'adjective' ? '形容詞' : 
-                      item.partOfSpeech === 'adverb' ? '副詞' : item.partOfSpeech}
-                    </ThemedText>
+                    <View style={styles.wordInfoContainer}>
+                      <ThemedText style={styles.partOfSpeech}>
+                        {item.partOfSpeech === 'noun' ? '名詞' : 
+                        item.partOfSpeech === 'verb' ? '動詞' : 
+                        item.partOfSpeech === 'adjective' ? '形容詞' : 
+                        item.partOfSpeech === 'adverb' ? '副詞' : item.partOfSpeech}
+                      </ThemedText>
+                      {item.appliedStudyStatus === '学習中' && (
+                        <View style={[styles.boxLevelContainer, { backgroundColor: '#f57c00' }]}>
+                          <Ionicons name="layers" size={12} color="#fff" style={styles.boxLevelIcon} />
+                          <ThemedText style={styles.boxLevelText}>{item.box_level}</ThemedText>
+                        </View>
+                      )}
+                    </View>
                   </View>
                   <View style={styles.rightContainer}>
                     {/* 意味は未展開時は表示しない */}
@@ -407,7 +417,15 @@ export default function VocabularyScreen() {
                         style={styles.soundButton}
                         onPress={() => handlePlaySound(item.vocabulary)}
                       >
-                        <Ionicons name="volume-high" size={24} color={COLORS.PRIMARY} />
+                        <Ionicons 
+                          name="volume-high" 
+                          size={24} 
+                          color={
+                            item.appliedStudyStatus === '学習済み' ? '#388e3c' :
+                            item.appliedStudyStatus === '学習中' ? '#f57c00' :
+                            COLORS.PRIMARY
+                          } 
+                        />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -431,10 +449,31 @@ export default function VocabularyScreen() {
                           {item.synonyms.map((synonym, index) => (
                             <TouchableOpacity
                               key={index}
-                              style={styles.synonym}
+                              style={[
+                                styles.synonym,
+                                {
+                                  borderColor: 
+                                    item.appliedStudyStatus === '学習済み' ? '#388e3c' :
+                                    item.appliedStudyStatus === '学習中' ? '#f57c00' :
+                                    'transparent',
+                                  borderWidth: 1,
+                                }
+                              ]}
                               onPress={() => handlePlaySound(synonym)}
                             >
-                              <ThemedText style={styles.synonymText}>{synonym}</ThemedText>
+                              <ThemedText 
+                                style={[
+                                  styles.synonymText,
+                                  {
+                                    color: 
+                                      item.appliedStudyStatus === '学習済み' ? '#388e3c' :
+                                      item.appliedStudyStatus === '学習中' ? '#f57c00' :
+                                      COLORS.PRIMARY
+                                  }
+                                ]}
+                              >
+                                {synonym}
+                              </ThemedText>
                             </TouchableOpacity>
                           ))}
                         </View>
@@ -943,6 +982,10 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     flex: 1,
   },
+  wordInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   word: {
     fontSize: 18,
     fontWeight: '600',
@@ -952,7 +995,24 @@ const styles = StyleSheet.create({
   partOfSpeech: {
     fontSize: 14,
     color: COLORS.TEXT_SECONDARY,
-    fontStyle: 'italic',
+    fontStyle: 'normal',
+  },
+  boxLevelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 10,
+    backgroundColor: COLORS.PRIMARY,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  boxLevelIcon: {
+    marginRight: 2,
+  },
+  boxLevelText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '500',
   },
   rightContainer: {
     flexDirection: 'row',
