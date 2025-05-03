@@ -1,7 +1,7 @@
 // app/(tabs)/index.tsx
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView, ActivityIndicator } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -31,6 +31,7 @@ const colors = {
 
 const HomeScreen = () => {
   const { session } = useAuth();
+  const router = useRouter();
   const [completedCount, setCompletedCount] = useState<number | null>(null);
   const [learningCount, setLearningCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,11 +63,23 @@ const HomeScreen = () => {
     }, [session?.access_token])
   );
 
+  // 学習状態ごとに単語帳画面に遷移する関数
+  const navigateToVocabularyWithFilter = (studyStatus: '学習済み' | '学習中') => {
+    router.push({
+      pathname: '/vocabulary',
+      params: { studyStatus }
+    });
+  };
+
   return (
     <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
       {/* --- フレーズ統計バー --- */}
       <View style={styles.statsBar}>
-        <View style={styles.statsItem}>
+        <TouchableOpacity 
+          style={styles.statsItem}
+          onPress={() => navigateToVocabularyWithFilter('学習済み')}
+          disabled={loading || !!error || (completedCount === 0)}
+        >
           <View style={styles.statsLabelRow}>
             <MaterialIcons name="check-circle" size={24} color={colors.accentGreen} style={styles.statsIcon} />
             <Text style={styles.statsLabel}>学習済み</Text>
@@ -78,9 +91,13 @@ const HomeScreen = () => {
           ) : (
             <Text style={styles.statsValue}>{completedCount}</Text>
           )}
-        </View>
+        </TouchableOpacity>
         <View style={styles.statsDivider} />
-        <View style={styles.statsItem}>
+        <TouchableOpacity 
+          style={styles.statsItem}
+          onPress={() => navigateToVocabularyWithFilter('学習中')}
+          disabled={loading || !!error || (learningCount === 0)}
+        >
           <View style={styles.statsLabelRow}>
             <MaterialIcons name="hourglass-bottom" size={24} color={colors.accentOrange} style={styles.statsIcon} />
             <Text style={styles.statsLabel}>学習中</Text>
@@ -92,7 +109,7 @@ const HomeScreen = () => {
           ) : (
             <Text style={styles.statsValue}>{learningCount}</Text>
           )}
-        </View>
+        </TouchableOpacity>
       </View>
       {/* --- 言語ツールセクション --- */}
       <View style={styles.section}>

@@ -22,6 +22,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useSpeech } from '@/hooks/useSpeech';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
+import { useLocalSearchParams } from 'expo-router';
 
 // 単語の型定義
 /**
@@ -55,6 +56,8 @@ type SortOrder = 'alphabetical_asc' | 'alphabetical_desc' | 'random';
 export default function VocabularyScreen() {
   const { session } = useAuth();
   const { speakText } = useSpeech();
+  const params = useLocalSearchParams<{ studyStatus?: string }>();
+  const initialStudyStatus = params.studyStatus as StudyStatusType | undefined;
   const [vocabulary, setVocabulary] = useState<VocabularyItem[]>([]);
   const [filteredVocabulary, setFilteredVocabulary] = useState<VocabularyItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +65,13 @@ export default function VocabularyScreen() {
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [activeFilters, setActiveFilters] = useState<FilterType[]>(['all']);
-  const [studyStatus, setStudyStatus] = useState<StudyStatusType>('未学習'); // 学習状態フィルター（デフォルト未学習）
+  const [studyStatus, setStudyStatus] = useState<StudyStatusType>(() => {
+    // 初期値をURLパラメータから取得して設定
+    if (initialStudyStatus && ['未学習', '学習中', '学習済み'].includes(initialStudyStatus)) {
+      return initialStudyStatus as StudyStatusType;
+    }
+    return '未学習'; // デフォルト値
+  });
   const [sortOrder, setSortOrder] = useState<SortOrder>('alphabetical_asc');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -74,6 +83,18 @@ export default function VocabularyScreen() {
   // スワイプで削除中のIDリスト
   const [removingIds, setRemovingIds] = useState<number[]>([]);
   const [randomSeed, setRandomSeed] = useState<string | null>(null);
+  
+  // 初回データロード
+  useEffect(() => {
+    fetchVocabulary(true);
+  }, [studyStatus]);
+  
+  // ページが変わったときの追加ロード
+  useEffect(() => {
+    if (page > 1) {
+      fetchVocabulary(false);
+    }
+  }, [page]);
   
   const screenWidth = Dimensions.get('window').width;
   
@@ -294,18 +315,6 @@ export default function VocabularyScreen() {
       setRefreshing(false);
     }
   };
-
-  // 初回ロード
-  useEffect(() => {
-    fetchVocabulary(true);
-  }, []);
-
-  // ページが変わったときの追加ロード
-  useEffect(() => {
-    if (page > 1) {
-      fetchVocabulary(false);
-    }
-  }, [page]);
 
   // 音声を再生する関数
   const handlePlaySound = (text: string) => {
