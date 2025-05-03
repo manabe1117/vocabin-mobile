@@ -66,11 +66,10 @@ export default function VocabularyScreen() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [activeFilters, setActiveFilters] = useState<FilterType[]>(['all']);
   const [studyStatus, setStudyStatus] = useState<StudyStatusType>(() => {
-    // 初期値をURLパラメータから取得して設定
     if (initialStudyStatus && ['未学習', '学習中', '学習済み'].includes(initialStudyStatus)) {
       return initialStudyStatus as StudyStatusType;
     }
-    return '未学習'; // デフォルト値
+    return '未学習';
   });
   const [sortOrder, setSortOrder] = useState<SortOrder>('alphabetical_asc');
   const [page, setPage] = useState(1);
@@ -83,11 +82,20 @@ export default function VocabularyScreen() {
   // スワイプで削除中のIDリスト
   const [removingIds, setRemovingIds] = useState<number[]>([]);
   const [randomSeed, setRandomSeed] = useState<string | null>(null);
+  // 一時的なフィルター状態
+  const [tempActiveFilters, setTempActiveFilters] = useState<FilterType[]>(activeFilters);
+  const [tempStudyStatus, setTempStudyStatus] = useState<StudyStatusType>(studyStatus);
+  
+  // useRefで前回値を保持
+  const prevFiltersRef = useRef(activeFilters);
+  const prevStatusRef = useRef(studyStatus);
+  const prevModalVisibleRef = useRef(filterModalVisible);
   
   // 初回データロード
+  // studyStatus変更時に自動でfetchしないように変更
   useEffect(() => {
     fetchVocabulary(true);
-  }, [studyStatus]);
+  }, []);
   
   // ページが変わったときの追加ロード
   useEffect(() => {
@@ -410,17 +418,10 @@ export default function VocabularyScreen() {
                         item.partOfSpeech === 'adjective' ? '形容詞' : 
                         item.partOfSpeech === 'adverb' ? '副詞' : item.partOfSpeech}
                       </ThemedText>
-                      {item.appliedStudyStatus === '学習中' && (
-                        <View style={[styles.boxLevelContainer, { backgroundColor: COLORS.STUDY_STATUS.IN_PROGRESS.TEXT }]}>
-                          <Ionicons name="layers" size={12} color={COLORS.WHITE} style={styles.boxLevelIcon} />
-                          <ThemedText style={styles.boxLevelText}>{item.box_level}</ThemedText>
-                        </View>
-                      )}
                     </View>
                   </View>
                   <View style={styles.rightContainer}>
-                    {/* 意味は未展開時は表示しない */}
-                    <View style={styles.actionButtonsContainer}>
+                    <View style={styles.actionButtonsContainerColumn}>
                       <TouchableOpacity 
                         style={styles.soundButton}
                         onPress={() => handlePlaySound(item.vocabulary)}
@@ -435,6 +436,12 @@ export default function VocabularyScreen() {
                           } 
                         />
                       </TouchableOpacity>
+                      {item.appliedStudyStatus === '学習中' && (
+                        <View style={[styles.boxLevelContainerWide, { backgroundColor: COLORS.STUDY_STATUS.IN_PROGRESS.TEXT }]}> 
+                          <Ionicons name="layers" size={14} color={COLORS.WHITE} style={styles.boxLevelIcon} />
+                          <ThemedText style={styles.boxLevelText}>{item.box_level}</ThemedText>
+                        </View>
+                      )}
                     </View>
                   </View>
                 </View>
@@ -575,8 +582,12 @@ export default function VocabularyScreen() {
       visible={sortModalVisible}
       onRequestClose={() => setSortModalVisible(false)}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+      <TouchableOpacity
+        activeOpacity={1}
+        style={styles.modalOverlay}
+        onPress={() => setSortModalVisible(false)}
+      >
+        <View style={styles.modalContent} pointerEvents="box-none">
           <View style={styles.modalHeader}>
             <ThemedText style={[styles.modalTitle, { color: COLORS.TEXT.DARKER }]}>並び替えを選択</ThemedText>
             <TouchableOpacity
@@ -608,7 +619,7 @@ export default function VocabularyScreen() {
             ))}
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     </Modal>
   );
 
@@ -645,7 +656,11 @@ export default function VocabularyScreen() {
           {/* フィルターボタン */}
           <TouchableOpacity
             style={styles.filterIconButton}
-            onPress={() => setFilterModalVisible(true)}
+            onPress={() => {
+              setTempActiveFilters(activeFilters);
+              setTempStudyStatus(studyStatus);
+              setFilterModalVisible(true);
+            }}
           >
             <ThemedText style={styles.filterButtonLabel}>絞り込み: </ThemedText>
             <ThemedText style={styles.activeFilterLabel}>{getActiveFiltersLabel()}</ThemedText>
@@ -669,9 +684,9 @@ export default function VocabularyScreen() {
     // フィルターを切り替える関数
     const toggleFilter = (value: FilterType) => {
       if (value === 'all') {
-        setActiveFilters(['all']);
+        setTempActiveFilters(['all']);
       } else {
-        setActiveFilters(prev => {
+        setTempActiveFilters(prev => {
           const newFilters = prev.includes('all') ? [] : [...prev];
           if (newFilters.includes(value)) {
             const filtered = newFilters.filter(f => f !== value);
@@ -697,8 +712,12 @@ export default function VocabularyScreen() {
         visible={filterModalVisible}
         onRequestClose={() => setFilterModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.modalOverlay}
+          onPress={() => setFilterModalVisible(false)}
+        >
+          <View style={styles.modalContent} pointerEvents="box-none">
             <View style={styles.modalHeader}>
               <ThemedText style={[styles.modalTitle, { color: COLORS.TEXT.DARKER }]}>絞り込み条件を選択</ThemedText>
               <TouchableOpacity 
@@ -723,21 +742,24 @@ export default function VocabularyScreen() {
                       paddingVertical: 8,
                       marginHorizontal: 4,
                       borderRadius: 16,
-                      backgroundColor: studyStatus === option.value ? COLORS.BACKGROUND.BLUE_LIGHT : COLORS.BACKGROUND.GRAY_MEDIUM,
-                      borderWidth: studyStatus === option.value ? 1 : 0,
-                      borderColor: studyStatus === option.value ? COLORS.BORDER.BLUE : 'transparent',
+                      backgroundColor: tempStudyStatus === option.value ? COLORS.BACKGROUND.BLUE_LIGHT : COLORS.BACKGROUND.GRAY_MEDIUM,
+                      borderWidth: tempStudyStatus === option.value ? 1 : 0,
+                      borderColor: tempStudyStatus === option.value ? COLORS.BORDER.BLUE : 'transparent',
                     }}
-                    onPress={() => setStudyStatus(studyStatus === option.value ? null : option.value)}
+                    onPress={() => {
+                      const newStatus = tempStudyStatus === option.value ? null : option.value;
+                      setTempStudyStatus(newStatus);
+                    }}
                   >
                     <Ionicons
-                      name={studyStatus === option.value ? 'radio-button-on' : 'radio-button-off'}
+                      name={tempStudyStatus === option.value ? 'radio-button-on' : 'radio-button-off'}
                       size={20}
-                      color={studyStatus === option.value ? COLORS.PRIMARY : COLORS.ICON.DEFAULT}
+                      color={tempStudyStatus === option.value ? COLORS.PRIMARY : COLORS.ICON.DEFAULT}
                     />
                     <ThemedText style={{
                       marginLeft: 6,
-                      color: studyStatus === option.value ? COLORS.PRIMARY : COLORS.TEXT.DARK,
-                      fontWeight: studyStatus === option.value ? 'bold' : 'normal',
+                      color: tempStudyStatus === option.value ? COLORS.PRIMARY : COLORS.TEXT.DARK,
+                      fontWeight: tempStudyStatus === option.value ? 'bold' : 'normal',
                     }}>{option.label}</ThemedText>
                   </TouchableOpacity>
                 );
@@ -751,21 +773,19 @@ export default function VocabularyScreen() {
                   key={filter.value}
                   style={[
                     styles.filterOption,
-                    activeFilters.includes(filter.value) && styles.filterItemActive
+                    tempActiveFilters.includes(filter.value) && styles.filterItemActive
                   ]}
-                  onPress={() => {
-                    toggleFilter(filter.value);
-                  }}
+                  onPress={() => toggleFilter(filter.value)}
                 >
                   <Ionicons 
                     name={filter.icon as any} 
                     size={24} 
-                    color={activeFilters.includes(filter.value) ? COLORS.PRIMARY : COLORS.ICON.DEFAULT} 
+                    color={tempActiveFilters.includes(filter.value) ? COLORS.PRIMARY : COLORS.ICON.DEFAULT} 
                   />
                   <ThemedText 
                     style={[
                       styles.filterItemText,
-                      activeFilters.includes(filter.value) && styles.filterItemTextActive
+                      tempActiveFilters.includes(filter.value) && styles.filterItemTextActive
                     ]}
                   >
                     {filter.label}
@@ -776,17 +796,27 @@ export default function VocabularyScreen() {
 
             <View style={styles.modalFooter}>
               <TouchableOpacity 
+                style={styles.resetButton}
+                onPress={() => {
+                  setTempActiveFilters(['all']);
+                  setTempStudyStatus('未学習');
+                }}
+              >
+                <ThemedText style={styles.resetButtonText}>リセット</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity 
                 style={styles.applyButton}
                 onPress={() => {
+                  setActiveFilters(tempActiveFilters);
+                  setStudyStatus(tempStudyStatus);
                   setFilterModalVisible(false);
-                  fetchVocabulary(true);
                 }}
               >
                 <ThemedText style={styles.applyButtonText}>適用</ThemedText>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
     );
   };
@@ -805,6 +835,20 @@ export default function VocabularyScreen() {
       fetchVocabulary(true, option.value);
     }
   };
+
+  // useEffectでactiveFilters, studyStatus, filterModalVisibleを監視し、モーダルが閉じた直後にfetchVocabularyを呼ぶ
+  useEffect(() => {
+    if (
+      prevModalVisibleRef.current && !filterModalVisible &&
+      (prevFiltersRef.current !== activeFilters || prevStatusRef.current !== studyStatus)
+    ) {
+      fetchVocabulary(true);
+    }
+    prevFiltersRef.current = activeFilters;
+    prevStatusRef.current = studyStatus;
+    prevModalVisibleRef.current = filterModalVisible;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilters, studyStatus, filterModalVisible]);
 
   // ローディング中の表示
   if (loading && page === 1) {
@@ -1066,7 +1110,7 @@ const styles = StyleSheet.create({
   },
   rightContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   translation: {
     fontSize: 16,
@@ -1167,8 +1211,20 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     padding: 16,
+  },
+  resetButton: {
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: COLORS.BACKGROUND.GRAY,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.GRAY,
+  },
+  resetButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.TEXT.DARK,
   },
   applyButton: {
     padding: 12,
@@ -1191,6 +1247,23 @@ const styles = StyleSheet.create({
   actionButtonsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  actionButtonsContainerColumn: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 1,
+  },
+  boxLevelContainerWide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 1,
+    minWidth: 48,
+    justifyContent: 'center',
+    backgroundColor: COLORS.PRIMARY,
+    paddingHorizontal: 12,
+    paddingVertical: 2,
+    borderRadius: 12,
   },
   statusButton: {
     width: 30,
