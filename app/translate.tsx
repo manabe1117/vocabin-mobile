@@ -29,21 +29,22 @@ import CameraModal from '../components/CameraModal';
 import DictionaryModal from '../components/DictionaryModal';
 import DictionaryBanner from '../components/DictionaryBanner';
 import { useAuth } from '../context/AuthContext';
+import { COLORS } from '../constants/styles';
 
 const colors = {
-  background: '#f8f9fa',
-  inputBackground: '#ffffff',
-  outputBackground: '#ffffff',
-  textPrimary: '#202124',
-  textSecondary: '#5f6368',
-  accentBlue: '#1a73e8',
-  iconColor: '#5f6368',
-  iconColorDisabled: '#bdbdbd',
-  borderColor: '#dadce0',
-  rippleColor: 'rgba(0, 0, 0, 0.1)',
-  errorColor: '#d93025',
-  placeholderColor: '#9e9e9e',
-  bottomBarBackground: '#ffffff',
+  background: COLORS.BACKGROUND.MAIN,
+  inputBackground: COLORS.WHITE,
+  outputBackground: COLORS.WHITE,
+  textPrimary: COLORS.TEXT_PRIMARY,
+  textSecondary: COLORS.TEXT_SECONDARY,
+  accentBlue: COLORS.PRIMARY,
+  iconColor: COLORS.ICON.DEFAULT,
+  iconColorDisabled: COLORS.ICON.DISABLED,
+  borderColor: COLORS.BORDER.LIGHT,
+  rippleColor: COLORS.EFFECTS.RIPPLE,
+  errorColor: COLORS.ERROR.DARKER,
+  placeholderColor: COLORS.TEXT.MEDIUM_GRAY,
+  bottomBarBackground: COLORS.WHITE,
   langButtonBackgroundOriginal: '#e8f0fe',
 };
 

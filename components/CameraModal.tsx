@@ -4,6 +4,7 @@ import { View, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Platform,
 import { Camera, CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { COLORS } from '../constants/styles';
 
 interface CameraModalProps {
   isVisible: boolean;
@@ -129,7 +130,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: COLORS.BACKGROUND.MAIN,
     padding: 20,
   },
   permissionText: {
@@ -138,19 +139,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   permissionButton: {
-    backgroundColor: '#1a73e8',
+    backgroundColor: COLORS.PRIMARY,
     paddingVertical: 12,
     paddingHorizontal: 30,
     borderRadius: 8,
     marginBottom: 15,
   },
   permissionButtonText: {
-    color: 'white',
+    color: COLORS.WHITE,
     fontSize: 16,
     fontWeight: 'bold',
   },
   closeButton: {
-      backgroundColor: '#5f6368',
+    backgroundColor: COLORS.ICON.DEFAULT,
   },
   camera: {
     flex: 1,
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
     borderRadius: 35,
     backgroundColor: 'rgba(0,0,0,0.4)',
     borderWidth: 3,
-    borderColor: 'white',
+    borderColor: COLORS.WHITE,
     justifyContent: 'center',
     alignItems: 'center',
   },

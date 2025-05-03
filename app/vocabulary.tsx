@@ -348,7 +348,7 @@ export default function VocabularyScreen() {
             },
           ]}
         >
-          <Ionicons name="help-circle" size={24} color="#fff" />
+          <Ionicons name="help-circle" size={24} color={COLORS.WHITE} />
           <Text style={styles.swipeHintText}>わからない</Text>
         </Animated.View>
         
@@ -362,7 +362,7 @@ export default function VocabularyScreen() {
             },
           ]}
         >
-          <Feather name="check-circle" size={24} color="#fff" />
+          <Feather name="check-circle" size={24} color={COLORS.WHITE} />
           <Text style={styles.swipeHintText}>知ってる</Text>
         </Animated.View>
         
@@ -386,8 +386,7 @@ export default function VocabularyScreen() {
                   styles.itemContainer,
                   item.learningStatus === 'known' && styles.knownItemBorder,
                   item.learningStatus === 'unknown' && styles.unknownItemBorder,
-                  item.appliedStudyStatus === '学習中' && { borderColor: '#f57c00' },
-                  item.appliedStudyStatus === '学習済み' && { borderColor: '#388e3c' }
+                  {borderColor: COLORS.BORDER.LIGHT},
                 ]}
                 onPress={() => toggleExpand(item.id)}
                 activeOpacity={0.7}
@@ -403,8 +402,8 @@ export default function VocabularyScreen() {
                         item.partOfSpeech === 'adverb' ? '副詞' : item.partOfSpeech}
                       </ThemedText>
                       {item.appliedStudyStatus === '学習中' && (
-                        <View style={[styles.boxLevelContainer, { backgroundColor: '#f57c00' }]}>
-                          <Ionicons name="layers" size={12} color="#fff" style={styles.boxLevelIcon} />
+                        <View style={[styles.boxLevelContainer, { backgroundColor: COLORS.STUDY_STATUS.IN_PROGRESS.TEXT }]}>
+                          <Ionicons name="layers" size={12} color={COLORS.WHITE} style={styles.boxLevelIcon} />
                           <ThemedText style={styles.boxLevelText}>{item.box_level}</ThemedText>
                         </View>
                       )}
@@ -421,8 +420,8 @@ export default function VocabularyScreen() {
                           name="volume-high" 
                           size={24} 
                           color={
-                            item.appliedStudyStatus === '学習済み' ? '#388e3c' :
-                            item.appliedStudyStatus === '学習中' ? '#f57c00' :
+                            item.appliedStudyStatus === '学習済み' ? COLORS.STUDY_STATUS.COMPLETED.TEXT :
+                            item.appliedStudyStatus === '学習中' ? COLORS.STUDY_STATUS.IN_PROGRESS.TEXT :
                             COLORS.PRIMARY
                           } 
                         />
@@ -434,47 +433,61 @@ export default function VocabularyScreen() {
                 {isExpanded && (
                   <View style={styles.expandedContent}>
                     <View style={styles.divider} />
-                    {/* 展開時のみ意味を「、」区切りで表示 */}
+                    {/* 展開時のみ意味を表示 */}
                     {item.meanings.length > 0 && (
                       <View style={styles.section}>
-                        <ThemedText style={styles.sectionTitle}>意味</ThemedText>
-                        <ThemedText style={styles.translation}>{item.meanings.join('、')}</ThemedText>
+                        <ThemedText style={[
+                          styles.sectionTitle,
+                          {
+                            color: 
+                              item.appliedStudyStatus === '学習済み' ? COLORS.STUDY_STATUS.COMPLETED.TEXT :
+                              item.appliedStudyStatus === '学習中' ? COLORS.STUDY_STATUS.IN_PROGRESS.TEXT :
+                              COLORS.PRIMARY
+                          }
+                        ]}>意味</ThemedText>
+                        <ThemedText style={styles.sectionText}>{item.meanings.join('、')}</ThemedText>
                       </View>
                     )}
                     
                     {item.synonyms.length > 0 && (
                       <View style={styles.section}>
-                        <ThemedText style={styles.sectionTitle}>類義語</ThemedText>
+                        <ThemedText style={[
+                          styles.sectionTitle,
+                          {
+                            color: 
+                              item.appliedStudyStatus === '学習済み' ? COLORS.STUDY_STATUS.COMPLETED.TEXT :
+                              item.appliedStudyStatus === '学習中' ? COLORS.STUDY_STATUS.IN_PROGRESS.TEXT :
+                              COLORS.PRIMARY
+                          }
+                        ]}>類義語</ThemedText>
                         <View style={styles.synonymContainer}>
                           {item.synonyms.map((synonym, index) => (
-                            <TouchableOpacity
+                            <View
                               key={index}
                               style={[
                                 styles.synonym,
                                 {
-                                  borderColor: 
-                                    item.appliedStudyStatus === '学習済み' ? '#388e3c' :
-                                    item.appliedStudyStatus === '学習中' ? '#f57c00' :
-                                    'transparent',
-                                  borderWidth: 1,
+                                  backgroundColor: 
+                                    item.appliedStudyStatus === '学習済み' ? COLORS.STUDY_STATUS.COMPLETED.BACKGROUND :
+                                    item.appliedStudyStatus === '学習中' ? COLORS.STUDY_STATUS.IN_PROGRESS.BACKGROUND :
+                                    '#e3f2fd'
                                 }
                               ]}
-                              onPress={() => handlePlaySound(synonym)}
                             >
                               <ThemedText 
                                 style={[
                                   styles.synonymText,
                                   {
                                     color: 
-                                      item.appliedStudyStatus === '学習済み' ? '#388e3c' :
-                                      item.appliedStudyStatus === '学習中' ? '#f57c00' :
+                                      item.appliedStudyStatus === '学習済み' ? COLORS.STUDY_STATUS.COMPLETED.TEXT :
+                                      item.appliedStudyStatus === '学習中' ? COLORS.STUDY_STATUS.IN_PROGRESS.TEXT :
                                       COLORS.PRIMARY
                                   }
                                 ]}
                               >
                                 {synonym}
                               </ThemedText>
-                            </TouchableOpacity>
+                            </View>
                           ))}
                         </View>
                       </View>
@@ -482,9 +495,25 @@ export default function VocabularyScreen() {
                     
                     {item.examples.length > 0 && (
                       <View style={styles.section}>
-                        <ThemedText style={styles.sectionTitle}>例文</ThemedText>
+                        <ThemedText style={[
+                          styles.sectionTitle,
+                          {
+                            color: 
+                              item.appliedStudyStatus === '学習済み' ? COLORS.STUDY_STATUS.COMPLETED.TEXT :
+                              item.appliedStudyStatus === '学習中' ? COLORS.STUDY_STATUS.IN_PROGRESS.TEXT :
+                              COLORS.PRIMARY
+                          }
+                        ]}>例文</ThemedText>
                         {item.examples.map((example, index) => (
-                          <View key={index} style={styles.exampleContainer}>
+                          <View key={index} style={[
+                            styles.exampleContainer,
+                            {
+                              backgroundColor: 
+                                // item.appliedStudyStatus === '学習済み' ? COLORS.STUDY_STATUS.COMPLETED.BACKGROUND_LIGHT :
+                                // item.appliedStudyStatus === '学習中' ? COLORS.STUDY_STATUS.IN_PROGRESS.BACKGROUND_LIGHT :
+                                COLORS.BACKGROUND.MAIN
+                            }
+                          ]}>
                             <ThemedText style={styles.example}>{example.en}</ThemedText>
                             <ThemedText style={styles.exampleTranslation}>{example.ja}</ThemedText>
                           </View>
@@ -494,8 +523,16 @@ export default function VocabularyScreen() {
                     
                     {item.notes && (
                       <View style={styles.section}>
-                        <ThemedText style={styles.sectionTitle}>補足</ThemedText>
-                        <ThemedText style={styles.notes}>{item.notes}</ThemedText>
+                        <ThemedText style={[
+                          styles.sectionTitle,
+                          {
+                            color: 
+                              item.appliedStudyStatus === '学習済み' ? COLORS.STUDY_STATUS.COMPLETED.TEXT :
+                              item.appliedStudyStatus === '学習中' ? COLORS.STUDY_STATUS.IN_PROGRESS.TEXT :
+                              COLORS.PRIMARY
+                          }
+                        ]}>補足</ThemedText>
+                        <ThemedText style={styles.sectionText}>{item.notes}</ThemedText>
                       </View>
                     )}
                   </View>
@@ -532,12 +569,12 @@ export default function VocabularyScreen() {
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <ThemedText style={styles.modalTitle}>並び替えを選択</ThemedText>
+            <ThemedText style={[styles.modalTitle, { color: COLORS.TEXT.DARKER }]}>並び替えを選択</ThemedText>
             <TouchableOpacity
               style={styles.closeModalButton}
               onPress={() => setSortModalVisible(false)}
             >
-              <Ionicons name="close" size={24} color={COLORS.TEXT_SECONDARY} />
+              <Ionicons name="close" size={24} color={COLORS.ICON.DEFAULT} />
             </TouchableOpacity>
           </View>
           <View style={styles.filtersContainer}>
@@ -593,7 +630,7 @@ export default function VocabularyScreen() {
           >
             <ThemedText style={styles.filterButtonLabel}>並び替え: </ThemedText>
             <ThemedText style={styles.activeFilterLabel}>{getSortLabel()}</ThemedText>
-            <Ionicons name="swap-vertical" size={18} color={COLORS.PRIMARY} />
+            <Ionicons name="swap-vertical" size={18} color={COLORS.ICON.LIGHT} />
           </TouchableOpacity>
 
           {/* フィルターボタン */}
@@ -603,7 +640,7 @@ export default function VocabularyScreen() {
           >
             <ThemedText style={styles.filterButtonLabel}>絞り込み: </ThemedText>
             <ThemedText style={styles.activeFilterLabel}>{getActiveFiltersLabel()}</ThemedText>
-            <Ionicons name="funnel" size={18} color={COLORS.PRIMARY} />
+            <Ionicons name="funnel" size={18} color={COLORS.ICON.LIGHT} />
           </TouchableOpacity>
         </View>
       </View>
@@ -654,44 +691,48 @@ export default function VocabularyScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <ThemedText style={styles.modalTitle}>絞り込み条件を選択</ThemedText>
+              <ThemedText style={[styles.modalTitle, { color: COLORS.TEXT.DARKER }]}>絞り込み条件を選択</ThemedText>
               <TouchableOpacity 
                 style={styles.closeModalButton}
                 onPress={() => setFilterModalVisible(false)}
               >
-                <Ionicons name="close" size={24} color={COLORS.TEXT_SECONDARY} />
+                <Ionicons name="close" size={24} color={COLORS.ICON.DEFAULT} />
               </TouchableOpacity>
             </View>
 
             {/* 学習状態フィルター */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
-              {studyStatusOptions.map(option => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingVertical: 8,
-                    marginHorizontal: 4,
-                    borderRadius: 16,
-                    backgroundColor: studyStatus === option.value ? COLORS.PRIMARY : '#f0f0f0',
-                  }}
-                  onPress={() => setStudyStatus(studyStatus === option.value ? null : option.value)}
-                >
-                  <Ionicons
-                    name={studyStatus === option.value ? 'radio-button-on' : 'radio-button-off'}
-                    size={20}
-                    color={studyStatus === option.value ? '#fff' : COLORS.TEXT_PRIMARY}
-                  />
-                  <ThemedText style={{
-                    marginLeft: 6,
-                    color: studyStatus === option.value ? '#fff' : COLORS.TEXT_PRIMARY,
-                    fontWeight: studyStatus === option.value ? 'bold' : 'normal',
-                  }}>{option.label}</ThemedText>
-                </TouchableOpacity>
-              ))}
+              {studyStatusOptions.map(option => {
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingVertical: 8,
+                      marginHorizontal: 4,
+                      borderRadius: 16,
+                      backgroundColor: studyStatus === option.value ? COLORS.BACKGROUND.BLUE_LIGHT : COLORS.BACKGROUND.GRAY_MEDIUM,
+                      borderWidth: studyStatus === option.value ? 1 : 0,
+                      borderColor: studyStatus === option.value ? COLORS.BORDER.BLUE : 'transparent',
+                    }}
+                    onPress={() => setStudyStatus(studyStatus === option.value ? null : option.value)}
+                  >
+                    <Ionicons
+                      name={studyStatus === option.value ? 'radio-button-on' : 'radio-button-off'}
+                      size={20}
+                      color={studyStatus === option.value ? COLORS.PRIMARY : COLORS.ICON.DEFAULT}
+                    />
+                    <ThemedText style={{
+                      marginLeft: 6,
+                      color: studyStatus === option.value ? COLORS.PRIMARY : COLORS.TEXT.DARK,
+                      fontWeight: studyStatus === option.value ? 'bold' : 'normal',
+                    }}>{option.label}</ThemedText>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             {/* 品詞フィルター */}
@@ -710,7 +751,7 @@ export default function VocabularyScreen() {
                   <Ionicons 
                     name={filter.icon as any} 
                     size={24} 
-                    color={activeFilters.includes(filter.value) ? '#fff' : COLORS.TEXT_PRIMARY} 
+                    color={activeFilters.includes(filter.value) ? COLORS.PRIMARY : COLORS.ICON.DEFAULT} 
                   />
                   <ThemedText 
                     style={[
@@ -845,7 +886,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER,
+    borderBottomColor: COLORS.BORDER.LIGHT,
   },
   optionsRow: {
     flexDirection: 'row',
@@ -862,7 +903,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginRight: 8,
     marginBottom: 4,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: COLORS.BACKGROUND.GRAY,
   },
   activeOptionButton: {
     backgroundColor: COLORS.PRIMARY,
@@ -872,7 +913,7 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_SECONDARY,
   },
   activeOptionText: {
-    color: '#fff',
+    color: COLORS.WHITE,
     fontWeight: '500',
   },
   filterIconButton: {
@@ -880,27 +921,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: COLORS.BACKGROUND.GRAY,
     borderRadius: 16,
   },
   filterButtonLabel: {
     fontSize: 14,
-    color: COLORS.TEXT_SECONDARY,
+    color: COLORS.TEXT.LIGHT,
     marginRight: 4,
   },
   activeFilterLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: COLORS.PRIMARY,
+    color: COLORS.TEXT.DARKER,
     marginRight: 6,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: COLORS.EFFECTS.SHADOW,
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.WHITE,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -932,15 +973,15 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
     marginHorizontal: '1%',
-    backgroundColor: '#f0f0f0',
+    backgroundColor: COLORS.BACKGROUND.GRAY,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: COLORS.BORDER.GRAY,
   },
   filterItemActive: {
-    backgroundColor: '#3498db',
-    borderColor: '#2980b9',
-    shadowColor: '#000',
+    backgroundColor: COLORS.BACKGROUND.BLUE_LIGHT,
+    borderColor: COLORS.BORDER.BLUE,
+    shadowColor: COLORS.BLACK,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
@@ -949,10 +990,10 @@ const styles = StyleSheet.create({
   filterItemText: {
     marginLeft: 8,
     fontSize: 16,
-    color: '#333',
+    color: COLORS.TEXT.PRIMARY,
   },
   filterItemTextActive: {
-    color: '#fff',
+    color: COLORS.PRIMARY,
     fontWeight: '600',
   },
   listContainer: {
@@ -964,11 +1005,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.CARD_BACKGROUND,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.BORDER,
+    borderColor: COLORS.BORDER.LIGHT,
     padding: 16,
     marginBottom: 6,
     elevation: 1,
-    shadowColor: '#000',
+    shadowColor: COLORS.BLACK,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -1011,7 +1052,7 @@ const styles = StyleSheet.create({
   },
   boxLevelText: {
     fontSize: 12,
-    color: '#fff',
+    color: COLORS.WHITE,
     fontWeight: '500',
   },
   rightContainer: {
@@ -1032,7 +1073,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.BORDER,
+    backgroundColor: COLORS.BORDER.LIGHT,
     marginVertical: 12,
   },
   pronunciation: {
@@ -1041,48 +1082,52 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   section: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: COLORS.TEXT_SECONDARY,
+    color: COLORS.PRIMARY,
     marginBottom: 8,
+  },
+  sectionText: {
+    fontSize: 16,
+    color: COLORS.TEXT_PRIMARY,
+    lineHeight: 24,
   },
   synonymContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 8,
+    gap: 8,
   },
   synonym: {
-    backgroundColor: COLORS.BACKGROUND,
-    borderRadius: 16,
-    paddingHorizontal: 12,
+    backgroundColor: COLORS.BACKGROUND.BLUE_LIGHT,
     paddingVertical: 6,
-    marginRight: 8,
-    marginBottom: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
   },
   synonymText: {
-    fontSize: 14,
     color: COLORS.PRIMARY,
+    fontSize: 14,
+    fontWeight: '500',
   },
   exampleContainer: {
-    marginBottom: 12,
+    backgroundColor: COLORS.BACKGROUND.MAIN,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
   },
   example: {
-    fontSize: 15,
+    fontSize: 16,
     color: COLORS.TEXT_PRIMARY,
+    lineHeight: 24,
     marginBottom: 4,
-    fontStyle: 'italic',
   },
   exampleTranslation: {
     fontSize: 14,
     color: COLORS.TEXT_SECONDARY,
-  },
-  notes: {
-    fontSize: 14,
-    color: COLORS.TEXT_SECONDARY,
     lineHeight: 20,
+    fontStyle: 'italic',
   },
   loadingMore: {
     padding: 20,
@@ -1124,15 +1169,15 @@ const styles = StyleSheet.create({
   applyButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#fff',
+    color: COLORS.WHITE,
   },
   knownItemBorder: {
     borderLeftWidth: 4,
-    borderLeftColor: '#4caf50',
+    borderLeftColor: COLORS.SUCCESS.DARK,
   },
   unknownItemBorder: {
     borderLeftWidth: 4,
-    borderLeftColor: '#ff9800',
+    borderLeftColor: COLORS.WARNING.DEFAULT,
   },
   actionButtonsContainer: {
     flexDirection: 'row',
@@ -1148,12 +1193,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   activeKnownButton: {
-    backgroundColor: '#4caf50',
-    borderColor: '#388e3c',
+    backgroundColor: COLORS.SUCCESS.DARK,
+    borderColor: COLORS.SUCCESS.DARKER,
   },
   activeUnknownButton: {
-    backgroundColor: '#ff9800',
-    borderColor: '#f57c00',
+    backgroundColor: COLORS.WARNING.DEFAULT,
+    borderColor: COLORS.WARNING.DARK,
   },
   swipeContainer: {
     position: 'relative',
@@ -1166,18 +1211,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   swipeHintText: {
-    color: '#fff',
+    color: COLORS.WHITE,
     marginTop: 4,
     fontSize: 12,
     fontWeight: '600',
   },
   unknownSwipeHint: {
     left: 0,
-    backgroundColor: '#e74c3c',
+    backgroundColor: COLORS.ERROR.DARK,
   },
   knownSwipeHint: {
     right: 0,
-    backgroundColor: '#27ae60',
+    backgroundColor: COLORS.SUCCESS.LIGHT,
   },
   feedbackOverlay: {
     position: 'absolute',
@@ -1199,7 +1244,7 @@ const styles = StyleSheet.create({
   feedbackText: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#fff',
+    color: COLORS.WHITE,
     marginTop: 12,
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
@@ -1216,9 +1261,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   knownStatusIcon: {
-    backgroundColor: '#4caf50',
+    backgroundColor: COLORS.SUCCESS.DARK,
   },
   unknownStatusIcon: {
-    backgroundColor: '#ff9800',
+    backgroundColor: COLORS.WARNING.DEFAULT,
   },
 }); 

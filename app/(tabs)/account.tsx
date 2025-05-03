@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { COLORS } from '@/constants/styles';
 
 export default function AccountScreen() {
   const { session, signOut } = useAuth();
@@ -33,15 +34,15 @@ export default function AccountScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>設定</Text>
         <TouchableOpacity style={styles.settingItem}>
-          <Ionicons name="notifications-outline" size={24} color="#666" />
+          <Ionicons name="notifications-outline" size={24} color={COLORS.TEXT.SECONDARY} />
           <Text style={styles.settingText}>通知設定</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.settingItem}>
-          <Ionicons name="language-outline" size={24} color="#666" />
+          <Ionicons name="language-outline" size={24} color={COLORS.TEXT.SECONDARY} />
           <Text style={styles.settingText}>言語設定</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.settingItem}>
-          <Ionicons name="moon-outline" size={24} color="#666" />
+          <Ionicons name="moon-outline" size={24} color={COLORS.TEXT.SECONDARY} />
           <Text style={styles.settingText}>ダークモード</Text>
         </TouchableOpacity>
       </View>
@@ -49,11 +50,11 @@ export default function AccountScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>その他</Text>
         <TouchableOpacity style={styles.settingItem}>
-          <Ionicons name="help-circle-outline" size={24} color="#666" />
+          <Ionicons name="help-circle-outline" size={24} color={COLORS.TEXT.SECONDARY} />
           <Text style={styles.settingText}>ヘルプとサポート</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.settingItem}>
-          <Ionicons name="information-circle-outline" size={24} color="#666" />
+          <Ionicons name="information-circle-outline" size={24} color={COLORS.TEXT.SECONDARY} />
           <Text style={styles.settingText}>アプリについて</Text>
         </TouchableOpacity>
       </View>
@@ -68,12 +69,12 @@ export default function AccountScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.WHITE,
   },
   header: {
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: COLORS.BORDER.LIGHTER,
   },
   title: {
     fontSize: 24,
@@ -82,49 +83,49 @@ const styles = StyleSheet.create({
   section: {
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: COLORS.BORDER.LIGHTER,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 15,
-    color: '#333',
+    color: COLORS.TEXT.PRIMARY,
   },
   infoCard: {
-    backgroundColor: '#f8f8f8',
+    backgroundColor: COLORS.BACKGROUND.LIGHTER,
     padding: 15,
     borderRadius: 10,
   },
   label: {
     fontSize: 14,
-    color: '#666',
+    color: COLORS.TEXT.SECONDARY,
     marginBottom: 5,
   },
   value: {
     fontSize: 16,
-    color: '#333',
+    color: COLORS.TEXT.PRIMARY,
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: COLORS.BORDER.LIGHTER,
   },
   settingText: {
     fontSize: 16,
-    color: '#333',
+    color: COLORS.TEXT.PRIMARY,
     marginLeft: 15,
   },
   logoutButton: {
     margin: 20,
     padding: 15,
-    backgroundColor: '#ff3b30',
+    backgroundColor: COLORS.ERROR.LIGHT,
     borderRadius: 10,
     alignItems: 'center',
   },
   logoutText: {
-    color: '#fff',
+    color: COLORS.WHITE,
     fontSize: 16,
     fontWeight: '600',
   },

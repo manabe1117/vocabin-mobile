@@ -192,7 +192,7 @@ const TranslateScreen = () => {
               value={inputText}
               onChangeText={setInputText}
               onSubmitEditing={handleTranslate}
-              placeholderTextColor="#999"
+              placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
               textContentType="none"
               autoCapitalize="none"
               autoCorrect={false}
@@ -210,7 +210,7 @@ const TranslateScreen = () => {
                 style={styles.clearButton} 
                 onPress={clearInput}
               >
-                <Ionicons name="close-circle" size={20} color="#999" />
+                <Ionicons name="close-circle" size={20} color={COLORS.TEXT.MEDIUM_GRAY} />
               </TouchableOpacity>
             )}
           </View>
@@ -222,7 +222,7 @@ const TranslateScreen = () => {
             <Ionicons 
               name="search" 
               size={20} 
-              color={inputText.length === 0 ? "#ccc" : "#4a90e2"} 
+              color={inputText.length === 0 ? COLORS.TEXT.DISABLED : COLORS.SECONDARY} 
             />
           </TouchableOpacity>
         </View>
@@ -258,7 +258,7 @@ const TranslateScreen = () => {
             value={inputText}
             onChangeText={setInputText}
             onSubmitEditing={handleTranslate}
-            placeholderTextColor="#999"
+            placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
             textContentType="none"
             autoCapitalize="none"
             autoCorrect={false}
@@ -276,7 +276,7 @@ const TranslateScreen = () => {
               style={styles.clearButton} 
               onPress={clearInput}
             >
-              <Ionicons name="close-circle" size={20} color="#999" />
+              <Ionicons name="close-circle" size={20} color={COLORS.TEXT.MEDIUM_GRAY} />
             </TouchableOpacity>
           )}
         </View>
@@ -288,7 +288,7 @@ const TranslateScreen = () => {
           <Ionicons 
             name="search" 
             size={20} 
-            color={inputText.length === 0 ? "#ccc" : "#4a90e2"} 
+            color={inputText.length === 0 ? COLORS.TEXT.DISABLED : COLORS.SECONDARY} 
           />
         </TouchableOpacity>
       </View>
@@ -298,7 +298,7 @@ const TranslateScreen = () => {
           <View style={styles.suggestionContainer}>
             <View style={styles.suggestionContent}>
               <View style={styles.suggestionHeader}>
-                <Ionicons name="search-circle" size={20} color="#4a90e2" />
+                <Ionicons name="search-circle" size={20} color={COLORS.SECONDARY} />
                 <Text style={styles.suggestionText}>もしかして？</Text>
               </View>
               <TouchableOpacity 
@@ -306,7 +306,7 @@ const TranslateScreen = () => {
                 onPress={handleSuggestionClick}
               >
                 <Text style={styles.suggestionWord}>{suggestion}</Text>
-                <Ionicons name="arrow-forward" size={20} color="#4a90e2" />
+                <Ionicons name="arrow-forward" size={20} color={COLORS.SECONDARY} />
               </TouchableOpacity>
             </View>
           </View>
@@ -324,7 +324,7 @@ const TranslateScreen = () => {
                 style={styles.soundButton}
                 onPress={() => handlePlaySound(vocabulary.vocabulary)}
               >
-                <Ionicons name="volume-high" size={24} color="#4a90e2" />
+                <Ionicons name="volume-high" size={24} color={COLORS.PRIMARY} />
               </TouchableOpacity>
             </View>
 
@@ -379,7 +379,7 @@ const TranslateScreen = () => {
               <Ionicons 
                 name={isSaved ? "checkmark-circle" : "bookmark-outline"} 
                 size={20} 
-                color={isSaved ? "#4CAF50" : "white"} 
+                color={isSaved ? COLORS.SUCCESS.DARK : COLORS.WHITE} 
                 style={styles.saveButtonIcon} 
               />
               <Text style={[styles.saveButtonText, isSaved && styles.savedButtonText]}>
@@ -396,22 +396,22 @@ const TranslateScreen = () => {
 const styles = StyleSheet.create({
   translateContainer: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: COLORS.BACKGROUND.MAIN,
     padding: 0,
     width: '100%',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: COLORS.BACKGROUND.MAIN,
   },
   searchBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: 'white',
+    backgroundColor: COLORS.WHITE,
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
-    shadowColor: '#000',
+    borderBottomColor: COLORS.BORDER.GRAY_LIGHT,
+    shadowColor: COLORS.BLACK,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: COLORS.BACKGROUND.MAIN,
     borderRadius: 12,
     paddingHorizontal: 12,
     marginRight: 8,
@@ -430,14 +430,14 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 40,
     fontSize: 16,
-    color: '#212529',
+    color: COLORS.TEXT.DARKER,
   },
   clearButton: {
     padding: 4,
   },
   magicButton: {
     padding: 10,
-    backgroundColor: '#e9ecef',
+    backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
     borderRadius: 12,
   },
   magicButtonDisabled: {
@@ -449,12 +449,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   resultCard: {
-    backgroundColor: 'white',
+    backgroundColor: COLORS.WHITE,
     borderRadius: 16,
     padding: 20,
     marginBottom: 20,
     width: '100%',
-    shadowColor: '#000',
+    shadowColor: COLORS.BLACK,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -472,12 +472,12 @@ const styles = StyleSheet.create({
   wordText: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#212529',
+    color: COLORS.TEXT.DARKER,
     marginBottom: 4,
   },
   pronunciation: {
     fontSize: 16,
-    color: '#6c757d',
+    color: COLORS.TEXT.LIGHT_GRAY,
   },
   soundButton: {
     padding: 8,
@@ -488,12 +488,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#4a90e2',
+    color: COLORS.SECONDARY,
     marginBottom: 8,
   },
   sectionText: {
     fontSize: 16,
-    color: '#495057',
+    color: COLORS.TEXT.DARK_GRAY,
     lineHeight: 24,
   },
   synonymContainer: {
@@ -502,40 +502,40 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   synonym: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: COLORS.BACKGROUND.BLUE_LIGHT,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
   },
   synonymText: {
-    color: '#1976d2',
+    color: COLORS.TEXT.BLUE_LIGHT,
     fontSize: 14,
     fontWeight: '500',
   },
   exampleContainer: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: COLORS.BACKGROUND.MAIN,
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
   },
   exampleText: {
     fontSize: 16,
-    color: '#495057',
+    color: COLORS.TEXT.DARK_GRAY,
     lineHeight: 24,
     marginBottom: 4,
   },
   exampleTranslation: {
     fontSize: 14,
-    color: '#6c757d',
+    color: COLORS.TEXT.LIGHT_GRAY,
     lineHeight: 20,
     fontStyle: 'italic',
   },
   suggestionContainer: {
-    backgroundColor: 'white',
+    backgroundColor: COLORS.WHITE,
     padding: 16,
     borderRadius: 16,
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: COLORS.BLACK,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -552,36 +552,36 @@ const styles = StyleSheet.create({
   },
   suggestionText: {
     fontSize: 14,
-    color: '#4a90e2',
+    color: COLORS.SECONDARY,
     fontWeight: '500',
   },
   suggestionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: COLORS.BACKGROUND.MAIN,
     padding: 12,
     borderRadius: 8,
   },
   suggestionWord: {
     fontSize: 16,
-    color: '#4a90e2',
+    color: COLORS.SECONDARY,
     fontWeight: 'bold',
   },
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4a90e2',
+    backgroundColor: COLORS.SECONDARY,
     padding: 12,
     borderRadius: 8,
     marginTop: 8,
     height: 44,
   },
   savedButton: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: COLORS.BACKGROUND.MAIN,
     borderWidth: 1,
-    borderColor: '#4a90e2',
+    borderColor: COLORS.SECONDARY,
     height: 44,
     padding: 11,
   },
@@ -589,18 +589,18 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   saveButtonText: {
-    color: 'white',
+    color: COLORS.WHITE,
     fontSize: 16,
     fontWeight: '500',
     lineHeight: 20,
   },
   savedButtonText: {
-    color: '#4a90e2',
+    color: COLORS.SECONDARY,
     lineHeight: 20,
   },
   partOfSpeech: {
     fontSize: 16,
-    color: '#6c757d',
+    color: COLORS.TEXT.LIGHT_GRAY,
     marginBottom: 4,
   },
 });
