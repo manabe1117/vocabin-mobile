@@ -399,16 +399,20 @@ async function fetchGeminiApi(vocabulary: string): Promise<VocabularyData | Sugg
       "conjugations": {},
       "notes": "Additional notes go here"
     }
-    Use Japanese for "part_of_speech", "meanings", "notes". Do *not* include any parenthetical translations or romaji in the Japanese.
+    Use Japanese for "part_of_speech", "meanings", "notes". No romaji or translations in Japanese.
     Provide verb conjugations: "原形", "現在分詞", "過去形", "過去分詞", "三人称単数現在".
     Provide noun conjugations: "単数形", "複数形".
     Provide adjective conjugations: "比較級", "最上級".
     Use English for "synonyms", "antonyms". Use IPA for "pronunciation".
-    Include irregular forms. Omit non-existent conjugations. Omit "pronunciation" or "notes" if not applicable or not available.
+    Include irregular forms. Omit non-existent conjugations.
 
-    If the spelling is incorrect, return {"suggestion": "<corrected_spell>"}. Where <corrected_spell> is the most likely corrected spelling.
+    REQUIREMENTS:
+    1. Must include at least one natural example sentence.
+    2. Notes should add unique value (usage tips, common mistakes, cultural context) and be under 100 characters.
 
-    Strictly JSON. When no suggestion, generate meanings. Do not include any extra fields like "id". Only include the requested fields.
+    If spelling is incorrect, return {"suggestion": "<corrected_spell>"}.
+
+    Return only JSON. No extra fields.
   `;
 
   // Gemini API へのリクエストボディ
