@@ -408,7 +408,7 @@ async function fetchGeminiApi(vocabulary: string): Promise<VocabularyData | Sugg
 
     REQUIREMENTS:
     1. Must include at least one natural example sentence.
-    2. Notes should add unique value (usage tips, common mistakes, cultural context) and be under 100 characters.
+    2. Notes should provide language learning tips, common usage patterns, or important grammatical points. Keep it under 100 characters and in Japanese. If there's nothing particularly noteworthy for language learners, leave notes empty.
 
     If spelling is incorrect, return {"suggestion": "<corrected_spell>"}.
 
