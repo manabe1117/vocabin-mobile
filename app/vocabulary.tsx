@@ -12,7 +12,8 @@ import {
   RefreshControl,
   Modal,
   Dimensions,
-  Alert
+  Alert,
+  Pressable
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
@@ -53,6 +54,88 @@ type StudyStatusType = '未学習' | '学習中' | '学習済み' | null;
 // ソート順の定義
 type SortOrder = 'alphabetical_asc' | 'alphabetical_desc' | 'random';
 
+// box_levelの色を取得する関数
+const getBoxLevelColor = (level: number) => {
+  switch (level) {
+    case 0:
+      return '#9e9e9e'; // グレー - 未学習
+    case 1:
+    case 2:
+      return '#fb8c00'; // オレンジ色 - 学習開始
+    case 3:
+    case 4:
+      return '#fdd835'; // 黄色 - 少し覚えてきた
+    case 5:
+      return '#43a047'; // 緑色 - かなり覚えた
+    case 6:
+      return '#2e7d32'; // 濃い緑色 - 完全に習得
+    default:
+      return '#9e9e9e';
+  }
+};
+
+// box_levelの説明を表示するモーダル
+const BoxLevelInfoModal = ({ visible, onClose }: { visible: boolean; onClose: () => void }) => (
+  <Modal
+    animationType="fade"
+    transparent={true}
+    visible={visible}
+    onRequestClose={onClose}
+  >
+    <TouchableOpacity
+      style={styles.modalOverlay}
+      activeOpacity={1}
+      onPress={onClose}
+    >
+      <View style={styles.boxLevelInfoContent}>
+        <View style={styles.boxLevelInfoHeader}>
+          <ThemedText style={styles.boxLevelInfoTitle}>習熟度レベルについて</ThemedText>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={24} color={COLORS.ICON.DEFAULT} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.boxLevelInfoBody}>
+          <ThemedText style={styles.boxLevelInfoText}>
+            習熟度レベルは、単語の理解度を表す指標です。数字が大きいほど、その単語をよく覚えていることを示します。
+          </ThemedText>
+          <View style={styles.boxLevelInfoList}>
+            <View style={styles.boxLevelInfoItem}>
+              <View style={[styles.boxLevelInfoBox, { backgroundColor: getBoxLevelColor(0) }]}>
+                <ThemedText style={styles.boxLevelInfoBoxText}>0</ThemedText>
+              </View>
+              <ThemedText style={styles.boxLevelInfoItemText}>未学習</ThemedText>
+            </View>
+            <View style={styles.boxLevelInfoItem}>
+              <View style={[styles.boxLevelInfoBox, { backgroundColor: getBoxLevelColor(1) }]}>
+                <ThemedText style={styles.boxLevelInfoBoxText}>1~2</ThemedText>
+              </View>
+              <ThemedText style={styles.boxLevelInfoItemText}>学習開始</ThemedText>
+            </View>
+            <View style={styles.boxLevelInfoItem}>
+              <View style={[styles.boxLevelInfoBox, { backgroundColor: getBoxLevelColor(3) }]}>
+                <ThemedText style={styles.boxLevelInfoBoxText}>3~4</ThemedText>
+              </View>
+              <ThemedText style={styles.boxLevelInfoItemText}>少し覚えてきた</ThemedText>
+            </View>
+            <View style={styles.boxLevelInfoItem}>
+              <View style={[styles.boxLevelInfoBox, { backgroundColor: getBoxLevelColor(5) }]}>
+                <ThemedText style={styles.boxLevelInfoBoxText}>5</ThemedText>
+              </View>
+              <ThemedText style={styles.boxLevelInfoItemText}>かなり覚えた</ThemedText>
+            </View>
+            <View style={styles.boxLevelInfoItem}>
+              <View style={[styles.boxLevelInfoBox, { backgroundColor: getBoxLevelColor(6) }]}>
+                <ThemedText style={styles.boxLevelInfoBoxText}>6</ThemedText>
+              </View>
+              <ThemedText style={styles.boxLevelInfoItemText}>完全に習得</ThemedText>
+            </View>
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  </Modal>
+);
+
 export default function VocabularyScreen() {
   const { session } = useAuth();
   const { speakText } = useSpeech();
@@ -85,6 +168,7 @@ export default function VocabularyScreen() {
   // 一時的なフィルター状態
   const [tempActiveFilters, setTempActiveFilters] = useState<FilterType[]>(activeFilters);
   const [tempStudyStatus, setTempStudyStatus] = useState<StudyStatusType>(studyStatus);
+  const [boxLevelInfoVisible, setBoxLevelInfoVisible] = useState(false);
   
   // useRefで前回値を保持
   const prevFiltersRef = useRef(activeFilters);
@@ -437,10 +521,13 @@ export default function VocabularyScreen() {
                         />
                       </TouchableOpacity>
                       {item.appliedStudyStatus === '学習中' && (
-                        <View style={[styles.boxLevelContainerWide, { backgroundColor: COLORS.STUDY_STATUS.IN_PROGRESS.TEXT }]}> 
+                        <Pressable 
+                          style={[styles.boxLevelContainerWide, { backgroundColor: getBoxLevelColor(item.box_level || 0) }]}
+                          onPress={() => setBoxLevelInfoVisible(true)}
+                        > 
                           <Ionicons name="layers" size={14} color={COLORS.WHITE} style={styles.boxLevelIcon} />
-                          <ThemedText style={styles.boxLevelText}>{item.box_level}</ThemedText>
-                        </View>
+                          <ThemedText style={[styles.boxLevelText, { color: COLORS.WHITE }]}>{item.box_level}</ThemedText>
+                        </Pressable>
                       )}
                     </View>
                   </View>
@@ -884,6 +971,10 @@ export default function VocabularyScreen() {
       {renderSortModal()}
       {/* フィルターモーダル */}
       {renderFilterModal()}
+      <BoxLevelInfoModal 
+        visible={boxLevelInfoVisible}
+        onClose={() => setBoxLevelInfoVisible(false)}
+      />
       
       {/* 単語リスト */}
       <FlatList
@@ -1347,5 +1438,62 @@ const styles = StyleSheet.create({
   },
   unknownStatusIcon: {
     backgroundColor: COLORS.WARNING.DEFAULT,
+  },
+  boxLevelInfoContent: {
+    backgroundColor: COLORS.WHITE,
+    margin: 20,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: COLORS.BLACK,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  boxLevelInfoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  boxLevelInfoTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: COLORS.TEXT.DARKER,
+  },
+  boxLevelInfoBody: {
+    marginBottom: 20,
+  },
+  boxLevelInfoText: {
+    fontSize: 16,
+    color: COLORS.TEXT.DARK,
+    lineHeight: 24,
+    marginBottom: 20,
+  },
+  boxLevelInfoList: {
+    gap: 16,
+  },
+  boxLevelInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  boxLevelInfoBox: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  boxLevelInfoBoxText: {
+    color: COLORS.WHITE,
+    fontWeight: '600',
+  },
+  boxLevelInfoItemText: {
+    fontSize: 16,
+    color: COLORS.TEXT.DARK,
   },
 }); 
