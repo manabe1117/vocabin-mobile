@@ -219,7 +219,6 @@ export default function VocabularyScreen() {
         method: 'POST',
         body: {
           vocabularyId: id,
-          type: 2,
           direction: status
         },
         headers: {
@@ -350,17 +349,16 @@ export default function VocabularyScreen() {
         requestBody.unregistered = true;
       }
 
-      const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/get-vocabulary`, {
+      const { data, error } = await supabase.functions.invoke('get-vocabulary', {
         method: 'POST',
+        body: requestBody,
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(requestBody),
+          Authorization: `Bearer ${session.access_token}`
+        }
       });
-      const data = await response.json();
+      
+      if (error) throw new Error(error.message || 'APIエラー');
       console.log('APIレスポンス（単語リスト）:', data);
-      if (!response.ok) throw new Error(data.error || 'APIエラー');
 
       const mapped: VocabularyItem[] = (data || []).map((v: any) => ({
         id: v.id,
@@ -476,7 +474,13 @@ export default function VocabularyScreen() {
           <PanGestureHandler
             onGestureEvent={getGestureHandler(item).onGestureEvent}
             onHandlerStateChange={getGestureHandler(item).onHandlerStateChange}
-            activeOffsetX={[-20, 20]}
+            activeOffsetX={
+              item.appliedStudyStatus === '学習中'
+                ? [-9999, 0] // 右スワイプのみ許可
+                : item.appliedStudyStatus === '学習済み'
+                  ? [0, 9999] // 左スワイプのみ許可
+                  : [-20, 20] // 両方向許可
+            }
             failOffsetY={[-20, 20]}
           >
             <Animated.View

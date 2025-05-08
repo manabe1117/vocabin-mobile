@@ -8,7 +8,6 @@ const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 const requestBodySchema = z.object({
   vocabularyId: z.number(),
-  type: z.number(),
   direction: z.enum(['known', 'unknown'])
 });
 
@@ -26,7 +25,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const parsed = requestBodySchema.safeParse(body);
     if (!parsed.success) throw new Error('Invalid request body');
-    const { vocabularyId, type, direction } = parsed.data;
+    const { vocabularyId, direction } = parsed.data;
     let box_level = direction === 'known' ? 6 : 0;
     let is_completed = direction === 'known';
     // 既存レコードを検索
@@ -35,7 +34,6 @@ Deno.serve(async (req) => {
       .select('*')
       .eq('user_id', userId)
       .eq('vocabulary_id', vocabularyId)
-      .eq('type', type)
       .maybeSingle();
     if (fetchError) throw fetchError;
     let result;
@@ -63,7 +61,6 @@ Deno.serve(async (req) => {
           vocabulary_id: vocabularyId,
           box_level,
           is_completed,
-          type,
           next_review_date: new Date().toISOString(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
