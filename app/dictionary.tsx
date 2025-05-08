@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Linking,
+  Platform,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons'; // アイコンをインポート
 import { supabase } from '@/lib/supabase';
@@ -17,6 +19,7 @@ import { COMMON_STYLES, COLORS } from '../constants/styles';
 import { handleApiError } from '../utils/errorHandler';
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import { useSpeech } from '../hooks/useSpeech';
+import * as FileSystem from 'expo-file-system';
 
 interface VocabularyResult {
   id: number;
@@ -122,6 +125,11 @@ const TranslateScreen = () => {
   const { session } = useAuth();
   const { playSound } = useAudio();
   const { speakText } = useSpeech();
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [permissionResponse, requestPermission] = Audio.usePermissions();
+  const [voiceLanguage, setVoiceLanguage] = useState<'en-US' | 'ja-JP'>('en-US'); // 音声入力言語
 
   const handleTranslate = () => {
     setDisplayText(inputText);
@@ -179,6 +187,195 @@ const TranslateScreen = () => {
     setVocabulary(null);
     setSuggestion(null);
     setIsSaved(false);
+  };
+
+  async function startRecording() {
+    if (isRecording || isTranscribing) return;
+    try {
+      // 録音開始時に検索欄をクリア
+      setInputText('');
+      setDisplayText('');
+      setVocabulary(null);
+      setSuggestion(null);
+      
+      let currentStatus = permissionResponse?.status;
+      if (currentStatus !== 'granted') {
+        console.log('Requesting microphone permission..');
+        const { status } = await requestPermission();
+        currentStatus = status;
+      }
+      if (currentStatus !== 'granted') {
+        Alert.alert(
+          '権限が必要です',
+          '音声入力のためにマイクへのアクセスを許可してください。',
+          [
+            {
+              text: '許可する',
+              onPress: async () => {
+                const { status: newStatus } = await requestPermission();
+                if (newStatus !== 'granted') {
+                  Alert.alert( '権限が必要です', '音声入力を使用するにはマイクへのアクセスを許可する必要があります。設定画面から許可してください。',
+                    [ { text: '設定を開く', onPress: () => Linking.openSettings() }, { text: 'キャンセル', style: 'cancel' } ], { cancelable: false }
+                  );
+                } else { startRecording(); }
+              },
+            },
+            { text: 'キャンセル', style: 'cancel' },
+          ],
+          { cancelable: false }
+        );
+        return;
+      }
+
+      console.log('Starting recording with expo-av...');
+      setIsRecording(true);
+      setVocabulary(null);
+      setSuggestion(null);
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const recordingOptions: Audio.RecordingOptions = {
+          android: {
+            extension: '.amr',
+            outputFormat: Audio.AndroidOutputFormat.AMR_NB,
+            audioEncoder: Audio.AndroidAudioEncoder.AMR_NB,
+            sampleRate: 8000,
+            numberOfChannels: 1,
+          },
+          ios: {
+            extension: '.wav',
+            outputFormat: Audio.IOSOutputFormat.LINEARPCM,
+            audioQuality: Audio.IOSAudioQuality.HIGH,
+            sampleRate: 16000,
+            numberOfChannels: 1,
+            bitRate: 256000,
+            linearPCMBitDepth: 16,
+            linearPCMIsBigEndian: false,
+            linearPCMIsFloat: false,
+          },
+          web: {},
+      };
+      console.log(`Attempting to record with options for ${Platform.OS}:`, Platform.OS === 'ios' ? recordingOptions.ios : recordingOptions.android);
+
+      const { recording: newRecording } = await Audio.Recording.createAsync(recordingOptions);
+      setRecording(newRecording);
+      console.log('Recording started');
+
+    } catch (err: any) {
+      console.error('Failed to start recording', err);
+      setIsRecording(false);
+      if (recording) { try { await recording.stopAndUnloadAsync(); } catch {} }
+      setRecording(null);
+    }
+  }
+
+  async function stopRecording() {
+    if (!recording) {
+      console.warn('Recording instance is null, cannot stop.');
+      setIsRecording(false);
+      return;
+    }
+    console.log('Stopping recording...');
+    setIsRecording(false);
+    setIsTranscribing(true);
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      if (!uri) throw new Error('録音ファイルのURIが取得できませんでした。');
+      console.log('Recording stopped and stored at', uri);
+
+      const contentType = Platform.OS === 'ios' ? 'audio/wav' : 'audio/amr';
+      await sendAudioToSupabase(uri, contentType);
+
+    } catch (err: any) {
+      console.error('Failed to stop recording or transcribe', err);
+      setIsTranscribing(false);
+      setRecording(null);
+    }
+  }
+
+  async function sendAudioToSupabase(fileUri: string, contentType: string) {
+    let fileInfo;
+    try {
+      console.log('Checking file existence at:', fileUri);
+      fileInfo = await FileSystem.getInfoAsync(fileUri);
+      if (!fileInfo.exists) throw new Error("録音ファイルが見つかりません。");
+      console.log('File Info:', { uri: fileInfo.uri, size: fileInfo.size });
+
+      const base64Audio = await FileSystem.readAsStringAsync(fileInfo.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      console.log('Invoking Supabase function speech-to-text...');
+      const languageCode = voiceLanguage; // 選択された音声言語コードを使用
+
+      console.log(`Sending audio with contentType: ${contentType} and language: ${languageCode}`);
+
+      const { data, error: invokeError } = await supabase.functions.invoke('speech-to-text', {
+        body: {
+          audioBase64: base64Audio,
+          languageCode: languageCode,
+          contentType: contentType,
+        },
+      });
+
+      if (invokeError) {
+          console.error('Supabase function invocation error:', invokeError);
+          throw new Error(invokeError.message || 'Function invocation failed');
+      }
+
+      if (data && typeof data.transcript === 'string') {
+        console.log('Transcription result:', data.transcript);
+        setInputText(data.transcript);
+      } else if (data && data.error) {
+        console.error('Supabase function returned an error:', data.error);
+        throw new Error(data.error);
+      } else {
+        console.warn('Transcription result is empty or invalid:', data);
+        if (fileInfo.size < 10000 && data?.transcript === '') {
+          Alert.alert('エラー', '録音時間が短いか、無音の可能性があります。');
+        } else {
+          Alert.alert('エラー', '音声が認識できませんでした。');
+        }
+      }
+
+    } catch (err: any) {
+      console.error('Supabase function invocation or processing failed:', err);
+      Alert.alert('エラー', `文字起こしエラー: ${err.message || '不明なエラー'}`);
+    } finally {
+      setIsTranscribing(false);
+      if (fileInfo && fileInfo.exists) {
+        try {
+          console.log('Deleting temporary audio file:', fileInfo.uri);
+          await FileSystem.deleteAsync(fileInfo.uri);
+          console.log('Temporary audio file deleted.');
+        } catch (e) {
+          console.warn("Failed to delete audio file", e);
+        }
+      } else if (fileUri && !fileInfo) {
+        try {
+          console.log('Attempting to delete audio file with original URI:', fileUri);
+          await FileSystem.deleteAsync(fileUri);
+          console.log('Temporary audio file deleted (fallback attempt).');
+        } catch (e) {
+          console.warn("Failed to delete audio file (fallback attempt)", e);
+        }
+      }
+    }
+  }
+
+  const handleMicButtonPress = () => { 
+    if (isRecording) stopRecording(); 
+    else startRecording(); 
+  };
+
+  // 音声入力言語を切り替える関数
+  const toggleVoiceLanguage = () => {
+    setVoiceLanguage(prev => prev === 'en-US' ? 'ja-JP' : 'en-US');
   };
 
   if (loading) {
@@ -254,7 +451,7 @@ const TranslateScreen = () => {
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
-            placeholder="英語または日本語を入力"
+            placeholder={isRecording ? "録音中..." : isTranscribing ? "文字起こし中..." : "英語または日本語を入力"}
             value={inputText}
             onChangeText={setInputText}
             onSubmitEditing={handleTranslate}
@@ -270,8 +467,9 @@ const TranslateScreen = () => {
             keyboardType="default"
             keyboardAppearance="light"
             inputMode="text"
+            editable={!isRecording && !isTranscribing}
           />
-          {inputText.length > 0 && (
+          {inputText.length > 0 && !isRecording && !isTranscribing && (
             <TouchableOpacity 
               style={styles.clearButton} 
               onPress={clearInput}
@@ -281,19 +479,48 @@ const TranslateScreen = () => {
           )}
         </View>
         <TouchableOpacity 
-          style={[styles.magicButton, inputText.length === 0 && styles.magicButtonDisabled]} 
+          style={[styles.magicButton, inputText.length === 0 && !isRecording && styles.magicButtonDisabled]} 
           onPress={handleTranslate}
-          disabled={inputText.length === 0}
+          disabled={inputText.length === 0 && !isRecording}
         >
           <Ionicons 
             name="search" 
             size={20} 
-            color={inputText.length === 0 ? COLORS.TEXT.DISABLED : COLORS.SECONDARY} 
+            color={inputText.length === 0 && !isRecording ? COLORS.TEXT.DISABLED : COLORS.SECONDARY} 
           />
         </TouchableOpacity>
+        <View style={styles.voiceControlGroup}>
+          <TouchableOpacity
+            style={[styles.micButton, isRecording && styles.micButtonRecording]}
+            onPress={handleMicButtonPress}
+            disabled={isTranscribing}
+          >
+            <Ionicons
+              name={isRecording ? "stop-circle" : "mic-outline"}
+              size={20}
+              color={isRecording ? COLORS.WHITE : isTranscribing ? COLORS.TEXT.DISABLED : COLORS.SECONDARY}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.voiceLangButton}
+            onPress={toggleVoiceLanguage}
+            disabled={isRecording || isTranscribing}
+          >
+            <Text style={styles.voiceLangButtonText}>
+              {voiceLanguage === 'en-US' ? 'EN' : 'JP'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.scrollView}>
+        {isTranscribing && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.PRIMARY} />
+            <Text style={styles.loadingText}>音声をテキストに変換中...</Text>
+          </View>
+        )}
+
         {suggestion && (
           <View style={styles.suggestionContainer}>
             <View style={styles.suggestionContent}>
@@ -424,7 +651,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.BACKGROUND.MAIN,
     borderRadius: 12,
     paddingHorizontal: 12,
-    marginRight: 8,
+    marginRight: 4,
   },
   input: {
     flex: 1,
@@ -439,14 +666,62 @@ const styles = StyleSheet.create({
     padding: 10,
     backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
     borderRadius: 12,
+    marginRight: 4,
   },
   magicButtonDisabled: {
     opacity: 0.7,
+  },
+  voiceControlGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.GRAY_LIGHT,
+    borderRadius: 16,
+    padding: 4,
+    marginLeft: 4,
+    backgroundColor: COLORS.BACKGROUND.MAIN,
+    minWidth: 90,
+    justifyContent: 'space-between',
+  },
+  micButton: {
+    padding: 8,
+    backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
+    borderRadius: 12,
+    flex: 1,
+    marginRight: 4,
+    alignItems: 'center',
+  },
+  micButtonRecording: {
+    backgroundColor: COLORS.PRIMARY,
+  },
+  voiceLangButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginLeft: 0,
+    backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
+    flex: 1,
+    alignItems: 'center',
+  },
+  voiceLangButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: COLORS.SECONDARY,
   },
   scrollView: {
     flex: 1,
     padding: 16,
     width: '100%',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 10,
+    color: COLORS.TEXT.MEDIUM_GRAY,
+    fontSize: 16,
   },
   resultCard: {
     backgroundColor: COLORS.WHITE,

@@ -50,8 +50,9 @@ const supabase = createClient(supabaseUrl!, supabaseServiceRoleKey!);
  * @returns 英語の場合はtrue、それ以外はfalse
  */
 function isEnglish(text: string): boolean {
-  // 基本的な英語の文字パターン（アルファベット、スペース、ハイフン、アポストロフィ）
-  const englishPattern = /^[a-zA-Z\s'-]+$/;
+  // 英語の文字パターン（アルファベット、スペース、一般的な句読点と記号）
+  // カンマ、ピリオド、感嘆符、疑問符、コロン、セミコロン、ハイフン、アポストロフィ、引用符、括弧などを許容
+  const englishPattern = /^[a-zA-Z0-9\s'-,.!?:;"()[\]{}#$%&*+<=>@^_`|~]+$/;
   
   // 日本語の文字パターン（ひらがな、カタカナ、漢字）
   const japanesePattern = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
@@ -385,14 +386,31 @@ async function fetchGeminiApi(vocabulary: string): Promise<VocabularyData | Sugg
 
   // Gemini API に送信するプロンプト
   const prompt = `
-    Check spelling of "${vocabulary}".
+    First, determine if "${vocabulary}" is:
+    1. A noun, verb, adjective, adverb with punctuation or capitalization (e.g., "Approximately.")
+    2. A common expression, greeting, question word, or complete sentence (e.g., "Hello!", "What?", "This is a test.")
+    
+    ONLY normalize category 1 (single vocabulary words with punctuation/capitalization) by:
+    - Removing trailing punctuation marks (., !, ?, ;, etc.)
+    - Converting to lowercase
+    
+    For example:
+    - "Approximately." should be processed as "approximately"
+    
+    Do NOT normalize any of these:
+    - "Hello!" (keep as "Hello!")
+    - "What?" (keep as "What?")
+    - "This is a test." (keep as "This is a test.")
+    - Any common greetings, expressions, questions, or sentences
+    
+    After determining if normalization is needed and performing it ONLY for category 1 words, check spelling.
 
-    If the spelling of "${vocabulary}" is correct, return JSON dictionary data:
+    If the spelling is correct, return JSON dictionary data:
     {
-      "vocabulary": "",
+      "vocabulary": "", // Use normalized form ONLY for category 1, keep original for everything else
       "part_of_speech": "",
       "pronunciation": "/IPA goes here/",
-      "meanings": ["Meaning of ${vocabulary} in Japanese"],
+      "meanings": ["Meaning in Japanese"],
       "example_sentences": [{"english": "", "japanese": ""}],
       "synonyms": [],
       "antonyms": [],
@@ -574,6 +592,21 @@ async function handleGeminiResponse(
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
+  }
+
+  // Gemini APIから返された単語が元の入力と異なる場合（正規化された場合）
+  if (response.vocabulary.toLowerCase() !== vocabulary.toLowerCase()) {
+    console.log(`Normalized vocabulary: "${response.vocabulary}" differs from input: "${vocabulary}"`);
+    
+    // 正規化された単語でもう一度Supabaseを検索
+    const existingVocabulary = await fetchVocabularyFromSupabase(response.vocabulary);
+    if (existingVocabulary) {
+      console.log(`Found existing data for normalized vocabulary: "${response.vocabulary}"`);
+      return new Response(JSON.stringify(existingVocabulary), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
   }
 
   const insertedId = await insertVocabularyToSupabase(response, 'en', 'ja');
