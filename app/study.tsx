@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import { ANIMATION } from '../constants/animation';
 import { COMMON_STYLES, COLORS } from '../constants/styles';
 import { useSpeech } from '../hooks/useSpeech';
+import { router } from 'expo-router';
 
 // フラッシュカードの型定義
 interface Flashcard {
@@ -371,11 +372,33 @@ const StudyScreen = () => {
         <TouchableOpacity
           style={styles.reloadButton}
           onPress={() => {
-            setShowCompletionMessage(false);
-            fetchFlashcards();
+            if (flashcards.length >= 5) {
+              // ここで状態をリセットしてから、完了メッセージを非表示にする
+              setCurrentCardIndex(0);
+              currentCardIndexRef.current = 0;
+              setShowBack(false);
+              animatedValue.setValue(0);
+              setFeedbackMessage(null);
+              feedbackOpacity.setValue(0);
+              swipeValue.setValue({ x: 0, y: 0 });
+              setIsAnimating(false);
+              setIsFlipping(false);
+              
+              // 完了メッセージを非表示にしてからカードを再取得
+              setShowCompletionMessage(false);
+              
+              // 少し遅延を入れてから再取得
+              setTimeout(() => {
+                fetchFlashcards();
+              }, 100);
+            } else {
+              router.push('/');
+            }
           }}
         >
-          <Text style={styles.reloadButtonText}>もう一度学習する</Text>
+          <Text style={styles.reloadButtonText}>
+            {flashcards.length >= 5 ? 'もう一度学習する' : 'ホーム画面に戻る'}
+          </Text>
         </TouchableOpacity>
       </View>
     );
