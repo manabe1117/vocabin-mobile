@@ -12,7 +12,7 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/
 
 // Gemini API がスペル修正候補を返す場合のレスポンス型
 interface SuggestionResponse {
-  suggestion: string;
+  suggestions: string[]; // 複数のサジェスチョンを保持するように修正
 }
 
 // 単語データの構造を定義するインターフェース
@@ -428,7 +428,9 @@ async function fetchGeminiApi(vocabulary: string): Promise<VocabularyData | Sugg
     1. Must include at least one natural example sentence.
     2. Notes should provide language learning tips, common usage patterns, or important grammatical points. Keep it under 100 characters and in Japanese. If there's nothing particularly noteworthy for language learners, leave notes empty.
 
-    If spelling is incorrect, return {"suggestion": "<corrected_spell>"}.
+    If spelling is incorrect, return one of these two formats:
+    1. If you're very confident about a single correction, return {"suggestion": "<corrected_spell>"}.
+    2. If there are multiple possible corrections, return {"suggestions": ["<option1>", "<option2>", ...]} with up to 3 most likely corrections.
 
     Return only JSON. No extra fields.
   `;
@@ -554,17 +556,26 @@ async function fetchGeminiApi(vocabulary: string): Promise<VocabularyData | Sugg
       };
       return validatedResponse; // 整形した単語データを返す
 
-    // 2. スペル修正候補が含まれる場合
-    } else if (jsonResponse.suggestion) {
-      console.log(`Gemini API returned a spelling suggestion: "${jsonResponse.suggestion}"`);
+    // 2. 複数のスペル修正候補が含まれる場合
+    } else if (jsonResponse.suggestions && Array.isArray(jsonResponse.suggestions)) {
+      console.log(`Gemini API returned multiple spelling suggestions:`, jsonResponse.suggestions);
       const suggestionResponse: SuggestionResponse = {
-        suggestion: typeof jsonResponse.suggestion === 'string' ? jsonResponse.suggestion : '' // string でなければ空文字
+        suggestions: jsonResponse.suggestions.filter((item: any) => typeof item === 'string').slice(0, 5) // 最大5つまで
       };
       return suggestionResponse; // 修正候補を返す
 
-    // 3. 予期しないレスポンス形式の場合
+    // 3. 単一のスペル修正候補が含まれる場合 (後方互換性のため)
+    } else if (jsonResponse.suggestion) {
+      console.log(`Gemini API returned a single spelling suggestion: "${jsonResponse.suggestion}"`);
+      // 単一のsuggestionでも配列形式に変換する
+      const suggestionResponse: SuggestionResponse = {
+        suggestions: [typeof jsonResponse.suggestion === 'string' ? jsonResponse.suggestion : '']
+      };
+      return suggestionResponse; // 修正候補を返す
+
+    // 4. 予期しないレスポンス形式の場合
     } else {
-      console.error('Invalid response format from Gemini (missing vocabulary or suggestion):', jsonResponse);
+      console.error('Invalid response format from Gemini (missing vocabulary or suggestions):', jsonResponse);
       throw new Error('Invalid response format'); // エラーを投げる
     }
 
@@ -587,7 +598,7 @@ async function handleGeminiResponse(
   response: VocabularyData | SuggestionResponse,
   vocabulary: string
 ): Promise<Response> {
-  if ('suggestion' in response) {
+  if ('suggestions' in response) {
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,

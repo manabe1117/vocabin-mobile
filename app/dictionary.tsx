@@ -34,13 +34,15 @@ interface VocabularyResult {
 }
 
 interface SuggestionResponse {
-  suggestion: string;
+  suggestions: string[];
 }
 
 // useVocabularyフックはモックで代用. 実際のアプリでは適切に実装してください。
 const useVocabulary = () => {
   const [vocabulary, setVocabulary] = useState<VocabularyResult | null>(null);
   const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[] | null>(null);
+  const [translations, setTranslations] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | { message: string } | null>(null);
   const [isSaved, setIsSaved] = useState(false);
@@ -71,6 +73,8 @@ const useVocabulary = () => {
     setError(null);
     setVocabulary(null);
     setSuggestion(null);
+    setSuggestions(null);
+    setTranslations(null);
     setIsSaved(false);
 
     try {
@@ -83,13 +87,21 @@ const useVocabulary = () => {
       if (error) throw error;
 
       if (data) {
-        // suggestionが返ってきた場合
+        if ('translations' in data && Array.isArray(data.translations)) {
+          setTranslations(data.translations);
+          return;
+        }
+        
+        if ('suggestions' in data && Array.isArray(data.suggestions)) {
+          setSuggestions(data.suggestions);
+          return;
+        }
+
         if ('suggestion' in data) {
           setSuggestion(data.suggestion);
           return;
         }
 
-        // 通常の辞書データが返ってきた場合
         const formattedData: VocabularyResult = {
           id: data.id,
           vocabulary: data.vocabulary || '',
@@ -102,7 +114,6 @@ const useVocabulary = () => {
           audio_url: data.audio_url || undefined
         };
         setVocabulary(formattedData);
-        // 保存状態を確認
         await checkSavedStatus(data.id);
       } else {
         setError({ message: `「${text}」の翻訳データが見つかりません。` });
@@ -115,13 +126,41 @@ const useVocabulary = () => {
     }
   };
 
-  return { vocabulary, suggestion, loading, error, translate, setVocabulary, setSuggestion, isSaved, setIsSaved };
+  return { 
+    vocabulary, 
+    suggestion, 
+    suggestions,
+    translations,
+    loading, 
+    error, 
+    translate, 
+    setVocabulary, 
+    setSuggestion, 
+    setSuggestions,
+    setTranslations,
+    isSaved, 
+    setIsSaved 
+  };
 };
 
 const TranslateScreen = () => {
   const [inputText, setInputText] = useState('');
   const [displayText, setDisplayText] = useState('');
-  const { vocabulary, suggestion, loading, error, translate, setVocabulary, setSuggestion, isSaved, setIsSaved } = useVocabulary();
+  const { 
+    vocabulary, 
+    suggestion, 
+    suggestions,
+    translations,
+    loading, 
+    error, 
+    translate, 
+    setVocabulary, 
+    setSuggestion, 
+    setSuggestions,
+    setTranslations,
+    isSaved, 
+    setIsSaved 
+  } = useVocabulary();
   const { session } = useAuth();
   const { playSound } = useAudio();
   const { speakText } = useSpeech();
@@ -136,12 +175,19 @@ const TranslateScreen = () => {
     translate(inputText);
   };
 
-  const handleSuggestionClick = () => {
-    if (suggestion) {
-      setInputText(suggestion);
-      setDisplayText(suggestion);
-      translate(suggestion);
-    }
+  const handleSuggestionClick = (text: string) => {
+    setInputText(text);
+    setDisplayText(text);
+    setSuggestion(null);
+    setSuggestions(null);
+    translate(text);
+  };
+
+  const handleTranslationClick = (translation: string) => {
+    setInputText(translation);
+    setDisplayText(translation);
+    setTranslations(null);
+    translate(translation);
   };
 
   const handleSave = async () => {
@@ -186,13 +232,14 @@ const TranslateScreen = () => {
     setDisplayText('');
     setVocabulary(null);
     setSuggestion(null);
+    setSuggestions(null);
+    setTranslations(null);
     setIsSaved(false);
   };
 
   async function startRecording() {
     if (isRecording || isTranscribing) return;
     try {
-      // 録音開始時に検索欄をクリア
       setInputText('');
       setDisplayText('');
       setVocabulary(null);
@@ -378,73 +425,6 @@ const TranslateScreen = () => {
     setVoiceLanguage(prev => prev === 'en-US' ? 'ja-JP' : 'en-US');
   };
 
-  if (loading) {
-    return (
-      <View style={[COMMON_STYLES.container, styles.translateContainer]}>
-        <View style={styles.searchBarContainer}>
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="英語または日本語を入力"
-              value={inputText}
-              onChangeText={setInputText}
-              onSubmitEditing={handleTranslate}
-              placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
-              textContentType="none"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              multiline={false}
-              returnKeyType="search"
-              enablesReturnKeyAutomatically={true}
-              blurOnSubmit={true}
-              keyboardType="default"
-              keyboardAppearance="light"
-              inputMode="text"
-            />
-            {inputText.length > 0 && (
-              <TouchableOpacity 
-                style={styles.clearButton} 
-                onPress={clearInput}
-              >
-                <Ionicons name="close-circle" size={20} color={COLORS.TEXT.MEDIUM_GRAY} />
-              </TouchableOpacity>
-            )}
-          </View>
-          <TouchableOpacity 
-            style={[styles.magicButton, inputText.length === 0 && styles.magicButtonDisabled]} 
-            onPress={handleTranslate}
-            disabled={inputText.length === 0}
-          >
-            <Ionicons 
-              name="search" 
-              size={20} 
-              color={inputText.length === 0 ? COLORS.TEXT.DISABLED : COLORS.SECONDARY} 
-            />
-          </TouchableOpacity>
-        </View>
-        <View style={COMMON_STYLES.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.PRIMARY} />
-          <Text style={COMMON_STYLES.loadingText}>翻訳中...</Text>
-        </View>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={COMMON_STYLES.errorContainer}>
-        <Text style={COMMON_STYLES.errorText}>{error.message}</Text>
-        <TouchableOpacity
-          style={COMMON_STYLES.retryButton}
-          onPress={clearInput}
-        >
-          <Text style={COMMON_STYLES.retryButtonText}>再試行</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
     <View style={[COMMON_STYLES.container, styles.translateContainer]}>
       <View style={styles.searchBarContainer}>
@@ -467,9 +447,9 @@ const TranslateScreen = () => {
             keyboardType="default"
             keyboardAppearance="light"
             inputMode="text"
-            editable={!isRecording && !isTranscribing}
+            editable={!isRecording && !isTranscribing && !loading}
           />
-          {inputText.length > 0 && !isRecording && !isTranscribing && (
+          {inputText.length > 0 && !isRecording && !isTranscribing && !loading && (
             <TouchableOpacity 
               style={styles.clearButton} 
               onPress={clearInput}
@@ -479,32 +459,32 @@ const TranslateScreen = () => {
           )}
         </View>
         <TouchableOpacity 
-          style={[styles.magicButton, inputText.length === 0 && !isRecording && styles.magicButtonDisabled]} 
+          style={[styles.magicButton, (inputText.length === 0 && !isRecording && !loading) && styles.magicButtonDisabled]} 
           onPress={handleTranslate}
-          disabled={inputText.length === 0 && !isRecording}
+          disabled={(inputText.length === 0 && !isRecording) || loading}
         >
           <Ionicons 
             name="search" 
             size={20} 
-            color={inputText.length === 0 && !isRecording ? COLORS.TEXT.DISABLED : COLORS.SECONDARY} 
+            color={inputText.length === 0 && !isRecording && !loading ? COLORS.TEXT.DISABLED : COLORS.SECONDARY} 
           />
         </TouchableOpacity>
         <View style={styles.voiceControlGroup}>
           <TouchableOpacity
             style={[styles.micButton, isRecording && styles.micButtonRecording]}
             onPress={handleMicButtonPress}
-            disabled={isTranscribing}
+            disabled={isTranscribing || loading}
           >
             <Ionicons
               name={isRecording ? "stop-circle" : "mic-outline"}
               size={20}
-              color={isRecording ? COLORS.WHITE : isTranscribing ? COLORS.TEXT.DISABLED : COLORS.SECONDARY}
+              color={isRecording ? COLORS.WHITE : isTranscribing || loading ? COLORS.TEXT.DISABLED : COLORS.SECONDARY}
             />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.voiceLangButton}
             onPress={toggleVoiceLanguage}
-            disabled={isRecording || isTranscribing}
+            disabled={isRecording || isTranscribing || loading}
           >
             <Text style={styles.voiceLangButtonText}>
               {voiceLanguage === 'en-US' ? 'EN' : 'JP'}
@@ -514,14 +494,59 @@ const TranslateScreen = () => {
       </View>
 
       <ScrollView style={styles.scrollView}>
-        {isTranscribing && (
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.PRIMARY} />
+            <Text style={styles.loadingText}>検索中...</Text>
+          </View>
+        )}
+        {!loading && isTranscribing && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.PRIMARY} />
             <Text style={styles.loadingText}>音声をテキストに変換中...</Text>
           </View>
         )}
-
-        {suggestion && (
+        {!loading && translations && translations.length > 0 && (
+          <View style={styles.suggestionContainer}>
+            <View style={styles.suggestionContent}>
+              <View style={styles.suggestionHeader}>
+                <Ionicons name="language" size={20} color={COLORS.SECONDARY} />
+                <Text style={styles.suggestionText}>翻訳候補</Text>
+              </View>
+              {translations.map((translation, index) => (
+                <TouchableOpacity 
+                  key={index}
+                  style={styles.suggestionButton}
+                  onPress={() => handleTranslationClick(translation)}
+                >
+                  <Text style={styles.suggestionWord}>{translation}</Text>
+                  <Ionicons name="arrow-forward" size={20} color={COLORS.SECONDARY} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+        {!loading && suggestions && suggestions.length > 0 && (
+          <View style={styles.suggestionContainer}>
+            <View style={styles.suggestionContent}>
+              <View style={styles.suggestionHeader}>
+                <Ionicons name="search-circle" size={20} color={COLORS.SECONDARY} />
+                <Text style={styles.suggestionText}>もしかして？</Text>
+              </View>
+              {suggestions.map((suggestionText, index) => (
+                <TouchableOpacity 
+                  key={index}
+                  style={styles.suggestionButton}
+                  onPress={() => handleSuggestionClick(suggestionText)}
+                >
+                  <Text style={styles.suggestionWord}>{suggestionText}</Text>
+                  <Ionicons name="arrow-forward" size={20} color={COLORS.SECONDARY} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+        {!loading && suggestion && (
           <View style={styles.suggestionContainer}>
             <View style={styles.suggestionContent}>
               <View style={styles.suggestionHeader}>
@@ -530,7 +555,7 @@ const TranslateScreen = () => {
               </View>
               <TouchableOpacity 
                 style={styles.suggestionButton}
-                onPress={handleSuggestionClick}
+                onPress={() => handleSuggestionClick(suggestion)}
               >
                 <Text style={styles.suggestionWord}>{suggestion}</Text>
                 <Ionicons name="arrow-forward" size={20} color={COLORS.SECONDARY} />
@@ -538,8 +563,7 @@ const TranslateScreen = () => {
             </View>
           </View>
         )}
-
-        {vocabulary && (
+        {!loading && vocabulary && (
           <View style={styles.resultCard}>
             <View style={styles.wordHeader}>
               <View style={styles.wordContainer}>
@@ -687,9 +711,8 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
     borderRadius: 12,
-    flex: 1,
-    marginRight: 4,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   micButtonRecording: {
     backgroundColor: COLORS.PRIMARY,
@@ -700,7 +723,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginLeft: 0,
     backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
-    flex: 1,
     alignItems: 'center',
   },
   voiceLangButtonText: {
