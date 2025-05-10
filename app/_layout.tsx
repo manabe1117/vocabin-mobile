@@ -82,6 +82,7 @@ function RootLayoutNav() {
       <Stack.Screen name="translate" options={{ headerShown: true, title: '翻訳' }} />
       <Stack.Screen name="study" options={{ headerShown: true, title: '学習' }} />
       <Stack.Screen name="vocabulary" options={{ headerShown: true, title: '単語帳' }} />
+      <Stack.Screen name="chat" options={{ headerShown: true, title: 'AIに質問' }} />
       <Stack.Screen name="auth/login" options={{ title: 'ログイン' }} />
     </Stack>
   );

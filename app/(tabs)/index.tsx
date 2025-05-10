@@ -26,7 +26,11 @@ const colors = {
   accentGreenLight: '#f0fdf4', // 緑系の薄い背景
   accentOrange: '#f97316', // オレンジ系のアクセント
   accentOrangeLight: '#fff7ed', // オレンジ系の薄い背景
+  accentPurple: '#8b5cf6', // 紫系のアクセント
+  accentPurpleLight: '#f5f3ff', // 紫系の薄い背景
   shadow: '#94a3b8', // 影の色
+  aiQuestionBackground: '#4f46e5', // AI質問カード用の特別な背景色 (例: Indigo)
+  aiQuestionText: '#ffffff', // AI質問カード用のテキスト色
 };
 
 const HomeScreen = () => {
@@ -111,6 +115,23 @@ const HomeScreen = () => {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* --- AIに質問セクション --- */}
+      <View style={styles.aiSection}>
+        <Link href="/chat" asChild>
+          <TouchableOpacity style={styles.aiCard}>
+            <View style={styles.aiIconContainer}>
+              <Ionicons name="sparkles" size={32} color={colors.aiQuestionText} />
+            </View>
+            <View style={styles.aiTextContainer}>
+              <Text style={styles.aiCardTitle}>AIに質問</Text>
+              <Text style={styles.aiCardDescription}>英語学習に関する疑問をAIに相談できます</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={colors.aiQuestionText} style={styles.aiChevron} />
+          </TouchableOpacity>
+        </Link>
+      </View>
+
       {/* --- 言語ツールセクション --- */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>言語ツール</Text>
@@ -147,6 +168,8 @@ const HomeScreen = () => {
               {/* <Text style={styles.cardDescription}>保存された単語</Text> */}
             </TouchableOpacity>
           </Link>
+          
+          {/* チャットカードはAI質問セクションに移動しました */}
         </View>
       </View>
 
@@ -265,7 +288,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardBackground,
     borderRadius: 16,
     padding: 20,
-    marginBottom: 16,
+    marginBottom: 0,
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -304,6 +327,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginBottom: 2,
+  },
+  // --- AIに質問セクションのスタイル ---
+  aiSection: {
+    // セクション全体のマージンやパディングは他のセクションと合わせるか、個別に調整
+    // marginBottom: 32, // 他のセクションとの間隔
+  },
+  aiCard: {
+    backgroundColor: colors.aiQuestionBackground,
+    borderRadius: 16,
+    paddingVertical: 24, // 縦のパディングを少し大きめに
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 6 }, // 影を少し強く
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  aiIconContainer: {
+    // アイコンコンテナのスタイル（必要であれば）
+    marginRight: 16,
+  },
+  aiTextContainer: {
+    flex: 1, // テキストが長くなった場合に対応
+  },
+  aiCardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.aiQuestionText,
+    marginBottom: 4,
+  },
+  aiCardDescription: {
+    fontSize: 14,
+    color: colors.aiQuestionText,
+    opacity: 0.9, // 少し透明度を出す
+  },
+  aiChevron: {
+    // 右向きシェブロンのスタイル
   },
 });
 
