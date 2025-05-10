@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   // --- AIに質問セクションのスタイル ---
   aiSection: {
     // セクション全体のマージンやパディングは他のセクションと合わせるか、個別に調整
-    // marginBottom: 32, // 他のセクションとの間隔
+    marginTop: -8,// statsBarとの間隔を詰めるためにネガティブマージンを追加
   },
   aiCard: {
     backgroundColor: colors.aiQuestionBackground,
