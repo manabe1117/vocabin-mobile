@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import { supabase } from '@/lib/supabase';
 
 import { ThemedView } from '../components/ThemedView';
 import { useSpeech } from '../hooks/useSpeech';
@@ -76,257 +77,101 @@ const ChatScreen = () => {
   const { session } = useAuth();
   const { speakText } = useSpeech();
   const [inputText, setInputText] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState<Message[]>(() => [
     {
-      id: '1',
+      id: 'initial-ai-message',
       text: 'こんにちは！英語に関する質問や、日本語を英語に訳してほしいことがあれば教えてください。',
       sender: 'ai',
       timestamp: new Date(),
-    },
+    }
   ]);
   const [isLoading, setIsLoading] = useState(false);
-  const [savedExamples, setSavedExamples] = useState<Example[]>([]);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // 会話履歴を生成する関数
+  const getChatHistory = (currentMessages: Message[]): { role: 'user' | 'model'; parts: { text: string }[] }[] => {
+    return currentMessages.map(msg => ({
+      role: msg.sender === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.text }]
+    }));
+  };
 
   // メッセージを送信する関数
   const sendMessage = async () => {
     if (!inputText.trim()) return;
-    
+
     const userMessage: Message = {
       id: Date.now().toString(),
       text: inputText,
       sender: 'user',
       timestamp: new Date(),
     };
-    
-    setMessages(prev => [...prev, userMessage]);
+
+    // ユーザーメッセージを現在のメッセージリストに追加
+    const updatedMessages = [...(messages || []), userMessage];
+    setMessages(updatedMessages);
+    const currentInput = inputText; // Edge Functionに渡すため、state更新前の値を保持
     setInputText('');
     setIsLoading(true);
-    
+
     // スクロールビューを一番下にスクロール
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
-    
+
     try {
-      // 仮のAI応答を遅延させて表示（実際の実装ではAPIコール）
-      setTimeout(() => {
-        let aiResponse: Message;
-        
-        // 「シチュエーション」という単語が含まれている場合、リッチコンテンツを返す
-        if (inputText.includes('シチュエーション') || inputText.includes('状況')) {
-          aiResponse = {
-            id: Date.now().toString(),
-            text: '"I\'m sorry I\'m taking so long." は、以下のような「自分の行動や準備に時間がかかって、相手を待たせてしまっている」シチュエーションで使えます：',
-            sender: 'ai',
-            timestamp: new Date(),
-            contentBlocks: [
-              {
-                type: 'header',
-                id: 'main-situation',
-                content: '主なシチュエーション：'
-              },
-              {
-                type: 'section',
-                id: 'section-1',
-                content: {
-                  number: 1,
-                  title: '支度に時間がかかっているとき',
-                  example: {
-                    context: '一緒に出かける予定なのに、自分の準備が終わっていない',
-                    english: 'I\'m sorry I\'m taking so long. I\'ll be ready in a minute.',
-                    translation: '(ごめん、時間がかかって。あとちょっとで準備できるよ)'
-                  }
-                }
-              },
-              {
-                type: 'section',
-                id: 'section-2',
-                content: {
-                  number: 2,
-                  title: '話すのに時間を取ってしまっているとき',
-                  example: {
-                    context: '会話の中で自分が長く話しすぎていると気づいたとき',
-                    english: 'I\'m sorry I\'m taking so long to explain.',
-                    translation: '(説明に時間がかかってごめんなさい)'
-                  }
-                }
-              },
-              {
-                type: 'section',
-                id: 'section-3',
-                content: {
-                  number: 3,
-                  title: '注文や決断が遅れているとき',
-                  example: {
-                    context: 'レストランや店でメニュー選びに迷っている',
-                    english: 'I\'m sorry I\'m taking so long to decide.',
-                    translation: '(決めるのに時間がかってごめん)'
-                  }
-                }
-              },
-              {
-                type: 'section',
-                id: 'section-4',
-                content: {
-                  number: 4,
-                  title: '何か作業中で相手が待っているとき',
-                  example: {
-                    context: '誰かに手伝ってもらっていて、自分が遅れている',
-                    english: 'I\'m sorry I\'m taking so long to finish this.',
-                    translation: '(終わらせるのに時間がかかってごめんなさい)'
-                  }
-                }
-              },
-              {
-                type: 'text',
-                id: 'footer-text',
-                content: '丁寧な印象を与える表現なので、日常でもビジネスでも使いやすいです。\n必要なら別の言い方（カジュアル/フォーマル）も紹介できます。'
-              }
-            ]
-          };
-        } else if (inputText.includes('車で送る')) {
-          aiResponse = {
-            id: Date.now().toString(),
-            text: '「車で送る」は英語で "give someone a ride" や "drive someone" のように言います。いくつかの例文を紹介します。',
-            sender: 'ai',
-            timestamp: new Date(),
-            examples: [
-              { id: '1', japanese: '駅まで車で送るよ', english: 'I\'ll give you a ride to the station.', saved: false },
-              { id: '2', japanese: '彼を空港まで車で送った', english: 'I drove him to the airport.', saved: false },
-              { id: '3', japanese: '家まで送ってもらえませんか？', english: 'Could you give me a ride home?', saved: false, note: '丁寧な依頼' },
-              { id: '4', japanese: 'よかったら、ホテルまで送りましょうか？', english: 'I can give you a ride to your hotel if you like.', saved: false },
-              { id: '5', japanese: '彼女は毎日子供を学校へ車で送っている', english: 'She drives her children to school every day.', saved: false },
-            ]
-          };
-        } else if (inputText.includes('挨拶') || inputText.includes('こんにちは')) {
-          // 従来の例文リスト方式も併用可能
-          aiResponse = {
-            id: Date.now().toString(),
-            text: '「こんにちは」は英語で "Hello" や "Good afternoon" と言います。時間帯によって異なる挨拶があります。',
-            sender: 'ai',
-            timestamp: new Date(),
-            examples: [
-              { id: '1', japanese: 'こんにちは', english: 'Hello', saved: false },
-              { id: '2', japanese: 'こんにちは（午後の挨拶）', english: 'Good afternoon', saved: false },
-              { id: '3', japanese: 'おはようございます', english: 'Good morning', saved: false },
-              { id: '4', japanese: 'こんばんは', english: 'Good evening', saved: false },
-              { id: '5', japanese: 'お元気ですか？', english: 'How are you?', saved: false, note: '一般的な挨拶表現' },
-            ]
-          };
-        } else if (inputText.includes('ありがとう') || inputText.includes('感謝')) {
-          aiResponse = {
-            id: Date.now().toString(),
-            text: '「ありがとう」は英語で "Thank you" と言います。感謝の気持ちを表す表現はいくつかあります。',
-            sender: 'ai',
-            timestamp: new Date(),
-            examples: [
-              { id: '1', japanese: 'ありがとう', english: 'Thank you', saved: false },
-              { id: '2', japanese: 'どうもありがとう', english: 'Thank you very much', saved: false },
-              { id: '3', japanese: '本当にありがとう', english: 'Thank you so much', saved: false },
-              { id: '4', japanese: '親切にしてくれてありがとう', english: 'Thank you for your kindness', saved: false, note: 'より丁寧な表現' },
-              { id: '5', japanese: '手伝ってくれてありがとう', english: 'Thanks for your help', saved: false },
-              { id: '6', japanese: '心から感謝します', english: 'I appreciate it from the bottom of my heart', saved: false },
-            ]
-          };
-        } else if (inputText.includes('趣味') || inputText.includes('hobby')) {
-          aiResponse = {
-            id: Date.now().toString(),
-            text: '趣味について話すときの英語表現をいくつか紹介します。',
-            sender: 'ai',
-            timestamp: new Date(),
-            examples: [
-              { id: '1', japanese: '私の趣味は読書です', english: 'My hobby is reading books', saved: false },
-              { id: '2', japanese: '週末は映画を見るのが好きです', english: 'I like watching movies on weekends', saved: false },
-              { id: '3', japanese: '暇なときは料理をします', english: 'I cook when I have free time', saved: false },
-              { id: '4', japanese: 'ギターを弾くのが趣味です', english: 'My hobby is playing the guitar', saved: false, note: '楽器の前には定冠詞the' },
-              { id: '5', japanese: '毎朝ジョギングをします', english: 'I go jogging every morning', saved: false },
-              { id: '6', japanese: '写真を撮るのが好きです', english: 'I enjoy taking photos', saved: false },
-              { id: '7', japanese: '最近ガーデニングを始めました', english: 'I recently started gardening', saved: false },
-            ]
-          };
-        } else if (inputText.includes('旅行') || inputText.includes('travel')) {
-          aiResponse = {
-            id: Date.now().toString(),
-            text: '旅行に関する英語表現をいくつか紹介します。',
-            sender: 'ai',
-            timestamp: new Date(),
-            examples: [
-              { id: '1', japanese: '海外旅行が好きです', english: 'I love traveling abroad', saved: false },
-              { id: '2', japanese: '昨年ヨーロッパに行きました', english: 'I went to Europe last year', saved: false },
-              { id: '3', japanese: '次の休暇にはビーチに行きたいです', english: 'I want to go to the beach on my next vacation', saved: false },
-              { id: '4', japanese: '飛行機での長旅は疲れます', english: 'Long flights are tiring', saved: false },
-              { id: '5', japanese: 'ホテルを予約しました', english: 'I booked a hotel', saved: false },
-              { id: '6', japanese: '旅行代理店でツアーを予約しました', english: 'I booked a tour at a travel agency', saved: false, note: '「travel agency」は旅行代理店' },
-              { id: '7', japanese: '観光スポットを訪れる予定です', english: 'I plan to visit tourist attractions', saved: false },
-            ]
-          };
-        } else if (inputText.includes('英語で') || inputText.includes('英語に')) {
-          const japaneseText = inputText.replace(/[「」]/g, '').replace(/は英語で.*?[?？]?$|を英語に.*?[?？]?$|英語で.*?[?？]?$/, '');
-          
-          // フレーズによって例文を変える
-          let examplesList: Example[] = [];
-          
-          if (japaneseText.includes('会議')) {
-            examplesList = [
-              { id: '1', japanese: '会議を開催する', english: 'Hold a meeting', saved: false },
-              { id: '2', japanese: '会議に参加する', english: 'Attend a meeting', saved: false },
-              { id: '3', japanese: '会議でプレゼンテーションをする', english: 'Give a presentation at the meeting', saved: false },
-              { id: '4', japanese: '会議室を予約する', english: 'Book a conference room', saved: false },
-              { id: '5', japanese: '会議を延期する', english: 'Postpone the meeting', saved: false },
-            ];
-          } else if (japaneseText.includes('天気')) {
-            examplesList = [
-              { id: '1', japanese: '今日は晴れています', english: 'It\'s sunny today', saved: false },
-              { id: '2', japanese: '明日は雨が降るでしょう', english: 'It will rain tomorrow', saved: false },
-              { id: '3', japanese: '天気予報をチェックする', english: 'Check the weather forecast', saved: false },
-              { id: '4', japanese: '台風が接近しています', english: 'A typhoon is approaching', saved: false },
-              { id: '5', japanese: '気温が下がる予定です', english: 'The temperature is expected to drop', saved: false },
-            ];
-          } else {
-            examplesList = [
-              { id: '1', japanese: japaneseText, english: 'How are you?', saved: false },
-              { id: '2', japanese: '元気ですか？', english: 'How are you doing?', saved: false },
-              { id: '3', japanese: 'お元気ですか？', english: 'How have you been?', saved: false },
-            ];
-          }
-          
-          aiResponse = {
-            id: Date.now().toString(),
-            text: `「${japaneseText}」は英語では様々な表現があります。状況に応じていくつかの例文を紹介します。`,
-            sender: 'ai',
-            timestamp: new Date(),
-            examples: examplesList
-          };
-        } else {
-          aiResponse = {
-            id: Date.now().toString(),
-            text: '他に何か英語に関して質問はありますか？例えば「挨拶」や「感謝」、「趣味」、「旅行」、「長文」、「シチュエーション」などのトピックについて聞いてみてください。',
-            sender: 'ai',
-            timestamp: new Date(),
-          };
-        }
-        
-        setMessages(prev => [...prev, aiResponse]);
-        setIsLoading(false);
-        
-        // スクロールビューを一番下にスクロール
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }, 1000);
+      // Edge Functionに渡す会話履歴を取得 (AIの初期メッセージは含めない場合もあるので調整が必要)
+      // ここでは、ユーザーの現在のメッセージの前までの履歴を渡すことを想定
+      const chatHistory = getChatHistory(messages || []);
+
+      // Supabase Edge Function を呼び出す
+      const { data, error } = await supabase.functions.invoke('get-chat-response', {
+        body: { message: currentInput, history: chatHistory }, // 会話履歴を渡す
+      });
+
+      if (error) {
+        throw error; // エラーをキャッチブロックで処理
+      }
+
+      console.log('Edge Function の応答:', data);
+
+      let aiResponse: Message;
+      if (data && data.reply) {
+        aiResponse = {
+          id: Date.now().toString() + '-ai',
+          text: data.reply, // Edge Functionからの応答テキスト
+          sender: 'ai',
+          timestamp: new Date(),
+          examples: data.examples && data.examples.length > 0 ? data.examples : undefined, // examples を追加
+          // contentBlocks は現状AIから返されない想定
+        };
+      } else {
+        // Edge Functionから期待した応答が得られなかった場合のエラーメッセージ
+        aiResponse = {
+          id: Date.now().toString() + '-ai-error',
+          text: '申し訳ありません。AIからの応答を取得できませんでした。' + (data?.error ? ` (${data.error})` : ''),
+          sender: 'ai',
+          timestamp: new Date(),
+        };
+      }
+      setMessages(prev => [...(prev || []), aiResponse]);
+
     } catch (error) {
-      console.error('エラーが発生しました:', error);
-      
+      console.error('Edge Function 呼び出しエラー:', error);
+      const errorMessageText = error instanceof Error ? error.message : '不明なエラーが発生しました。';
       const errorMessage: Message = {
-        id: Date.now().toString(),
-        text: '申し訳ありません。エラーが発生しました。もう一度お試しください。',
+        id: Date.now().toString() + '-error',
+        text: `申し訳ありません。エラーが発生しました。(${errorMessageText})`,
         sender: 'ai',
         timestamp: new Date(),
       };
-      
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => [...(prev || []), errorMessage]);
+    } finally {
       setIsLoading(false);
+      // スクロールビューを一番下にスクロール
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     }
   };
 
@@ -342,114 +187,107 @@ const ChatScreen = () => {
   };
 
   // 例文を保存済みリストに追加するヘルパー関数
-  const addExampleToSavedList = (exampleToAdd: Example) => {
-    setSavedExamples(prev => {
-      const isAlreadySaved = prev.some(ex => ex.id === exampleToAdd.id && ex.japanese === exampleToAdd.japanese);
-      if (!isAlreadySaved) {
-        return [...prev, { ...exampleToAdd, saved: true }];
-      }
-      return prev;
-    });
-  };
+  // const addExampleToSavedList = (exampleToAdd: Example) => { // 例文保存機能は後で実装
+  //   setSavedExamples(prev => {
+  //     const isAlreadySaved = prev.some(ex => ex.id === exampleToAdd.id && ex.japanese === exampleToAdd.japanese);
+  //     if (!isAlreadySaved) {
+  //       return [...prev, { ...exampleToAdd, saved: true }];
+  //     }
+  //     return prev;
+  //   });
+  // };
 
   // 例文を保存済みリストから削除するヘルパー関数
-  const removeExampleFromSavedList = (exampleToRemove: Example) => {
-    setSavedExamples(prev => prev.filter(ex => !(ex.id === exampleToRemove.id && ex.japanese === exampleToRemove.japanese)));
-  };
+  // const removeExampleFromSavedList = (exampleToRemove: Example) => { // 例文保存機能は後で実装
+  //   setSavedExamples(prev => prev.filter(ex => !(ex.id === exampleToRemove.id && ex.japanese === exampleToRemove.japanese)));
+  // };
 
   // 例文を保存する
-  const saveExample = (messageId: string, exampleId: string) => {
-    let foundExample: Example | null = null;
-
-    setMessages(prev =>
-      prev.map(message => {
-        if (message.id === messageId && message.examples) {
-          const updatedExamples = message.examples.map(example => {
-            if (example.id === exampleId) {
-              foundExample = { ...example, saved: !example.saved };
-              return foundExample;
-            }
-            return example;
-          });
-          return { ...message, examples: updatedExamples };
-        }
-        // contentBlocks内のexampleも対応
-        if (message.id === messageId && message.contentBlocks) {
-          const updatedBlocks = message.contentBlocks.map(block => {
-            if (block.type === 'example' && block.id === exampleId) {
-              const currentExample = block.content as Example;
-              foundExample = { ...currentExample, saved: !currentExample.saved };
-              return { ...block, content: foundExample };
-            }
-            return block;
-          });
-          return { ...message, contentBlocks: updatedBlocks };
-        }
-        return message;
-      })
-    );
-
-    if (foundExample) {
-      const currentExample: Example = foundExample;
-      if (currentExample.saved) {
-        addExampleToSavedList(currentExample);
-        Alert.alert('保存完了', '例文を単語帳に追加しました');
-      } else {
-        removeExampleFromSavedList(currentExample);
-        Alert.alert('解除完了', '例文を単語帳から削除しました');
-      }
-    }
-  };
+  // const saveExample = (messageId: string, exampleId: string) => { // 例文保存機能は後で実装
+    // let foundExample: Example | null = null;
+    // setMessages(prev =>
+    //   prev.map(message => {
+    //     if (message.id === messageId && message.examples) {
+    //       const updatedExamples = message.examples.map(example => {
+    //         if (example.id === exampleId) {
+    //           foundExample = { ...example, saved: !example.saved };
+    //           return foundExample;
+    //         }
+    //         return example;
+    //       });
+    //       return { ...message, examples: updatedExamples };
+    //     }
+    //     // contentBlocks内のexampleも対応
+    //     if (message.id === messageId && message.contentBlocks) {
+    //       const updatedBlocks = message.contentBlocks.map(block => {
+    //         if (block.type === 'example' && block.id === exampleId) {
+    //           const currentExample = block.content as Example;
+    //           foundExample = { ...currentExample, saved: !currentExample.saved };
+    //           return { ...block, content: foundExample };
+    //         }
+    //         return block;
+    //       });
+    //       return { ...message, contentBlocks: updatedBlocks };
+    //     }
+    //     return message;
+    //   })
+    // );
+    // if (foundExample) {
+    //   const currentExample: Example = foundExample;
+    //   if (currentExample.saved) {
+    //     addExampleToSavedList(currentExample);
+    //     Alert.alert('保存完了', '例文を単語帳に追加しました');
+    //   } else {
+    //     removeExampleFromSavedList(currentExample);
+    //     Alert.alert('解除完了', '例文を単語帳から削除しました');
+    //   }
+    // }
+  // };
 
   // メッセージ内のすべての例文を保存する
-  const handleSaveAllExamples = (messageId: string) => {
-    const targetMessage = messages.find(m => m.id === messageId);
-    if (!targetMessage || !targetMessage.examples) return;
-
-    let newExamplesAdded = false;
-    const examplesToSave = targetMessage.examples.filter(ex => !ex.saved);
-
-    if (examplesToSave.length === 0) {
-      Alert.alert('保存済み', 'すべての例文は既に単語帳に保存されています。');
-      return;
-    }
-
-    // メッセージ内の例文の保存状態を更新
-    setMessages(prev =>
-      prev.map(message => {
-        if (message.id === messageId && message.examples) {
-          return {
-            ...message,
-            examples: message.examples.map((ex: Example) => ({
-              id: ex.id,
-              japanese: ex.japanese,
-              english: ex.english,
-              saved: true, 
-              note: ex.note,
-              // richContent や contentBlocks を持つ Example は現状ないと想定
-            })),
-          };
-        }
-        return message;
-      })
-    );
-
-    // 保存済み例文リストを更新
-    examplesToSave.forEach(example => {
-      addExampleToSavedList({ ...example, saved: true });
-      newExamplesAdded = true;
-    });
-
-    if (newExamplesAdded) {
-      Alert.alert('すべて保存完了', '選択された例文を単語帳に追加しました。');
-    }
-  };
+  // const handleSaveAllExamples = (messageId: string) => { // 例文保存機能は後で実装
+    // const targetMessage = messages.find(m => m.id === messageId);
+    // if (!targetMessage || !targetMessage.examples) return;
+    // let newExamplesAdded = false;
+    // const examplesToSave = targetMessage.examples.filter(ex => !ex.saved);
+    // if (examplesToSave.length === 0) {
+    //   Alert.alert('保存済み', 'すべての例文は既に単語帳に保存されています。');
+    //   return;
+    // }
+    // // メッセージ内の例文の保存状態を更新
+    // setMessages(prev =>
+    //   prev.map(message => {
+    //     if (message.id === messageId && message.examples) {
+    //       return {
+    //         ...message,
+    //         examples: message.examples.map((ex: Example) => ({
+    //           id: ex.id,
+    //           japanese: ex.japanese,
+    //           english: ex.english,
+    //           saved: true, 
+    //           note: ex.note,
+    //           // richContent や contentBlocks を持つ Example は現状ないと想定
+    //         })),
+    //       };
+    //     }
+    //     return message;
+    //   })
+    // );
+    // // 保存済み例文リストを更新
+    // examplesToSave.forEach(example => {
+    //   addExampleToSavedList({ ...example, saved: true });
+    //   newExamplesAdded = true;
+    // });
+    // if (newExamplesAdded) {
+    //   Alert.alert('すべて保存完了', '選択された例文を単語帳に追加しました。');
+    // }
+  // };
 
   // リッチコンテンツの例文を保存する
-  const saveRichExample = (sectionIndex: number, itemIndex: number, exampleIndex: number) => {
-    // 実装予定
-    Alert.alert('保存機能', '単語帳に保存する機能は今後実装予定です');
-  };
+  // const saveRichExample = (sectionIndex: number, itemIndex: number, exampleIndex: number) => { // 例文保存機能は後で実装
+    // // 実装予定
+    // Alert.alert('保存機能', '単語帳に保存する機能は今後実装予定です');
+  // };
 
   // リッチコンテンツをレンダリングする関数
   const renderRichContent = (content: RichContent) => {
@@ -493,11 +331,11 @@ const ChatScreen = () => {
                           >
                             <Ionicons name="volume-medium-outline" size={18} color={COLORS.PRIMARY} />
                           </TouchableOpacity>
-                          <TouchableOpacity
+                          {/* <TouchableOpacity
                             style={styles.contentExampleAction}
                           >
                             <Ionicons name="bookmark-outline" size={18} color={COLORS.PRIMARY} />
-                          </TouchableOpacity>
+                          </TouchableOpacity> */}
                         </View>
                       </View>
                     </View>
@@ -592,11 +430,11 @@ const ChatScreen = () => {
               >
                 <Ionicons name="volume-medium-outline" size={18} color={COLORS.PRIMARY} />
               </TouchableOpacity>
-              <TouchableOpacity
+              {/* <TouchableOpacity
                 style={styles.exampleActionButton}
               >
                 <Ionicons name="bookmark-outline" size={18} color={COLORS.PRIMARY} />
-              </TouchableOpacity>
+              </TouchableOpacity> */}
             </View>
           </View>
         );
@@ -643,12 +481,12 @@ const ChatScreen = () => {
             {message.contentBlocks.map(block => renderContentBlock(block, message.id))}
           </View>
         )}
-        
+
         {/* 従来の例文リストがある場合も新しいスタイルで表示 */}
         {!isUserMessage && message.examples && message.examples.length > 0 && (
           <>
             <TouchableOpacity
-              onPress={() => handleSaveAllExamples(message.id)}
+              // onPress={() => handleSaveAllExamples(message.id)} // 一時的にコメントアウト
               style={styles.saveAllButton}
             >
               <Ionicons name="bookmark" size={16} color={COLORS.WHITE} style={{marginRight: 8}} />
@@ -684,7 +522,7 @@ const ChatScreen = () => {
                       <Ionicons name="volume-medium-outline" size={16} color={COLORS.PRIMARY} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => saveExample(message.id, example.id)}
+                      // onPress={() => saveExample(message.id, example.id)} // 一時的にコメントアウト
                       style={[
                         styles.compactActionButton, 
                         example.saved && styles.savedExampleButton
@@ -711,7 +549,7 @@ const ChatScreen = () => {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoid}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} // iPhoneの場合のオフセット調整
       >
         <ScrollView
           ref={scrollViewRef}
@@ -719,7 +557,8 @@ const ChatScreen = () => {
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
         >
-          {messages.map(renderMessage)}
+          {/* messages が undefined の可能性を考慮 */}
+          {(messages || []).map(renderMessage)}
           
           {isLoading && (
             <View style={styles.loadingContainer}>
