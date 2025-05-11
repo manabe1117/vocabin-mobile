@@ -8,7 +8,7 @@ import { z } from "https://deno.land/x/zod@v3.22.4/index.ts";
 // 環境変数から Gemini API キーを取得
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
 // Gemini API のエンドポイント URL
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 // Gemini API がスペル修正候補を返す場合のレスポンス型
 interface SuggestionResponse {
@@ -52,7 +52,8 @@ const supabase = createClient(supabaseUrl!, supabaseServiceRoleKey!);
 function isEnglish(text: string): boolean {
   // 英語の文字パターン（アルファベット、スペース、一般的な句読点と記号）
   // カンマ、ピリオド、感嘆符、疑問符、コロン、セミコロン、ハイフン、アポストロフィ、引用符、括弧などを許容
-  const englishPattern = /^[a-zA-Z0-9\s'-,.!?:;"()[\]{}#$%&*+<=>@^_`|~]+$/;
+  // ハイフンをエスケープしてリテラル文字として扱う
+  const englishPattern = /^[a-zA-Z0-9\s'\-.,!?:;"()[\]{}#$%&*+<=>@^_`|~]+$/;
   
   // 日本語の文字パターン（ひらがな、カタカナ、漢字）
   const japanesePattern = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
@@ -397,6 +398,8 @@ async function fetchGeminiApi(vocabulary: string): Promise<VocabularyData | Sugg
     For example:
     - "Approximately." should be processed as "approximately"
     
+    However, do NOT convert proper nouns (e.g., "American", "Tokyo") or acronyms/initialisms (e.g., "BS", "NASA") to lowercase. These should retain their original capitalization.
+
     Do NOT normalize any of these:
     - "Hello!" (keep as "Hello!")
     - "What?" (keep as "What?")
@@ -425,8 +428,8 @@ async function fetchGeminiApi(vocabulary: string): Promise<VocabularyData | Sugg
     Include irregular forms. Omit non-existent conjugations.
 
     REQUIREMENTS:
-    1. Must include at least one natural example sentence.
-    2. Notes should provide language learning tips, common usage patterns, or important grammatical points. Keep it under 100 characters and in Japanese. If there's nothing particularly noteworthy for language learners, leave notes empty.
+    1. Provide at least 2 natural example sentences. If the vocabulary has multiple distinct meanings or common usages, provide up to 3 example sentences, with one example for each distinct meaning or usage. Each example sentence must have both English and Japanese versions.
+    2. Notes should provide language learning tips, common usage patterns, or important grammatical points specifically related to the input vocabulary. If the meaning changes significantly depending on the part of speech, please explain that as well. Focus on linguistic aspects, not general knowledge about the concept the word represents. Keep it under 100 characters and in Japanese. If there's nothing particularly noteworthy about the vocabulary itself for language learners, leave notes empty.
 
     If spelling is incorrect, return one of these two formats:
     1. If you're very confident about a single correction, return {"suggestion": "<corrected_spell>"}.
