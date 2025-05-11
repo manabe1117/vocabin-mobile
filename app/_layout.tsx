@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { Stack, SplashScreen, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { TouchableOpacity, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 // スプラッシュスクリーンが自動で隠れるのを防ぐ
 SplashScreen.preventAutoHideAsync();
@@ -78,12 +80,94 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerShown: false }}>
       {/* スクリーン定義 */}
       <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="dictionary" options={{ headerShown: true, title: '辞書' }} />
-      <Stack.Screen name="translate" options={{ headerShown: true, title: '翻訳' }} />
-      <Stack.Screen name="study" options={{ headerShown: true, title: '学習' }} />
-      <Stack.Screen name="vocabulary" options={{ headerShown: true, title: '単語帳' }} />
-      <Stack.Screen name="chat" options={{ headerShown: true, title: 'AIに質問' }} />
-      <Stack.Screen name="auth/login" options={{ title: 'ログイン' }} />
+      <Stack.Screen 
+        name="dictionary" 
+        options={{
+          headerShown: true, 
+          title: '辞書',
+          headerTitleAlign: 'center',
+          headerLeft: () => (
+            <TouchableOpacity 
+              onPress={() => router.replace('/(tabs)')} 
+              style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0, padding: 5 }}
+            >
+              <Ionicons name="arrow-back" size={24} color={Platform.OS === 'ios' ? '#007AFF' : 'black'} />
+            </TouchableOpacity>
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="translate" 
+        options={{
+          headerShown: true, 
+          title: '翻訳',
+          headerTitleAlign: 'center',
+          headerLeft: () => (
+            <TouchableOpacity 
+              onPress={() => router.replace('/(tabs)')} 
+              style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0, padding: 5 }}
+            >
+              <Ionicons name="arrow-back" size={24} color={Platform.OS === 'ios' ? '#007AFF' : 'black'} />
+            </TouchableOpacity>
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="study" 
+        options={{
+          headerShown: true, 
+          title: '学習',
+          headerTitleAlign: 'center',
+          headerLeft: () => (
+            <TouchableOpacity 
+              onPress={() => router.replace('/(tabs)')} 
+              style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0, padding: 5 }}
+            >
+              <Ionicons name="arrow-back" size={24} color={Platform.OS === 'ios' ? '#007AFF' : 'black'} />
+            </TouchableOpacity>
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="vocabulary" 
+        options={{
+          headerShown: true, 
+          title: '単語帳',
+          headerTitleAlign: 'center',
+          headerLeft: () => (
+            <TouchableOpacity 
+              onPress={() => router.replace('/(tabs)')} 
+              style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0, padding: 5 }}
+            >
+              <Ionicons name="arrow-back" size={24} color={Platform.OS === 'ios' ? '#007AFF' : 'black'} />
+            </TouchableOpacity>
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="chat" 
+        options={{
+          headerShown: true, 
+          title: 'AIに質問',
+          headerTitleAlign: 'center',
+          headerLeft: () => (
+            <TouchableOpacity 
+              onPress={() => router.replace('/(tabs)')} 
+              style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0, padding: 5 }}
+            >
+              <Ionicons name="arrow-back" size={24} color={Platform.OS === 'ios' ? '#007AFF' : 'black'} />
+            </TouchableOpacity>
+          ),
+        }} 
+      />
+      <Stack.Screen 
+        name="auth/login" 
+        options={{ 
+          title: 'ログイン', 
+          headerShown: true,
+          headerTitleAlign: 'center'
+        }} 
+      />
     </Stack>
   );
 }

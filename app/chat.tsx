@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import { Link } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 import { ThemedView } from '../components/ThemedView';
@@ -568,6 +569,12 @@ const ChatScreen = () => {
         </ScrollView>
         
         <View style={styles.inputContainer}>
+          {/* 履歴ボタンを入力欄の左に追加 */}
+          <Link href="/history" asChild>
+            <TouchableOpacity style={styles.historyButton}>
+              <Ionicons name="time-outline" size={24} color={COLORS.PRIMARY} />
+            </TouchableOpacity>
+          </Link>
           <TextInput
             value={inputText}
             onChangeText={setInputText}
@@ -606,6 +613,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.BACKGROUND.MAIN,
+  },
+  historyButton: { // 履歴ボタンのスタイルを調整
+    padding: 8,
+    marginRight: 8, // TextInputとの間にマージンを追加
   },
   keyboardAvoid: {
     flex: 1,
@@ -660,7 +671,8 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
+    paddingHorizontal: 8, // 左右のパディングを調整
+    paddingVertical: 8,
     marginHorizontal: 8,
     marginBottom: 8,
     borderRadius: 24,
@@ -683,6 +695,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.PRIMARY,
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: 8, // TextInputとの間にマージンを追加
   },
   sendButtonDisabled: {
     backgroundColor: COLORS.BACKGROUND.GRAY,
@@ -1149,9 +1162,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,
-    marginHorizontal: 4, // contentBlocksContainerのpaddingを考慮
-    marginTop: 16, // 上の要素とのマージン
-    marginBottom: 8, // 下の例文リストとのマージン
+    marginHorizontal: 4, 
+    marginTop: 16, 
+    marginBottom: 8, 
   },
   saveAllButtonText: {
     color: COLORS.WHITE,
