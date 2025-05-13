@@ -13,8 +13,8 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/
 
 // リクエストボディのスキーマ定義 (Zod を使用)
 const requestBodySchema = z.object({
-  message: z.string(), // "message" フィールドが文字列であることを要求
-  history: z.array(z.object({ // 会話履歴を追加
+  userInput: z.string(), // ユーザー入力
+  history: z.array(z.object({
     role: z.enum(['user', 'model']),
     parts: z.array(z.object({
       text: z.string(),
@@ -24,6 +24,15 @@ const requestBodySchema = z.object({
 // リクエストボディの型 (スキーマから推論)
 type RequestBody = z.infer<typeof requestBodySchema>;
 
+// データベースに保存する文の型
+interface SentenceRow {
+  id?: number; // DBが生成するID (戻り値で使用)
+  japanese: string;
+  english: string;
+  note?: string;
+  created_at?: string; // DBのデフォルト値を使用
+}
+
 // クライアントに返す例文の型
 interface ExampleOutput {
   id: string;
@@ -31,6 +40,7 @@ interface ExampleOutput {
   english: string;
   saved: boolean;
   note?: string;
+  sentence_id?: number; // ★追加: sentenceテーブルのIDを追加
 }
 
 // Deno の HTTP サーバーを起動
@@ -54,18 +64,45 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Authorization ヘッダーから JWT を取得
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('認証ヘッダーがありません');
+    }
+    const token = authHeader.replace('Bearer ', '');
+
     const requestJson = await req.json();
     const validatedBody = requestBodySchema.safeParse(requestJson);
 
     if (!validatedBody.success) {
       console.error('リクエストボディのバリデーションエラー:', validatedBody.error.issues);
-      return new Response(JSON.stringify({ error: 'Invalid request body', details: validatedBody.error.issues }), {
+      return new Response(JSON.stringify({ error: 'リクエストボディが無効です', details: validatedBody.error.issues }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
       });
     }
 
-    const { message, history } = validatedBody.data;
+    // Supabaseクライアントの作成
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', // ★ サービスロールキーを使用（RLSをバイパス）
+    );
+
+    // JWT トークンを使用してユーザー認証
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseClient.auth.getUser(token);
+
+    if (authError || !user) {
+      throw new Error('認証に失敗しました');
+    }
+
+    // 認証されたユーザーIDを取得
+    const userId = user.id;
+
+    // ユーザー入力の取得 (リクエストボディから)
+    const { userInput, history } = validatedBody.data;
 
     const exampleJsonForPrompt = { // プロンプトで見せるためのJSON構造の例
       replyText: "string (ここにはユーザーへの通常の返答や説明を記述します。例文そのものはここには含めません。)",
@@ -133,7 +170,7 @@ Deno.serve(async (req) => {
       })));
     }
     // 現在のユーザーの質問
-    contents.push({ role: "user", parts: [{ text: `ユーザーの質問は次のとおりです。\n${message}` }] });
+    contents.push({ role: "user", parts: [{ text: `ユーザーの質問は次のとおりです。\n${userInput}` }] });
 
     const geminiRequestBody = {
       contents: contents,
@@ -213,20 +250,14 @@ Deno.serve(async (req) => {
     }
 
     let replyText = textToParse; // 初期値は（Markdown除去後の）テキスト全体
-    let examples: ExampleOutput[] = [];
-
+    let generatedExamples: any[] = []; // AIから生成された例文オブジェクト (japanese, english, note)
+    
     try {
       const parsedResponse = JSON.parse(textToParse); // Markdown除去後のテキストをパース
       if (parsedResponse.replyText !== undefined && parsedResponse.generatedExamples !== undefined) {
         replyText = parsedResponse.replyText;
-        examples = parsedResponse.generatedExamples.map((ex: any, index: number) => ({
-          id: `${Date.now().toString()}-ex-${index}`,
-          japanese: ex.japanese || '',
-          english: ex.english || '',
-          note: ex.note,
-          saved: false,
-        }));
-        console.log("Parsed structured response with examples:", { replyText, examples });
+        generatedExamples = parsedResponse.generatedExamples;
+        console.log("Successfully parsed AI response with", generatedExamples.length, "examples");
       } else {
         console.log("Parsed JSON, but not the expected structure (missing replyText or generatedExamples). Using textToParse as replyText.");
         // replyText は textToParse のままなので、ここでは明示的な代入は不要
@@ -236,14 +267,129 @@ Deno.serve(async (req) => {
       // replyText は textToParse のままなので、ここでは明示的な代入は不要
     }
 
-    return new Response(JSON.stringify({ reply: replyText, examples: examples }), {
+    // 例文が存在し、形式が正しい場合のみデータベースに保存
+    const examples: ExampleOutput[] = [];
+    const messageId = `${Date.now().toString()}-ai`; // AIメッセージのID (クライアント側で一意)
+
+    if (generatedExamples && Array.isArray(generatedExamples) && generatedExamples.length > 0) {
+      console.log(`Processing ${generatedExamples.length} examples for database insertion...`);
+      
+      // 例文をサーバー側で一時ID付与
+      for (let i = 0; i < generatedExamples.length; i++) {
+        const ex = generatedExamples[i];
+        // japanese と english が両方存在する場合のみ処理
+        if (ex.japanese && ex.english) {
+          // 1. sentenceテーブルに保存して sentence_id を取得
+          try {
+            const sentenceData: SentenceRow = {
+              japanese: ex.japanese,
+              english: ex.english,
+              note: ex.note || null,
+            };
+
+            const { data: insertedSentence, error: insertError } = await supabaseClient
+              .from('sentence')
+              .insert(sentenceData)
+              .select();
+
+            if (insertError) {
+              console.error(`Error inserting sentence #${i}:`, insertError);
+              // 保存に失敗してもクライアントには返す (sentence_id なし)
+              examples.push({
+                id: `${messageId}-ex-${i}`,
+                japanese: ex.japanese,
+                english: ex.english,
+                note: ex.note,
+                saved: false,
+              });
+            } else if (insertedSentence && insertedSentence.length > 0) {
+              console.log(`Successfully inserted sentence #${i} with ID ${insertedSentence[0].id}`);
+              // 保存成功: sentence_id 付きで例文をクライアントに返す
+              examples.push({
+                id: `${messageId}-ex-${i}`,
+                japanese: ex.japanese,
+                english: ex.english,
+                note: ex.note,
+                saved: false,
+                sentence_id: insertedSentence[0].id, // 新しく挿入された文のID
+              });
+            }
+          } catch (dbError) {
+            console.error(`Exception in sentence insertion for example #${i}:`, dbError);
+            // エラーが発生しても他の例文の処理を継続
+            examples.push({
+              id: `${messageId}-ex-${i}`, 
+              japanese: ex.japanese,
+              english: ex.english,
+              note: ex.note,
+              saved: false,
+            });
+          }
+        } else {
+          console.warn(`Skipping example #${i} due to missing required fields:`, ex);
+        }
+      }
+    }
+
+    // ユーザーメッセージをchat_historiesテーブルに保存
+    try {
+      const userMessageId = `${Date.now().toString()}-user`;
+      await supabaseClient
+        .from('chat_histories')
+        .insert({
+          user_id: userId,
+          message_id: userMessageId,
+          sender: 'user',
+          text_content: userInput,
+          timestamp: new Date().toISOString(),
+        });
+      
+      console.log('ユーザーメッセージをchat_historiesに保存しました');
+    } catch (userMsgError) {
+      console.error('ユーザーメッセージの保存中にエラーが発生しました:', userMsgError);
+      // クライアントへの応答には影響しない (ログのみ)
+    }
+
+    // AIメッセージをchat_historiesテーブルに保存
+    try {
+      const { data: insertedChatHistory, error: chatInsertError } = await supabaseClient
+        .from('chat_histories')
+        .insert({
+          user_id: userId,
+          message_id: messageId,
+          sender: 'ai',
+          text_content: replyText,
+          timestamp: new Date().toISOString(),
+          examples: examples.length > 0 ? examples : null,
+        })
+        .select();
+
+      if (chatInsertError) {
+        console.error('Error inserting AI message to chat_histories:', chatInsertError);
+      } else {
+        console.log('Successfully saved AI message to chat_histories');
+      }
+    } catch (chatError) {
+      console.error('Exception in chat_histories insertion:', chatError);
+      // クライアントへの応答には影響しない (ログのみ)
+    }
+
+    // クライアントへの応答: AIテキスト, 例文リスト, メッセージID, タイムスタンプ
+    const responseToClient = {
+      id: messageId,
+      text: replyText,
+      examples: examples,
+      timestamp: new Date().toISOString(),
+    };
+    
+    return new Response(JSON.stringify(responseToClient), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
 
   } catch (error) {
-    console.error('An error occurred in get-chat-response:', error);
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+    console.error('get-chat-responseでエラーが発生しました:', error);
+    const errorMessage = error instanceof Error ? error.message : "予期しないエラーが発生しました";
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,

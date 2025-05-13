@@ -2919,6 +2919,25 @@ CREATE TABLE public.bk_vocabulary (
 
 
 --
+-- Name: chat_histories; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.chat_histories (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    user_id uuid NOT NULL,
+    message_id text NOT NULL,
+    sender text NOT NULL,
+    text_content text NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    examples jsonb,
+    rich_content jsonb,
+    content_blocks jsonb,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chat_histories_sender_check CHECK ((sender = ANY (ARRAY['user'::text, 'ai'::text])))
+);
+
+
+--
 -- Name: level_progress; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2991,6 +3010,39 @@ CREATE TABLE public.profiles (
     CONSTRAINT profiles_language_level_check CHECK ((language_level = ANY (ARRAY['beginner'::text, 'intermediate'::text, 'advanced'::text]))),
     CONSTRAINT username_length CHECK ((char_length(username) >= 3))
 );
+
+
+--
+-- Name: sentence; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.sentence (
+    id integer NOT NULL,
+    japanese text NOT NULL,
+    english text NOT NULL,
+    note text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: sentence_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.sentence_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: sentence_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.sentence_id_seq OWNED BY public.sentence.id;
 
 
 --
@@ -3423,6 +3475,13 @@ ALTER TABLE ONLY public.levels ALTER COLUMN id SET DEFAULT nextval('public.level
 
 
 --
+-- Name: sentence id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sentence ALTER COLUMN id SET DEFAULT nextval('public.sentence_id_seq'::regclass);
+
+
+--
 -- Name: translation_training id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3613,6 +3672,14 @@ ALTER TABLE ONLY auth.users
 
 
 --
+-- Name: chat_histories chat_histories_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_histories
+    ADD CONSTRAINT chat_histories_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: level_progress level_progress_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3650,6 +3717,14 @@ ALTER TABLE ONLY public.profiles
 
 ALTER TABLE ONLY public.profiles
     ADD CONSTRAINT profiles_username_key UNIQUE (username);
+
+
+--
+-- Name: sentence sentence_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sentence
+    ADD CONSTRAINT sentence_pkey PRIMARY KEY (id);
 
 
 --
@@ -4378,6 +4453,14 @@ ALTER TABLE ONLY auth.sso_domains
 
 
 --
+-- Name: chat_histories chat_histories_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_histories
+    ADD CONSTRAINT chat_histories_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+
+
+--
 -- Name: level_progress level_progress_level_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4696,6 +4779,40 @@ CREATE POLICY "Users can view their own translation history" ON public.translati
 
 
 --
+-- Name: chat_histories; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.chat_histories ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: chat_histories chat_histories_delete_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY chat_histories_delete_policy ON public.chat_histories FOR DELETE USING ((user_id = public.get_my_user_id()));
+
+
+--
+-- Name: chat_histories chat_histories_insert_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY chat_histories_insert_policy ON public.chat_histories FOR INSERT WITH CHECK ((user_id = public.get_my_user_id()));
+
+
+--
+-- Name: chat_histories chat_histories_select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY chat_histories_select_policy ON public.chat_histories FOR SELECT USING ((user_id = public.get_my_user_id()));
+
+
+--
+-- Name: chat_histories chat_histories_update_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY chat_histories_update_policy ON public.chat_histories FOR UPDATE USING ((user_id = public.get_my_user_id())) WITH CHECK ((user_id = public.get_my_user_id()));
+
+
+--
 -- Name: level_progress; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -4713,6 +4830,26 @@ CREATE POLICY level_progress_user_policy ON public.level_progress USING ((user_i
 --
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: sentence; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.sentence ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: sentence sentence_insert_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY sentence_insert_policy ON public.sentence FOR INSERT WITH CHECK (true);
+
+
+--
+-- Name: sentence sentence_select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY sentence_select_policy ON public.sentence FOR SELECT USING (true);
+
 
 --
 -- Name: study_history; Type: ROW SECURITY; Schema: public; Owner: -

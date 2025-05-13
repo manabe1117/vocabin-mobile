@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   TextInput,
@@ -7,7 +7,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Keyboard,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   Text,
@@ -30,8 +29,8 @@ interface Message {
   sender: 'user' | 'ai';
   timestamp: Date;
   examples?: Example[];
-  richContent?: RichContent; // リッチコンテンツの追加
-  contentBlocks?: ContentBlock[]; // 新しい柔軟なコンテンツブロック構造
+  richContent?: RichContent;
+  contentBlocks?: ContentBlock[];
 }
 
 // 例文の型定義
@@ -41,6 +40,7 @@ interface Example {
   english: string;
   saved: boolean;
   note?: string;
+  sentence_id?: number;
 }
 
 // リッチコンテンツの型定義
@@ -71,94 +71,110 @@ interface ContentItem {
 interface ContentBlock {
   type: 'text' | 'example' | 'note' | 'header' | 'section';
   id: string;
-  content: any; // テキスト、例文、ノートなど様々なコンテンツを入れられるように
+  content: any;
 }
 
 const ChatScreen = () => {
   const { session } = useAuth();
   const { speakText } = useSpeech();
   const [inputText, setInputText] = useState('');
-  const [messages, setMessages] = useState<Message[]>(() => [
-    {
-      id: 'initial-ai-message',
-      text: 'こんにちは！英語に関する質問や、日本語を英語に訳してほしいことがあれば教えてください。',
-      sender: 'ai',
-      timestamp: new Date(),
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // 会話履歴を生成する関数
-  const getChatHistory = (currentMessages: Message[]): { role: 'user' | 'model'; parts: { text: string }[] }[] => {
-    return currentMessages.map(msg => ({
-      role: msg.sender === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.text }]
-    }));
+  // 初期メッセージの設定 (セッションがある場合のみ)
+  useEffect(() => {
+    if (session) {
+      setMessages([
+        {
+          id: 'initial-ai-message',
+          text: 'こんにちは！英語に関する質問や、日本語を英語に訳してほしいことがあれば教えてください。',
+          sender: 'ai',
+          timestamp: new Date(),
+        }
+      ]);
+    } else {
+      setMessages([]); // セッションがない場合はクリア
+    }
+  }, [session]);
+
+  // 会話履歴をAIに渡す形式で生成する関数
+  const getChatHistoryForAI = (currentMessages: Message[]): { role: 'user' | 'model'; parts: { text: string }[] }[] => {
+    // AIの初期メッセージや、エラーメッセージは履歴に含めないなどの調整をここで行う
+    return currentMessages
+      .filter(msg => msg.id !== 'initial-ai-message' && !msg.id.endsWith('-error')) // 例: 初期メッセージとエラーを除外
+      .map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.text }]
+      }));
   };
 
   // メッセージを送信する関数
   const sendMessage = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || !session?.user) return;
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: Date.now().toString() + '-user', // 意図的に '-user' を付与
       text: inputText,
       sender: 'user',
       timestamp: new Date(),
     };
 
-    // ユーザーメッセージを現在のメッセージリストに追加
-    const updatedMessages = [...(messages || []), userMessage];
-    setMessages(updatedMessages);
-    const currentInput = inputText; // Edge Functionに渡すため、state更新前の値を保持
+    const currentInput = inputText;
     setInputText('');
+
+    // UIにユーザーメッセージを即時反映
+    setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
-    // スクロールビューを一番下にスクロール
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    // スクロール
+    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
-      // Edge Functionに渡す会話履歴を取得 (AIの初期メッセージは含めない場合もあるので調整が必要)
-      // ここでは、ユーザーの現在のメッセージの前までの履歴を渡すことを想定
-      const chatHistory = getChatHistory(messages || []);
+      const chatHistoryForAI = getChatHistoryForAI(messages); // AIに渡す履歴を取得 (userMessage追加前のもの)
 
       // Supabase Edge Function を呼び出す
-      const { data, error } = await supabase.functions.invoke('get-chat-response', {
-        body: { message: currentInput, history: chatHistory }, // 会話履歴を渡す
+      const { data: aiResponseMessageData, error: functionError } = await supabase.functions.invoke('get-chat-response', {
+        body: {
+          userInput: currentInput, // ユーザーの現在の入力
+          history: chatHistoryForAI, // AIへのコンテキスト用履歴
+        },
       });
 
-      if (error) {
-        throw error; // エラーをキャッチブロックで処理
+      if (functionError) {
+        throw functionError;
       }
 
-      console.log('Edge Function の応答:', data);
-
-      let aiResponse: Message;
-      if (data && data.reply) {
-        aiResponse = {
-          id: Date.now().toString() + '-ai',
-          text: data.reply, // Edge Functionからの応答テキスト
+      if (aiResponseMessageData && aiResponseMessageData.text) { // Functionからの応答はAIメッセージオブジェクトそのもの
+        const aiMessage: Message = {
+          id: aiResponseMessageData.id, // Functionが生成したID
+          text: aiResponseMessageData.text,
           sender: 'ai',
-          timestamp: new Date(),
-          examples: data.examples && data.examples.length > 0 ? data.examples : undefined, // examples を追加
-          // contentBlocks は現状AIから返されない想定
+          timestamp: new Date(aiResponseMessageData.timestamp), // ISO文字列からDateへ
+          examples: aiResponseMessageData.examples?.map((ex: any) => ({
+            id: ex.id || `client-temp-${Date.now()}`, // クライアント用の一時ID
+            japanese: ex.japanese,
+            english: ex.english,
+            note: ex.note,
+            saved: false, // UI上の初期状態
+            sentence_id: ex.sentence_id, // ★ Functionから渡されたsentence_id
+          })) || undefined,
+          richContent: aiResponseMessageData.richContent,
+          contentBlocks: aiResponseMessageData.contentBlocks,
         };
+        setMessages(prev => [...prev, aiMessage]);
       } else {
-        // Edge Functionから期待した応答が得られなかった場合のエラーメッセージ
-        aiResponse = {
+        const fallbackErrorMsg: Message = {
           id: Date.now().toString() + '-ai-error',
-          text: '申し訳ありません。AIからの応答を取得できませんでした。' + (data?.error ? ` (${data.error})` : ''),
+          text: '申し訳ありません。AIからの応答を正しく処理できませんでした。',
           sender: 'ai',
           timestamp: new Date(),
         };
+        setMessages(prev => [...prev, fallbackErrorMsg]);
       }
-      setMessages(prev => [...(prev || []), aiResponse]);
 
     } catch (error) {
-      console.error('Edge Function 呼び出しエラー:', error);
+      console.error('get-chat-response 呼び出しエラー:', error);
       const errorMessageText = error instanceof Error ? error.message : '不明なエラーが発生しました。';
       const errorMessage: Message = {
         id: Date.now().toString() + '-error',
@@ -166,13 +182,10 @@ const ChatScreen = () => {
         sender: 'ai',
         timestamp: new Date(),
       };
-      setMessages(prev => [...(prev || []), errorMessage]);
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
-      // スクロールビューを一番下にスクロール
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     }
   };
 
@@ -285,13 +298,13 @@ const ChatScreen = () => {
   // };
 
   // リッチコンテンツの例文を保存する
-  // const saveRichExample = (sectionIndex: number, itemIndex: number, exampleIndex: number) => { // 例文保存機能は後で実装
-    // // 実装予定
-    // Alert.alert('保存機能', '単語帳に保存する機能は今後実装予定です');
-  // };
+  const saveRichExample = (sectionIndex: number, itemIndex: number, exampleIndex: number) => {
+    // 実装予定
+    Alert.alert('保存機能', '単語帳に保存する機能は今後実装予定です');
+  };
 
   // リッチコンテンツをレンダリングする関数
-  const renderRichContent = (content: RichContent) => {
+  const renderRichContent = (content: RichContent, messageId: string) => {
     return (
       <View style={styles.richContentContainer}>
         {content.title && (
@@ -332,11 +345,6 @@ const ChatScreen = () => {
                           >
                             <Ionicons name="volume-medium-outline" size={18} color={COLORS.PRIMARY} />
                           </TouchableOpacity>
-                          {/* <TouchableOpacity
-                            style={styles.contentExampleAction}
-                          >
-                            <Ionicons name="bookmark-outline" size={18} color={COLORS.PRIMARY} />
-                          </TouchableOpacity> */}
                         </View>
                       </View>
                     </View>
@@ -400,7 +408,7 @@ const ChatScreen = () => {
           </View>
         );
       case 'example':
-        const example = block.content;
+        const example = block.content as Example;
         return (
           <View key={block.id} style={styles.exampleItem}>
             <View style={styles.exampleHeader}>
@@ -431,11 +439,6 @@ const ChatScreen = () => {
               >
                 <Ionicons name="volume-medium-outline" size={18} color={COLORS.PRIMARY} />
               </TouchableOpacity>
-              {/* <TouchableOpacity
-                style={styles.exampleActionButton}
-              >
-                <Ionicons name="bookmark-outline" size={18} color={COLORS.PRIMARY} />
-              </TouchableOpacity> */}
             </View>
           </View>
         );
@@ -465,16 +468,25 @@ const ChatScreen = () => {
         
         {!isUserMessage && (
           <View style={styles.messageActions}>
+            {/*
             <TouchableOpacity
               onPress={() => handleSpeakText(message.text, '日本語')}
               style={styles.actionButton}
             >
+              <Ionicons name="volume-medium-outline" size={20} color={COLORS.TEXT.PRIMARY} />
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => copyToClipboard(message.text)}
+              style={styles.actionButton}
+            >
+              <Ionicons name="copy-outline" size={20} color={COLORS.TEXT.PRIMARY} />
+            </TouchableOpacity>
+            */}
           </View>
         )}
         
         {/* リッチコンテンツがある場合はそれを表示 */}
-        {!isUserMessage && message.richContent && renderRichContent(message.richContent)}
+        {!isUserMessage && message.richContent && renderRichContent(message.richContent, message.id)}
         
         {/* 新しいコンテンツブロックがある場合 */}
         {!isUserMessage && message.contentBlocks && message.contentBlocks.length > 0 && (
@@ -495,11 +507,10 @@ const ChatScreen = () => {
             </TouchableOpacity>
             <View style={styles.contentBlocksContainer}>
               {message.examples.map((example, index) => (
-                <View 
-                  key={example.id} 
+                <View
+                  key={example.id}
                   style={[
                     styles.compactExampleItem,
-                    // 最後の要素以外には下に線を引く
                     index < message.examples!.length - 1 && styles.exampleItemSeparator
                   ]}
                 >
@@ -523,9 +534,8 @@ const ChatScreen = () => {
                       <Ionicons name="volume-medium-outline" size={16} color={COLORS.PRIMARY} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                      // onPress={() => saveExample(message.id, example.id)} // 一時的にコメントアウト
                       style={[
-                        styles.compactActionButton, 
+                        styles.compactActionButton,
                         example.saved && styles.savedExampleButton
                       ]}
                     >
@@ -550,15 +560,16 @@ const ChatScreen = () => {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoid}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} // iPhoneの場合のオフセット調整
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <ScrollView
           ref={scrollViewRef}
           style={styles.messagesContainer}
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
+          onLayout={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 50)}
+          onContentSizeChange={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 50)}
         >
-          {/* messages が undefined の可能性を考慮 */}
           {(messages || []).map(renderMessage)}
           
           {isLoading && (
@@ -569,7 +580,6 @@ const ChatScreen = () => {
         </ScrollView>
         
         <View style={styles.inputContainer}>
-          {/* 履歴ボタンを入力欄の左に追加 */}
           <Link href="/history" asChild>
             <TouchableOpacity style={styles.historyButton}>
               <Ionicons name="time-outline" size={24} color={COLORS.PRIMARY} />
@@ -584,24 +594,28 @@ const ChatScreen = () => {
             returnKeyType="done"
             blurOnSubmit={true}
             onSubmitEditing={() => {
-              if (inputText.trim()) {
-                sendMessage();
+              if (Platform.OS === 'android' && inputText.trim()) {
+                // sendMessage(); // Androidでは送信ボタンを使うことを推奨
               }
             }}
           />
           <TouchableOpacity
             style={[
               styles.sendButton,
-              !inputText.trim() && styles.sendButtonDisabled,
+              (!inputText.trim() || isLoading) && styles.sendButtonDisabled,
             ]}
             onPress={sendMessage}
-            disabled={!inputText.trim()}
+            disabled={!inputText.trim() || isLoading}
           >
-            <Ionicons
-              name="send"
-              size={20}
-              color={inputText.trim() ? COLORS.WHITE : COLORS.ICON.DISABLED}
-            />
+            {isLoading ? (
+              <ActivityIndicator size="small" color={COLORS.WHITE} />
+            ) : (
+              <Ionicons
+                name="send"
+                size={20}
+                color={inputText.trim() ? COLORS.WHITE : COLORS.ICON.DISABLED}
+              />
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -614,9 +628,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.BACKGROUND.MAIN,
   },
-  historyButton: { // 履歴ボタンのスタイルを調整
+  historyButton: {
     padding: 8,
-    marginRight: 8, // TextInputとの間にマージンを追加
+    marginRight: 8,
   },
   keyboardAvoid: {
     flex: 1,
@@ -658,10 +672,12 @@ const styles = StyleSheet.create({
   messageActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    alignItems: 'center',
     marginTop: 8,
   },
   actionButton: {
-    padding: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     marginLeft: 8,
   },
   loadingContainer: {
@@ -671,10 +687,10 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8, // 左右のパディングを調整
+    paddingHorizontal: 8,
     paddingVertical: 8,
     marginHorizontal: 8,
-    marginBottom: 8,
+    marginBottom: Platform.OS === 'ios' ? 0 : 8,
     borderRadius: 24,
     backgroundColor: COLORS.WHITE,
     borderWidth: 1,
@@ -685,7 +701,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     maxHeight: 100,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
     color: COLORS.TEXT.PRIMARY,
   },
   sendButton: {
@@ -695,7 +711,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.PRIMARY,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8, // TextInputとの間にマージンを追加
+    marginLeft: 8,
   },
   sendButtonDisabled: {
     backgroundColor: COLORS.BACKGROUND.GRAY,
@@ -749,10 +765,12 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   exampleItem: {
-    marginBottom: 14,
-    borderRadius: 12,
-    padding: 14,
-    flexDirection: 'column',
+    padding: 12,
+    marginVertical: 4,
+    backgroundColor: COLORS.BACKGROUND.LIGHTER,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.PRIMARY,
   },
   exampleHeader: {
     flexDirection: 'row',
@@ -776,7 +794,7 @@ const styles = StyleSheet.create({
   savedLabel: {
     fontSize: 12,
     color: COLORS.SUCCESS.DARKER,
-    backgroundColor: COLORS.SUCCESS.DEFAULT + '20', // 20% opacity
+    backgroundColor: COLORS.SUCCESS.DEFAULT + '20',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
@@ -812,42 +830,30 @@ const styles = StyleSheet.create({
   exampleJapanese: {
     fontSize: 15,
     color: COLORS.TEXT.SECONDARY,
-    fontWeight: '500',
-    lineHeight: 22,
+    marginBottom: 4,
   },
   exampleNote: {
-    fontSize: 12,
-    color: COLORS.TEXT.DARKER,
-    marginLeft: 6,
-    flex: 1,
+    fontSize: 13,
+    color: COLORS.TEXT.LIGHT,
+    fontStyle: 'italic',
   },
   exampleEnglish: {
     fontSize: 16,
-    fontWeight: '600',
     color: COLORS.TEXT.PRIMARY,
-    lineHeight: 24,
+    fontWeight: '500',
+    marginBottom: 6,
   },
   exampleActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
-    paddingTop: 8,
-    marginTop: 8,
+    justifyContent: 'flex-end',
+    marginTop: 6,
   },
   exampleActionButton: {
-    padding: 8,
-    marginLeft: 8,
-    backgroundColor: COLORS.WHITE,
-    borderRadius: 20,
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.BORDER.LIGHTER,
+    padding: 6,
+    marginLeft: 10,
   },
   savedExampleButton: {
     backgroundColor: COLORS.PRIMARY,
-    borderColor: COLORS.PRIMARY,
   },
   richContentContainer: {
     marginTop: 16,
@@ -920,7 +926,7 @@ const styles = StyleSheet.create({
   },
   contentItemEnglish: {
     fontSize: 14,
-    color: COLORS.TEXT.LIGHT,
+    color: COLORS.TEXT.PRIMARY,
   },
   contentExample: {
     marginTop: 10,
@@ -962,7 +968,6 @@ const styles = StyleSheet.create({
   },
   contentExampleAction: {
     padding: 6,
-    marginLeft: 8,
     backgroundColor: COLORS.WHITE,
     borderRadius: 16,
     width: 32,
@@ -971,6 +976,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: COLORS.BORDER.LIGHT,
+    marginRight: 8,
   },
   contentItemDescription: {
     marginTop: 8,
@@ -981,17 +987,14 @@ const styles = StyleSheet.create({
   },
   contentItemDescriptionText: {
     fontSize: 14,
-    color: COLORS.TEXT.LIGHT,
+    color: COLORS.TEXT.DARKER,
   },
   contentBlocksContainer: {
-    marginTop: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-    padding: 0,
+    marginTop: 12,
   },
   situationHeader: {
-    marginBottom: 16,
-    marginTop: 8,
+    marginBottom: 12,
+    marginTop: 4,
   },
   situationHeaderText: {
     fontSize: 16,
@@ -999,7 +1002,7 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT.PRIMARY,
   },
   situationText: {
-    marginBottom: 16,
+    marginBottom: 12,
     paddingHorizontal: 4,
   },
   situationTextContent: {
@@ -1013,7 +1016,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.BACKGROUND.BLUE_LIGHT,
     padding: 12,
     borderRadius: 8,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   situationNoteText: {
     flex: 1,
@@ -1024,7 +1027,7 @@ const styles = StyleSheet.create({
   },
   situationSection: {
     marginBottom: 16,
-    padding: 4,
+    paddingLeft: 4,
   },
   situationSectionHeader: {
     flexDirection: 'row',
@@ -1047,31 +1050,17 @@ const styles = StyleSheet.create({
     marginLeft: 24,
     marginBottom: 4,
   },
-  situationExampleLabel: {
-    fontSize: 14,
-    color: COLORS.TEXT.SECONDARY,
-    marginBottom: 6,
-  },
-  situationExampleContext: {
-    padding: 8,
-    backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
   situationExampleContextText: {
     fontSize: 14,
     color: COLORS.TEXT.SECONDARY,
     lineHeight: 20,
     marginBottom: 10,
-  },
-  situationExampleContent: {
-    backgroundColor: COLORS.BACKGROUND.BLUE_LIGHT,
-    borderRadius: 8,
-    padding: 12,
-    marginLeft: 0,
+    fontStyle: 'italic',
   },
   situationExampleSentenceContainer: {
-    // 必要に応じて追加のスタイリング
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 6,
   },
   englishSentenceContainer: {
     flexDirection: 'row',
@@ -1080,11 +1069,10 @@ const styles = StyleSheet.create({
   },
   sentenceIcon: {
     marginRight: 6,
-    marginTop: 1,
+    marginTop: 2,
   },
   situationExampleEnglish: {
     fontSize: 15,
-    fontWeight: 'normal',
     color: COLORS.TEXT.PRIMARY,
     flex: 1,
     lineHeight: 22,
@@ -1092,25 +1080,25 @@ const styles = StyleSheet.create({
   situationExampleTranslation: {
     fontSize: 14,
     color: COLORS.TEXT.SECONDARY,
-    fontStyle: 'normal',
     marginLeft: 24,
     lineHeight: 20,
   },
   compactExampleItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingVertical: 12,
     paddingHorizontal: 4,
   },
   compactExampleContent: {
     flex: 1,
+    marginRight: 8,
   },
   compactExampleJapanese: {
     fontSize: 15,
     color: COLORS.TEXT.SECONDARY,
     fontWeight: '500',
     lineHeight: 22,
+    marginBottom: 2,
   },
   compactExampleEnglish: {
     fontSize: 16,
@@ -1121,26 +1109,21 @@ const styles = StyleSheet.create({
   compactNoteContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 6,
+    marginTop: 6,
     backgroundColor: COLORS.BACKGROUND.BLUE_LIGHT,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 6,
-    marginRight: 8,
+    alignSelf: 'flex-start',
   },
   compactExampleNote: {
     fontSize: 12,
     color: COLORS.TEXT.DARKER,
     marginLeft: 6,
-    flex: 1,
-    marginRight: 8,
-    textAlignVertical: 'center',
     lineHeight: 16,
   },
   compactExampleActions: {
     flexDirection: 'column',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
   },
   compactActionButton: {
     padding: 6,
