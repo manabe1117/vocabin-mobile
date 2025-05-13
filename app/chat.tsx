@@ -31,6 +31,7 @@ interface Message {
   examples?: Example[];
   richContent?: RichContent;
   contentBlocks?: ContentBlock[];
+  sessionId?: string;
 }
 
 // 例文の型定義
@@ -81,8 +82,9 @@ const ChatScreen = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
-  // 初期メッセージの設定 (セッションがある場合のみ)
+  // 初期メッセージの設定とセッションIDのリセット
   useEffect(() => {
     if (session) {
       setMessages([
@@ -93,16 +95,17 @@ const ChatScreen = () => {
           timestamp: new Date(),
         }
       ]);
+      setCurrentSessionId(null);
     } else {
-      setMessages([]); // セッションがない場合はクリア
+      setMessages([]);
+      setCurrentSessionId(null);
     }
   }, [session]);
 
   // 会話履歴をAIに渡す形式で生成する関数
   const getChatHistoryForAI = (currentMessages: Message[]): { role: 'user' | 'model'; parts: { text: string }[] }[] => {
-    // AIの初期メッセージや、エラーメッセージは履歴に含めないなどの調整をここで行う
     return currentMessages
-      .filter(msg => msg.id !== 'initial-ai-message' && !msg.id.endsWith('-error')) // 例: 初期メッセージとエラーを除外
+      .filter(msg => msg.id !== 'initial-ai-message' && !msg.id.endsWith('-error'))
       .map(msg => ({
         role: msg.sender === 'user' ? 'user' : 'model',
         parts: [{ text: msg.text }]
@@ -114,10 +117,11 @@ const ChatScreen = () => {
     if (!inputText.trim() || !session?.user) return;
 
     const userMessage: Message = {
-      id: Date.now().toString() + '-user', // 意図的に '-user' を付与
+      id: Date.now().toString() + '-user',
       text: inputText,
       sender: 'user',
       timestamp: new Date(),
+      sessionId: currentSessionId ?? undefined,
     };
 
     const currentInput = inputText;
@@ -131,13 +135,14 @@ const ChatScreen = () => {
     setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
-      const chatHistoryForAI = getChatHistoryForAI(messages); // AIに渡す履歴を取得 (userMessage追加前のもの)
+      const chatHistoryForAI = getChatHistoryForAI(messages);
 
       // Supabase Edge Function を呼び出す
       const { data: aiResponseMessageData, error: functionError } = await supabase.functions.invoke('get-chat-response', {
         body: {
-          userInput: currentInput, // ユーザーの現在の入力
-          history: chatHistoryForAI, // AIへのコンテキスト用履歴
+          userInput: currentInput,
+          history: chatHistoryForAI,
+          sessionId: currentSessionId,
         },
       });
 
@@ -145,30 +150,48 @@ const ChatScreen = () => {
         throw functionError;
       }
 
-      if (aiResponseMessageData && aiResponseMessageData.text) { // Functionからの応答はAIメッセージオブジェクトそのもの
-        const aiMessage: Message = {
-          id: aiResponseMessageData.id, // Functionが生成したID
-          text: aiResponseMessageData.text,
-          sender: 'ai',
-          timestamp: new Date(aiResponseMessageData.timestamp), // ISO文字列からDateへ
-          examples: aiResponseMessageData.examples?.map((ex: any) => ({
-            id: ex.id || `client-temp-${Date.now()}`, // クライアント用の一時ID
-            japanese: ex.japanese,
-            english: ex.english,
-            note: ex.note,
-            saved: false, // UI上の初期状態
-            sentence_id: ex.sentence_id, // ★ Functionから渡されたsentence_id
-          })) || undefined,
-          richContent: aiResponseMessageData.richContent,
-          contentBlocks: aiResponseMessageData.contentBlocks,
-        };
-        setMessages(prev => [...prev, aiMessage]);
+      if (aiResponseMessageData) {
+        const newSessionIdFromServer = aiResponseMessageData.sessionId;
+        if (newSessionIdFromServer) {
+          setCurrentSessionId(newSessionIdFromServer);
+        }
+
+        if (aiResponseMessageData.text) {
+          const aiMessage: Message = {
+            id: aiResponseMessageData.id,
+            text: aiResponseMessageData.text,
+            sender: 'ai',
+            timestamp: new Date(aiResponseMessageData.timestamp),
+            examples: aiResponseMessageData.examples?.map((ex: any) => ({
+              id: ex.id || `client-temp-${Date.now()}`,
+              japanese: ex.japanese,
+              english: ex.english,
+              note: ex.note,
+              saved: false,
+              sentence_id: ex.sentence_id,
+            })) || undefined,
+            richContent: aiResponseMessageData.richContent,
+            contentBlocks: aiResponseMessageData.contentBlocks,
+            sessionId: newSessionIdFromServer,
+          };
+          setMessages(prev => [...prev, aiMessage]);
+        } else {
+          const fallbackErrorMsg: Message = {
+            id: Date.now().toString() + '-ai-error',
+            text: '申し訳ありません。AIからの応答を正しく処理できませんでした。',
+            sender: 'ai',
+            timestamp: new Date(),
+            sessionId: newSessionIdFromServer,
+          };
+          setMessages(prev => [...prev, fallbackErrorMsg]);
+        }
       } else {
         const fallbackErrorMsg: Message = {
-          id: Date.now().toString() + '-ai-error',
-          text: '申し訳ありません。AIからの応答を正しく処理できませんでした。',
+          id: Date.now().toString() + '-ai-error-nodata',
+          text: '申し訳ありません。AIからの応答がありませんでした。',
           sender: 'ai',
           timestamp: new Date(),
+          sessionId: currentSessionId ?? undefined,
         };
         setMessages(prev => [...prev, fallbackErrorMsg]);
       }
@@ -181,6 +204,7 @@ const ChatScreen = () => {
         text: `申し訳ありません。エラーが発生しました。(${errorMessageText})`,
         sender: 'ai',
         timestamp: new Date(),
+        sessionId: currentSessionId ?? undefined,
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
@@ -581,7 +605,10 @@ const ChatScreen = () => {
         
         <View style={styles.inputContainer}>
           <Link href="/history" asChild>
-            <TouchableOpacity style={styles.historyButton}>
+            <TouchableOpacity 
+              style={styles.historyButton}
+              onPress={() => setCurrentSessionId(null)}
+            >
               <Ionicons name="time-outline" size={24} color={COLORS.PRIMARY} />
             </TouchableOpacity>
           </Link>

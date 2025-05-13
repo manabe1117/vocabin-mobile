@@ -2933,7 +2933,21 @@ CREATE TABLE public.chat_histories (
     rich_content jsonb,
     content_blocks jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    session_id uuid,
     CONSTRAINT chat_histories_sender_check CHECK ((sender = ANY (ARRAY['user'::text, 'ai'::text])))
+);
+
+
+--
+-- Name: chat_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.chat_sessions (
+    session_id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    user_id uuid NOT NULL,
+    summary text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_message_timestamp timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -3680,6 +3694,14 @@ ALTER TABLE ONLY public.chat_histories
 
 
 --
+-- Name: chat_sessions chat_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_sessions
+    ADD CONSTRAINT chat_sessions_pkey PRIMARY KEY (session_id);
+
+
+--
 -- Name: level_progress level_progress_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4176,6 +4198,20 @@ CREATE INDEX users_is_anonymous_idx ON auth.users USING btree (is_anonymous);
 
 
 --
+-- Name: idx_chat_histories_session_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_histories_session_id ON public.chat_histories USING btree (session_id);
+
+
+--
+-- Name: idx_chat_sessions_user_id_last_message_timestamp; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_sessions_user_id_last_message_timestamp ON public.chat_sessions USING btree (user_id, last_message_timestamp DESC);
+
+
+--
 -- Name: idx_level_progress_level_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4453,11 +4489,27 @@ ALTER TABLE ONLY auth.sso_domains
 
 
 --
+-- Name: chat_histories chat_histories_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_histories
+    ADD CONSTRAINT chat_histories_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.chat_sessions(session_id) ON DELETE CASCADE;
+
+
+--
 -- Name: chat_histories chat_histories_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.chat_histories
     ADD CONSTRAINT chat_histories_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: chat_sessions chat_sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_sessions
+    ADD CONSTRAINT chat_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
 
 
 --
@@ -4744,10 +4796,31 @@ CREATE POLICY "Everyone can view vocabulary" ON public.bk_vocabulary FOR SELECT 
 
 
 --
+-- Name: chat_sessions Users can delete their own chat sessions; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can delete their own chat sessions" ON public.chat_sessions FOR DELETE USING ((auth.uid() = user_id));
+
+
+--
+-- Name: chat_sessions Users can insert their own chat sessions; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can insert their own chat sessions" ON public.chat_sessions FOR INSERT WITH CHECK ((auth.uid() = user_id));
+
+
+--
 -- Name: translation_history Users can insert their own translation history; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can insert their own translation history" ON public.translation_history FOR INSERT WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: chat_sessions Users can update their own chat sessions; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can update their own chat sessions" ON public.chat_sessions FOR UPDATE USING ((auth.uid() = user_id));
 
 
 --
@@ -4762,6 +4835,13 @@ CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE
 --
 
 CREATE POLICY "Users can update their own translation history" ON public.translation_history FOR UPDATE USING ((auth.uid() = user_id));
+
+
+--
+-- Name: chat_sessions Users can view their own chat sessions; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can view their own chat sessions" ON public.chat_sessions FOR SELECT USING ((auth.uid() = user_id));
 
 
 --
@@ -4811,6 +4891,12 @@ CREATE POLICY chat_histories_select_policy ON public.chat_histories FOR SELECT U
 
 CREATE POLICY chat_histories_update_policy ON public.chat_histories FOR UPDATE USING ((user_id = public.get_my_user_id())) WITH CHECK ((user_id = public.get_my_user_id()));
 
+
+--
+-- Name: chat_sessions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: level_progress; Type: ROW SECURITY; Schema: public; Owner: -

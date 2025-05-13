@@ -4,6 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js";
 import { corsHeaders } from '../_shared/cors-headers.ts';
 // Zod ライブラリをインポート (リクエストボディのバリデーション用)
 import { z } from "https://deno.land/x/zod@v3.22.4/index.ts";
+import { v4 as uuidv4 } from "npm:uuid";
 
 // 環境変数から Gemini API キーを取得
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
@@ -20,6 +21,7 @@ const requestBodySchema = z.object({
       text: z.string(),
     })),
   })).optional(),
+  sessionId: z.string().uuid().nullable().optional(), // ★ 追加: セッションID (null許容、任意)
 });
 // リクエストボディの型 (スキーマから推論)
 type RequestBody = z.infer<typeof requestBodySchema>;
@@ -41,6 +43,95 @@ interface ExampleOutput {
   saved: boolean;
   note?: string;
   sentence_id?: number; // ★追加: sentenceテーブルのIDを追加
+}
+
+// ChatHistory テーブルの型 (保存用)
+interface ChatHistoryInsert {
+  user_id: string;
+  session_id: string; // ★ 追加
+  message_id: string;
+  sender: 'user' | 'ai';
+  text_content: string;
+  timestamp?: string; // DBのデフォルトに任せる場合もある
+  examples?: ExampleOutput[] | null;
+  // richContent や contentBlocks も必要に応じて追加
+}
+
+// セッションを管理する関数 (取得または作成)
+async function ensureChatSession(
+  supabase: SupabaseClient,
+  userId: string,
+  sessionId: string | null | undefined,
+  firstUserMessage: string
+): Promise<string> {
+  if (sessionId) {
+    // セッションIDがある場合、存在確認と最終更新日時をアップデート
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .update({ last_message_timestamp: new Date().toISOString() })
+      .eq('session_id', sessionId)
+      .eq('user_id', userId) // 念のためユーザーIDも確認
+      .select('session_id')
+      .maybeSingle(); // 単一の結果、または null
+
+    if (error) {
+      console.error("Error updating chat session:", error);
+      // エラーが発生しても処理を続行するが、新しいセッションを作る可能性も検討
+      // ここでは既存の sessionId を返す試みをする
+      return sessionId;
+    }
+    if (data) {
+      console.log(`Chat session ${sessionId} updated.`);
+      return sessionId; // 既存のセッションIDを返す
+    }
+    // 指定されたsessionIdが見つからない場合 (またはユーザーが異なる場合) は新規作成フローへ
+    console.warn(`Session ID ${sessionId} not found for user ${userId}, creating a new session.`);
+  }
+
+  // セッションIDがない、または見つからなかった場合、新しいセッションを作成
+  const newSessionId = uuidv4();
+  // 簡単な要約を生成 (最初のユーザーメッセージの冒頭部分など)
+  const summaryText = `ユーザー: ${firstUserMessage.substring(0, 50)}${firstUserMessage.length > 50 ? '...' : ''}`;
+  const now = new Date().toISOString();
+
+  const { data: newSession, error: insertError } = await supabase
+    .from('chat_sessions')
+    .insert({
+      session_id: newSessionId,
+      user_id: userId,
+      summary: summaryText,
+      created_at: now,
+      last_message_timestamp: now,
+    })
+    .select('session_id')
+    .single(); // 作成したセッションIDを取得
+
+  if (insertError) {
+    console.error("Error creating new chat session:", insertError);
+    throw new Error("Failed to create a new chat session.");
+  }
+
+  console.log(`New chat session ${newSessionId} created.`);
+  return newSession.session_id;
+}
+
+// ログメッセージをDBに保存する関数
+async function logChatMessage(
+  supabase: SupabaseClient,
+  messageData: ChatHistoryInsert
+) {
+  try {
+    const { error } = await supabase
+      .from('chat_histories')
+      .insert(messageData);
+    if (error) {
+      console.error(`Error saving message (sender: ${messageData.sender}):`, error);
+    } else {
+      console.log(`Message (sender: ${messageData.sender}) saved to chat_histories.`);
+    }
+  } catch (e) {
+    console.error(`Exception saving message (sender: ${messageData.sender}):`, e);
+  }
 }
 
 // Deno の HTTP サーバーを起動
@@ -101,8 +192,30 @@ Deno.serve(async (req) => {
     // 認証されたユーザーIDを取得
     const userId = user.id;
 
-    // ユーザー入力の取得 (リクエストボディから)
-    const { userInput, history } = validatedBody.data;
+    // ユーザー入力とセッションIDの取得
+    const { userInput, history, sessionId: requestedSessionId } = validatedBody.data;
+
+    // --- セッション処理 ---
+    const currentSessionId = await ensureChatSession(
+      supabaseClient,
+      userId,
+      requestedSessionId,
+      userInput
+    );
+    // --- セッション処理完了 ---
+
+    // --- ユーザーメッセージ保存 ---
+    const userMessageId = `${Date.now().toString()}-user`;
+    const userMessageData: ChatHistoryInsert = {
+      user_id: userId,
+      session_id: currentSessionId, // ★ session_id を含める
+      message_id: userMessageId,
+      sender: 'user',
+      text_content: userInput,
+      timestamp: new Date().toISOString(),
+    };
+    await logChatMessage(supabaseClient, userMessageData); // 非同期でログ保存を実行 (完了を待たない)
+    // --- ユーザーメッセージ保存完了 ---
 
     const exampleJsonForPrompt = { // プロンプトで見せるためのJSON構造の例
       replyText: "string (ここにはユーザーへの通常の返答や説明を記述します。例文そのものはここには含めません。)",
@@ -267,9 +380,9 @@ Deno.serve(async (req) => {
       // replyText は textToParse のままなので、ここでは明示的な代入は不要
     }
 
-    // 例文が存在し、形式が正しい場合のみデータベースに保存
+    // --- 例文処理 & Sentence 保存 ---
     const examples: ExampleOutput[] = [];
-    const messageId = `${Date.now().toString()}-ai`; // AIメッセージのID (クライアント側で一意)
+    const aiMessageId = `${Date.now().toString()}-ai`; // AIメッセージのID (クライアント側で一意)
 
     if (generatedExamples && Array.isArray(generatedExamples) && generatedExamples.length > 0) {
       console.log(`Processing ${generatedExamples.length} examples for database insertion...`);
@@ -296,7 +409,7 @@ Deno.serve(async (req) => {
               console.error(`Error inserting sentence #${i}:`, insertError);
               // 保存に失敗してもクライアントには返す (sentence_id なし)
               examples.push({
-                id: `${messageId}-ex-${i}`,
+                id: `${aiMessageId}-ex-${i}`,
                 japanese: ex.japanese,
                 english: ex.english,
                 note: ex.note,
@@ -306,7 +419,7 @@ Deno.serve(async (req) => {
               console.log(`Successfully inserted sentence #${i} with ID ${insertedSentence[0].id}`);
               // 保存成功: sentence_id 付きで例文をクライアントに返す
               examples.push({
-                id: `${messageId}-ex-${i}`,
+                id: `${aiMessageId}-ex-${i}`,
                 japanese: ex.japanese,
                 english: ex.english,
                 note: ex.note,
@@ -318,7 +431,7 @@ Deno.serve(async (req) => {
             console.error(`Exception in sentence insertion for example #${i}:`, dbError);
             // エラーが発生しても他の例文の処理を継続
             examples.push({
-              id: `${messageId}-ex-${i}`, 
+              id: `${aiMessageId}-ex-${i}`, 
               japanese: ex.japanese,
               english: ex.english,
               note: ex.note,
@@ -330,56 +443,28 @@ Deno.serve(async (req) => {
         }
       }
     }
+    // --- 例文処理完了 ---
 
-    // ユーザーメッセージをchat_historiesテーブルに保存
-    try {
-      const userMessageId = `${Date.now().toString()}-user`;
-      await supabaseClient
-        .from('chat_histories')
-        .insert({
-          user_id: userId,
-          message_id: userMessageId,
-          sender: 'user',
-          text_content: userInput,
-          timestamp: new Date().toISOString(),
-        });
-      
-      console.log('ユーザーメッセージをchat_historiesに保存しました');
-    } catch (userMsgError) {
-      console.error('ユーザーメッセージの保存中にエラーが発生しました:', userMsgError);
-      // クライアントへの応答には影響しない (ログのみ)
-    }
+    // --- AIメッセージ保存 ---
+    const aiMessageData: ChatHistoryInsert = {
+      user_id: userId,
+      session_id: currentSessionId, // ★ session_id を含める
+      message_id: aiMessageId,
+      sender: 'ai',
+      text_content: replyText,
+      timestamp: new Date().toISOString(),
+      examples: examples.length > 0 ? examples : null,
+    };
+    await logChatMessage(supabaseClient, aiMessageData); // 非同期でログ保存を実行
+    // --- AIメッセージ保存完了 ---
 
-    // AIメッセージをchat_historiesテーブルに保存
-    try {
-      const { data: insertedChatHistory, error: chatInsertError } = await supabaseClient
-        .from('chat_histories')
-        .insert({
-          user_id: userId,
-          message_id: messageId,
-          sender: 'ai',
-          text_content: replyText,
-          timestamp: new Date().toISOString(),
-          examples: examples.length > 0 ? examples : null,
-        })
-        .select();
-
-      if (chatInsertError) {
-        console.error('Error inserting AI message to chat_histories:', chatInsertError);
-      } else {
-        console.log('Successfully saved AI message to chat_histories');
-      }
-    } catch (chatError) {
-      console.error('Exception in chat_histories insertion:', chatError);
-      // クライアントへの応答には影響しない (ログのみ)
-    }
-
-    // クライアントへの応答: AIテキスト, 例文リスト, メッセージID, タイムスタンプ
+    // クライアントへの応答: AIテキスト, 例文リスト, メッセージID, タイムスタンプ, セッションID
     const responseToClient = {
-      id: messageId,
+      id: aiMessageId,
+      sessionId: currentSessionId, // ★ session_id を返す
       text: replyText,
       examples: examples,
-      timestamp: new Date().toISOString(),
+      timestamp: aiMessageData.timestamp, // 保存したメッセージのタイムスタンプ
     };
     
     return new Response(JSON.stringify(responseToClient), {
