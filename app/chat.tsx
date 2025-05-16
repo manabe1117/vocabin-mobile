@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 import { ThemedView } from '../components/ThemedView';
@@ -83,10 +83,47 @@ const ChatScreen = () => {
   const [isLoading, setIsLoading] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const { id: sessionIdFromParams } = useLocalSearchParams<{ id?: string }>();
 
-  // 初期メッセージの設定とセッションIDのリセット
   useEffect(() => {
-    if (session) {
+    const fetchHistoryMessages = async (sessionId: string) => {
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('get-chat-session-messages', {
+          body: { sessionId }
+        });
+        if (error) throw error;
+        if (Array.isArray(data)) {
+          const loadedMessages: Message[] = data.map((msg: any) => ({
+            id: msg.id,
+            text: msg.text,
+            sender: msg.sender,
+            timestamp: new Date(msg.timestamp),
+            examples: msg.examples,
+            richContent: msg.richContent,
+            contentBlocks: msg.contentBlocks,
+            sessionId: msg.sessionId,
+          }));
+          setMessages(loadedMessages);
+          setCurrentSessionId(sessionId);
+        }
+      } catch (e) {
+        setMessages([
+          {
+            id: 'error',
+            text: '履歴の取得に失敗しました。',
+            sender: 'ai',
+            timestamp: new Date(),
+          }
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (session && sessionIdFromParams) {
+      fetchHistoryMessages(sessionIdFromParams as string);
+    } else if (session) {
       setMessages([
         {
           id: 'initial-ai-message',
@@ -100,7 +137,7 @@ const ChatScreen = () => {
       setMessages([]);
       setCurrentSessionId(null);
     }
-  }, [session]);
+  }, [session, sessionIdFromParams]);
 
   // 会話履歴をAIに渡す形式で生成する関数
   const getChatHistoryForAI = (currentMessages: Message[]): { role: 'user' | 'model'; parts: { text: string }[] }[] => {
@@ -604,7 +641,7 @@ const ChatScreen = () => {
         </ScrollView>
         
         <View style={styles.inputContainer}>
-          <Link href="/history" asChild>
+          <Link href="/chat-history" asChild>
             <TouchableOpacity 
               style={styles.historyButton}
               onPress={() => setCurrentSessionId(null)}
