@@ -18,6 +18,19 @@ interface ChatSession {
   summary?: string | null;
 }
 
+// 日付を日本時間（JST）で返す
+function formatDateTimeJp(dateString: string): string {
+  const date = new Date(dateString);
+  // UTC→JST
+  const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  const yyyy = jst.getFullYear();
+  const mm = String(jst.getMonth() + 1).padStart(2, '0');
+  const dd = String(jst.getDate()).padStart(2, '0');
+  const hh = String(jst.getHours()).padStart(2, '0');
+  const min = String(jst.getMinutes()).padStart(2, '0');
+  return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
+}
+
 // 最初のメッセージから要約を生成するヘルパー関数
 async function generateSummaryFromFirstMessage(supabase: SupabaseClient, sessionId: string): Promise<string> {
   const { data: firstMsgData, error: firstMsgError } = await supabase
@@ -32,9 +45,9 @@ async function generateSummaryFromFirstMessage(supabase: SupabaseClient, session
     if (firstMsgError) console.error(`Error fetching first message for session ${sessionId} to generate summary:`, firstMsgError.message);
     return '会話の開始'; // デフォルトの要約
   }
-  const prefix = firstMsgData.sender === 'user' ? 'User' : 'AI';
+  let prefix = firstMsgData.sender === 'user' ? 'あなた：' : 'AI：';
   const contentPreview = firstMsgData.text_content.substring(0, 30);
-  return `${prefix}: ${contentPreview}${firstMsgData.text_content.length > 30 ? '...' : ''}`;
+  return `${prefix}${contentPreview}${firstMsgData.text_content.length > 30 ? '...' : ''}`;
 }
 
 Deno.serve(async (req: Request) => {
@@ -114,7 +127,7 @@ Deno.serve(async (req: Request) => {
           const summary = session.summary || await generateSummaryFromFirstMessage(supabaseClient, session.session_id);
           return {
             id: session.session_id,
-            date: new Date(session.created_at).toLocaleDateString('ja-JP'),
+            date: formatDateTimeJp(session.created_at),
             summary: summary,
             lastMessage: 'メッセージ取得エラー',
             messageCount: 0,
@@ -124,9 +137,9 @@ Deno.serve(async (req: Request) => {
         const messageCount = count || 0;
         let lastMessageText = 'メッセージなし';
         if (lastMessageData) {
-          const prefix = lastMessageData.sender === 'user' ? 'User' : 'AI';
+          let prefix = lastMessageData.sender === 'user' ? 'You:' : 'AI:';
           const contentPreview = lastMessageData.text_content.substring(0, 50);
-          lastMessageText = `${prefix}: ${contentPreview}${lastMessageData.text_content.length > 50 ? '...' : ''}`;
+          lastMessageText = `${prefix}${contentPreview}${lastMessageData.text_content.length > 50 ? '...' : ''}`;
         }
 
         // 要約の処理 (セッションにsummaryがなければ最初のメッセージから生成)
@@ -134,7 +147,7 @@ Deno.serve(async (req: Request) => {
         
         return {
           id: session.session_id,
-          date: new Date(session.created_at).toLocaleDateString('ja-JP'),
+          date: formatDateTimeJp(session.created_at),
           summary: summary,
           lastMessage: lastMessageText,
           messageCount: messageCount,

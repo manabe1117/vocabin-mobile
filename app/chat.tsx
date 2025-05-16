@@ -641,7 +641,10 @@ const ChatScreen = () => {
         </ScrollView>
         
         <View style={styles.inputContainer}>
-          <Link href="/chat-history" asChild>
+          <Link
+            href={currentSessionId ? { pathname: "/chat-history", params: { id: currentSessionId } } : "/chat-history"}
+            asChild
+          >
             <TouchableOpacity 
               style={styles.historyButton}
               onPress={() => setCurrentSessionId(null)}

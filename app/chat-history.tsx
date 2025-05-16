@@ -9,9 +9,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Link, useRouter } from 'expo-router';
+import { Link, useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { useFocusEffect } from '@react-navigation/native';
 
 const COLORS = {
   BACKGROUND: {
@@ -44,59 +45,59 @@ const ChatHistoryScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const { session } = useAuth() as { session: any | null };
   const router = useRouter();
+  const { id: sessionIdFromParams } = useLocalSearchParams<{ id?: string }>();
 
-  useEffect(() => {
-    const fetchHistory = async () => {
-      if (!session?.user) {
-        setError('ユーザーが認証されていません。');
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-      try {
-        const { data: historyData, error: functionError } = await supabase.functions.invoke(
-          'get-chat-history'
-        );
-
-        if (functionError) {
-          const errMsg = functionError.message || (typeof functionError === 'string' ? functionError : 'Function execution failed');
-          if ((functionError as any).details) {
-            console.error('Function error details:', (functionError as any).details);
-          }
-          throw new Error(errMsg);
-        }
-
-        if (Array.isArray(historyData)) {
-            const transformedItems: HistoryItem[] = historyData.map((item: any) => ({
-                id: item.id, 
-                date: item.date,
-                summary: item.summary || '要約なし',
-                lastMessage: item.lastMessage || 'メッセージなし',
-                messageCount: item.messageCount || 0,
-            }));
-            setHistoryItems(transformedItems);
-        } else {
-            console.warn('Unexpected data format from get-chat-history function. Expected array, got:', historyData);
-            setHistoryItems([]);
-        }
-      } catch (e: any) {
-        console.error('Failed to fetch chat history via function:', e);
-        const message = e.message || '不明なエラー';
-        setError(`チャット履歴の取得に失敗しました。(${message})`);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (session) {
-      fetchHistory();
-    } else {
+  const fetchHistory = async () => {
+    if (!session?.user) {
       setError('ユーザーが認証されていません。');
       setLoading(false);
+      return;
     }
-  }, [session]);
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: historyData, error: functionError } = await supabase.functions.invoke(
+        'get-chat-history'
+      );
+      if (functionError) {
+        const errMsg = functionError.message || (typeof functionError === 'string' ? functionError : 'Function execution failed');
+        if ((functionError as any).details) {
+          console.error('Function error details:', (functionError as any).details);
+        }
+        throw new Error(errMsg);
+      }
+      if (Array.isArray(historyData)) {
+        const transformedItems: HistoryItem[] = historyData.map((item: any) => ({
+          id: item.id, 
+          date: item.date,
+          summary: item.summary || '要約なし',
+          lastMessage: item.lastMessage || 'メッセージなし',
+          messageCount: item.messageCount || 0,
+        }));
+        setHistoryItems(transformedItems);
+      } else {
+        console.warn('Unexpected data format from get-chat-history function. Expected array, got:', historyData);
+        setHistoryItems([]);
+      }
+    } catch (e: any) {
+      console.error('Failed to fetch chat history via function:', e);
+      const message = e.message || '不明なエラー';
+      setError(`チャット履歴の取得に失敗しました。(${message})`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (session) {
+        fetchHistory();
+      } else {
+        setError('ユーザーが認証されていません。');
+        setLoading(false);
+      }
+    }, [session])
+  );
 
   const handleSelectHistory = (item: HistoryItem) => {
     router.push({
@@ -119,7 +120,7 @@ const ChatHistoryScreen = () => {
             <Text style={styles.messageCountText}>{item.messageCount} 件</Text>
           </View>
         </View>
-        <Text style={styles.historyItemSummary} numberOfLines={1} ellipsizeMode="tail">{item.summary}</Text>
+        <Text style={styles.historyItemSummary} numberOfLines={1} ellipsizeMode="tail">{item.summary.replace(/^ユーザー:|^User:/, 'You:')}</Text>
         <Text
           style={styles.historyItemLastMessage}
           numberOfLines={1}
@@ -156,13 +157,16 @@ const ChatHistoryScreen = () => {
     return (
       <View style={styles.container}>
         <View style={styles.headerContainer}>
-            <Link href="/chat" asChild>
+          <Link
+            href={sessionIdFromParams ? { pathname: "/chat", params: { id: sessionIdFromParams } } : "/chat"}
+            asChild
+          >
             <TouchableOpacity style={styles.backButton}>
-                <Ionicons name="arrow-back" size={24} color={COLORS.PRIMARY} />
+              <Ionicons name="arrow-back" size={24} color={COLORS.PRIMARY} />
             </TouchableOpacity>
-            </Link>
-            <Text style={styles.headerTitle}>チャット履歴</Text>
-            <View style={{ width: 40 }} />
+          </Link>
+          <Text style={styles.headerTitle}>チャット履歴</Text>
+          <View style={{ width: 40 }} />
         </View>
         <View style={styles.centered}>
           <Ionicons name="chatbubbles-outline" size={48} color={COLORS.TEXT.SECONDARY} />
@@ -175,7 +179,10 @@ const ChatHistoryScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
-        <Link href="/chat" asChild>
+        <Link
+          href={sessionIdFromParams ? { pathname: "/chat", params: { id: sessionIdFromParams } } : "/chat"}
+          asChild
+        >
           <TouchableOpacity style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={COLORS.PRIMARY} />
           </TouchableOpacity>
@@ -292,6 +299,7 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT.PRIMARY,
     marginBottom: 8,
     lineHeight: 22,
+    paddingRight: 32,
   },
   historyItemLastMessage: {
     fontSize: 14,
