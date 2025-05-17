@@ -501,6 +501,18 @@ const ChatScreen = () => {
     }
   };
 
+  // 例文をすべて保存する関数
+  const handleSaveAllExamples = async (messageId: string, messageIdx: number) => {
+    const targetMessage = messages[messageIdx];
+    if (!targetMessage || !targetMessage.examples) return;
+    const unsavedExamples = targetMessage.examples
+      .map((ex, idx) => ({ ex, idx }))
+      .filter(({ ex }) => !ex.saved);
+    for (const { ex, idx } of unsavedExamples) {
+      await handleSaveExample(ex, messageIdx, idx);
+    }
+  };
+
   // メッセージアイテムのレンダリング
   const renderMessage = (message: Message, messageIdx?: number) => {
     const isUserMessage = message.sender === 'user';
@@ -553,7 +565,7 @@ const ChatScreen = () => {
         {!isUserMessage && message.examples && message.examples.length > 0 && (
           <>
             <TouchableOpacity
-              // onPress={() => handleSaveAllExamples(message.id)} // 一時的にコメントアウト
+              onPress={() => handleSaveAllExamples(message.id, messageIdx ?? 0)}
               style={styles.saveAllButton}
             >
               <Ionicons name="bookmark" size={16} color={COLORS.WHITE} style={{marginRight: 8}} />
