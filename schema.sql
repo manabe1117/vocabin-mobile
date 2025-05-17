@@ -3088,7 +3088,7 @@ CREATE TABLE public.study_status (
     study_date timestamp with time zone DEFAULT now() NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    box_level integer DEFAULT 1 NOT NULL,
+    box_level integer DEFAULT 0 NOT NULL,
     next_review_date timestamp with time zone DEFAULT now() NOT NULL,
     delete_flg boolean DEFAULT false NOT NULL,
     is_completed boolean DEFAULT false NOT NULL,
@@ -3115,6 +3115,26 @@ CREATE VIEW public.study_status_jst AS
     ss.is_completed
    FROM (public.study_status ss
      JOIN public.bk_vocabulary v ON ((ss.vocabulary_id = v.id)));
+
+
+--
+-- Name: study_status_sentence; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.study_status_sentence (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    user_id uuid NOT NULL,
+    sentence_id integer NOT NULL,
+    study_date timestamp with time zone DEFAULT now() NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    box_level integer DEFAULT 0 NOT NULL,
+    next_review_date timestamp with time zone DEFAULT now() NOT NULL,
+    delete_flg boolean DEFAULT false NOT NULL,
+    is_completed boolean DEFAULT false NOT NULL,
+    type integer,
+    CONSTRAINT study_status_sentence_box_level_check CHECK (((box_level >= 0) AND (box_level <= 6)))
+);
 
 
 --
@@ -3763,6 +3783,22 @@ ALTER TABLE ONLY public.study_status
 
 ALTER TABLE ONLY public.study_history
     ADD CONSTRAINT study_history_pkey1 PRIMARY KEY (id);
+
+
+--
+-- Name: study_status_sentence study_status_sentence_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.study_status_sentence
+    ADD CONSTRAINT study_status_sentence_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: study_status_sentence study_status_sentence_user_sentence_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.study_status_sentence
+    ADD CONSTRAINT study_status_sentence_user_sentence_unique UNIQUE (user_id, sentence_id);
 
 
 --
@@ -4569,6 +4605,22 @@ ALTER TABLE ONLY public.study_history
 
 
 --
+-- Name: study_status_sentence study_status_sentence_sentence_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.study_status_sentence
+    ADD CONSTRAINT study_status_sentence_sentence_id_fkey FOREIGN KEY (sentence_id) REFERENCES public.sentence(id) ON DELETE CASCADE;
+
+
+--
+-- Name: study_status_sentence study_status_sentence_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.study_status_sentence
+    ADD CONSTRAINT study_status_sentence_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+
+
+--
 -- Name: study_status_translation study_status_translation_translation_training_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4768,10 +4820,24 @@ CREATE POLICY "Enable delete access to users based on user_id" ON public.study_s
 
 
 --
+-- Name: study_status_sentence Enable delete access to users based on user_id; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Enable delete access to users based on user_id" ON public.study_status_sentence FOR DELETE TO authenticated USING ((public.get_my_user_id() = user_id));
+
+
+--
 -- Name: study_status Enable insert access to users based on user_id; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Enable insert access to users based on user_id" ON public.study_status FOR INSERT TO authenticated WITH CHECK ((public.get_my_user_id() = user_id));
+
+
+--
+-- Name: study_status_sentence Enable insert access to users based on user_id; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Enable insert access to users based on user_id" ON public.study_status_sentence FOR INSERT TO authenticated WITH CHECK ((public.get_my_user_id() = user_id));
 
 
 --
@@ -4782,10 +4848,24 @@ CREATE POLICY "Enable read access to users based on user_id" ON public.study_sta
 
 
 --
+-- Name: study_status_sentence Enable read access to users based on user_id; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Enable read access to users based on user_id" ON public.study_status_sentence FOR SELECT TO authenticated USING ((public.get_my_user_id() = user_id));
+
+
+--
 -- Name: study_status Enable update access to users based on user_id; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Enable update access to users based on user_id" ON public.study_status FOR UPDATE TO authenticated USING ((public.get_my_user_id() = user_id)) WITH CHECK ((public.get_my_user_id() = user_id));
+
+
+--
+-- Name: study_status_sentence Enable update access to users based on user_id; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Enable update access to users based on user_id" ON public.study_status_sentence FOR UPDATE TO authenticated USING ((public.get_my_user_id() = user_id)) WITH CHECK ((public.get_my_user_id() = user_id));
 
 
 --
@@ -4955,6 +5035,12 @@ CREATE POLICY study_history_user_policy ON public.study_history USING ((user_id 
 --
 
 ALTER TABLE public.study_status ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: study_status_sentence; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.study_status_sentence ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: study_status_translation; Type: ROW SECURITY; Schema: public; Owner: -
