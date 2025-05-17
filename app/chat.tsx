@@ -103,16 +103,25 @@ const ChatScreen = () => {
         });
         if (error) throw error;
         if (Array.isArray(data)) {
-          const loadedMessages: Message[] = data.map((msg: any) => ({
-            id: msg.id,
-            text: msg.text,
-            sender: msg.sender,
-            timestamp: new Date(msg.timestamp),
-            examples: msg.examples,
-            richContent: msg.richContent,
-            contentBlocks: msg.contentBlocks,
-            sessionId: msg.sessionId,
-          }));
+          // 例文の保存状態を取得
+          const loadedMessages: Message[] = await Promise.all(
+            data.map(async (msg: any) => {
+              let examples = msg.examples;
+              if (examples && Array.isArray(examples) && examples.length > 0) {
+                examples = await fetchExamplesSavedStatus(examples);
+              }
+              return {
+                id: msg.id,
+                text: msg.text,
+                sender: msg.sender,
+                timestamp: new Date(msg.timestamp),
+                examples,
+                richContent: msg.richContent,
+                contentBlocks: msg.contentBlocks,
+                sessionId: msg.sessionId,
+              };
+            })
+          );
           setMessages(loadedMessages);
           setCurrentSessionId(sessionId);
         }
@@ -155,6 +164,33 @@ const ChatScreen = () => {
         role: msg.sender === 'user' ? 'user' : 'model',
         parts: [{ text: msg.text }]
       }));
+  };
+
+  // 例文ごとの保存状態を一括取得し反映する
+  const fetchExamplesSavedStatus = async (examples: Example[]) => {
+    if (!session || !examples || examples.length === 0) return examples;
+    const sentenceIds = examples
+      .map((ex) => ex.sentence_id)
+      .filter((id): id is number => typeof id === 'number');
+    if (sentenceIds.length === 0) return examples;
+    try {
+      const { data, error } = await supabase.functions.invoke('get-study-status-sentence-bulk', {
+        method: 'POST',
+        body: { sentenceIds },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      if (error || !data) {
+        return examples.map((ex) => ({ ...ex, saved: false }));
+      }
+      return examples.map((ex) => ({
+        ...ex,
+        saved: ex.sentence_id && data[ex.sentence_id] ? true : false,
+      }));
+    } catch {
+      return examples.map((ex) => ({ ...ex, saved: false }));
+    }
   };
 
   // メッセージを送信する関数
@@ -202,19 +238,26 @@ const ChatScreen = () => {
         }
 
         if (aiResponseMessageData.text) {
+          let examples = aiResponseMessageData.examples?.map((ex: any) => ({
+            id: ex.id || `client-temp-${Date.now()}`,
+            japanese: ex.japanese,
+            english: ex.english,
+            note: ex.note,
+            saved: false,
+            sentence_id: ex.sentence_id,
+          })) || undefined;
+
+          // 例文ごとに保存状態を取得
+          if (examples && examples.length > 0) {
+            examples = await fetchExamplesSavedStatus(examples);
+          }
+
           const aiMessage: Message = {
             id: aiResponseMessageData.id,
             text: aiResponseMessageData.text,
             sender: 'ai',
             timestamp: new Date(aiResponseMessageData.timestamp),
-            examples: aiResponseMessageData.examples?.map((ex: any) => ({
-              id: ex.id || `client-temp-${Date.now()}`,
-              japanese: ex.japanese,
-              english: ex.english,
-              note: ex.note,
-              saved: false,
-              sentence_id: ex.sentence_id,
-            })) || undefined,
+            examples,
             richContent: aiResponseMessageData.richContent,
             contentBlocks: aiResponseMessageData.contentBlocks,
             sessionId: newSessionIdFromServer,
