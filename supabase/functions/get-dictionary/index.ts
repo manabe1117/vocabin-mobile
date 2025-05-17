@@ -134,6 +134,24 @@ async function translateToEnglish(japaneseWord: string): Promise<string[] | null
   }
 }
 
+// 検索履歴をUPSERTする関数
+async function upsertDictionarySearchHistory(userId: string, vocabularyId: number, vocabulary: string) {
+  // Supabaseクライアントのサービスロール権限で直接書き込み
+  const { error } = await supabase
+    .from('dictionary_search_history')
+    .upsert([
+      {
+        user_id: userId,
+        vocabulary_id: vocabularyId,
+        vocabulary: vocabulary,
+        searched_at: new Date().toISOString(),
+      }
+    ], { onConflict: ['user_id', 'vocabulary_id'] });
+  if (error) {
+    console.error('Error upserting dictionary_search_history:', error);
+  }
+}
+
 // Deno の HTTP サーバーを起動
 Deno.serve(async (req) => {
   // CORS プリフライトリクエスト (OPTIONS) の処理
@@ -155,6 +173,24 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Authorization ヘッダーから JWT を取得
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('Authorization header is missing');
+    }
+    const token = authHeader.replace('Bearer ', '');
+
+    // JWT を使用して認証
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      throw new Error('Unauthorized');
+    }
+    const userId: string = user.id;
+
     const requestBody = await req.json();
     const validatedBody = requestBodySchema.safeParse(requestBody);
 
@@ -176,6 +212,10 @@ Deno.serve(async (req) => {
       // 英語の場合：直接Supabaseで検索
       const existingVocabulary = await fetchVocabularyFromSupabase(vocabulary);
       if (existingVocabulary) {
+        // 履歴保存
+        if (typeof existingVocabulary.id === "number") {
+          await upsertDictionarySearchHistory(userId, existingVocabulary.id, existingVocabulary.vocabulary);
+        }
         return new Response(JSON.stringify(existingVocabulary), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 200,
@@ -183,7 +223,7 @@ Deno.serve(async (req) => {
       }
       // 存在しない場合はGeminiプロンプトへ
       const geminiApiResponse = await fetchGeminiApi(vocabulary);
-      return handleGeminiResponse(geminiApiResponse, vocabulary);
+      return await handleGeminiResponse(geminiApiResponse, vocabulary, userId);
     } else {
       // 英語以外の場合：まず翻訳
       const translations = await translateToEnglish(vocabulary);
@@ -198,6 +238,10 @@ Deno.serve(async (req) => {
         // 翻訳が1つの場合：Supabaseで検索
         const existingVocabulary = await fetchVocabularyFromSupabase(translations[0]);
         if (existingVocabulary) {
+          // 履歴保存
+          if (typeof existingVocabulary.id === "number") {
+            await upsertDictionarySearchHistory(userId, existingVocabulary.id, existingVocabulary.vocabulary);
+          }
           return new Response(JSON.stringify(existingVocabulary), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
@@ -205,7 +249,7 @@ Deno.serve(async (req) => {
         }
         // 存在しない場合はGeminiプロンプトへ
         const geminiApiResponse = await fetchGeminiApi(translations[0]);
-        return handleGeminiResponse(geminiApiResponse, translations[0]);
+        return await handleGeminiResponse(geminiApiResponse, translations[0], userId);
       } else {
         // 翻訳が複数の場合：選択肢として返す
         return new Response(JSON.stringify({ translations }), {
@@ -599,7 +643,8 @@ async function fetchGeminiApi(vocabulary: string): Promise<VocabularyData | Sugg
  */
 async function handleGeminiResponse(
   response: VocabularyData | SuggestionResponse,
-  vocabulary: string
+  vocabulary: string,
+  userId?: string
 ): Promise<Response> {
   if ('suggestions' in response) {
     return new Response(JSON.stringify(response), {
@@ -616,6 +661,10 @@ async function handleGeminiResponse(
     const existingVocabulary = await fetchVocabularyFromSupabase(response.vocabulary);
     if (existingVocabulary) {
       console.log(`Found existing data for normalized vocabulary: "${response.vocabulary}"`);
+      // 履歴保存
+      if (userId && typeof existingVocabulary.id === "number") {
+        await upsertDictionarySearchHistory(userId, existingVocabulary.id, existingVocabulary.vocabulary);
+      }
       return new Response(JSON.stringify(existingVocabulary), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
@@ -628,7 +677,10 @@ async function handleGeminiResponse(
     ...response,
     id: insertedId,
   };
-
+  // 履歴保存
+  if (userId && typeof insertedId === "number") {
+    await upsertDictionarySearchHistory(userId, insertedId, response.vocabulary);
+  }
   return new Response(JSON.stringify(formattedData), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     status: 200,

@@ -2952,6 +2952,19 @@ CREATE TABLE public.chat_sessions (
 
 
 --
+-- Name: dictionary_search_history; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.dictionary_search_history (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    user_id uuid NOT NULL,
+    vocabulary_id integer NOT NULL,
+    vocabulary text NOT NULL,
+    searched_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: level_progress; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3722,6 +3735,22 @@ ALTER TABLE ONLY public.chat_sessions
 
 
 --
+-- Name: dictionary_search_history dictionary_search_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dictionary_search_history
+    ADD CONSTRAINT dictionary_search_history_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: dictionary_search_history dictionary_search_history_user_id_vocabulary_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dictionary_search_history
+    ADD CONSTRAINT dictionary_search_history_user_id_vocabulary_id_key UNIQUE (user_id, vocabulary_id);
+
+
+--
 -- Name: level_progress level_progress_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4248,6 +4277,13 @@ CREATE INDEX idx_chat_sessions_user_id_last_message_timestamp ON public.chat_ses
 
 
 --
+-- Name: idx_dictionary_search_history_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_dictionary_search_history_user_id ON public.dictionary_search_history USING btree (user_id, searched_at DESC);
+
+
+--
 -- Name: idx_level_progress_level_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4546,6 +4582,22 @@ ALTER TABLE ONLY public.chat_histories
 
 ALTER TABLE ONLY public.chat_sessions
     ADD CONSTRAINT chat_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: dictionary_search_history dictionary_search_history_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dictionary_search_history
+    ADD CONSTRAINT dictionary_search_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: dictionary_search_history dictionary_search_history_vocabulary_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dictionary_search_history
+    ADD CONSTRAINT dictionary_search_history_vocabulary_id_fkey FOREIGN KEY (vocabulary_id) REFERENCES public.vocabulary(id);
 
 
 --
@@ -4979,6 +5031,26 @@ CREATE POLICY chat_histories_update_policy ON public.chat_histories FOR UPDATE U
 ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: dictionary_search_history delete_own_history; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY delete_own_history ON public.dictionary_search_history FOR DELETE USING ((user_id = public.get_my_user_id()));
+
+
+--
+-- Name: dictionary_search_history; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.dictionary_search_history ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: dictionary_search_history insert_own_history; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY insert_own_history ON public.dictionary_search_history FOR INSERT WITH CHECK ((user_id = public.get_my_user_id()));
+
+
+--
 -- Name: level_progress; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -4996,6 +5068,13 @@ CREATE POLICY level_progress_user_policy ON public.level_progress USING ((user_i
 --
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: dictionary_search_history select_own_history; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_own_history ON public.dictionary_search_history FOR SELECT USING ((user_id = public.get_my_user_id()));
+
 
 --
 -- Name: sentence; Type: ROW SECURITY; Schema: public; Owner: -
@@ -5060,6 +5139,13 @@ CREATE POLICY study_status_translation_user_policy ON public.study_status_transl
 --
 
 ALTER TABLE public.translation_history ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: dictionary_search_history update_own_history; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY update_own_history ON public.dictionary_search_history FOR UPDATE USING ((user_id = public.get_my_user_id())) WITH CHECK ((user_id = public.get_my_user_id()));
+
 
 --
 -- Name: messages; Type: ROW SECURITY; Schema: realtime; Owner: -
