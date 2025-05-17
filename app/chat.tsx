@@ -420,8 +420,46 @@ const ChatScreen = () => {
     }
   };
 
+  // 例文保存処理
+  const handleSaveExample = async (example: Example, messageIdx: number, exampleIdx: number) => {
+    if (!session) {
+      Alert.alert('エラー', 'ログインが必要です');
+      return;
+    }
+    if (!example.sentence_id) {
+      Alert.alert('エラー', '保存できる例文IDがありません');
+      return;
+    }
+    try {
+      const { data, error } = await supabase.functions.invoke('update-study-status-sentence', {
+        method: 'POST',
+        body: {
+          sentenceId: example.sentence_id
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      if (error) throw error;
+      // 保存状態をUIに反映
+      setMessages(prevMsgs => {
+        const newMsgs = [...prevMsgs];
+        const msg = newMsgs[messageIdx];
+        if (msg && msg.examples && msg.examples[exampleIdx]) {
+          msg.examples[exampleIdx] = {
+            ...msg.examples[exampleIdx],
+            saved: data.isSaved,
+          };
+        }
+        return newMsgs;
+      });
+    } catch (err) {
+      Alert.alert('エラー', '例文の保存に失敗しました');
+    }
+  };
+
   // メッセージアイテムのレンダリング
-  const renderMessage = (message: Message) => {
+  const renderMessage = (message: Message, messageIdx?: number) => {
     const isUserMessage = message.sender === 'user';
     
     return (
@@ -507,6 +545,7 @@ const ChatScreen = () => {
                       <Ionicons name="volume-medium-outline" size={16} color={COLORS.PRIMARY} />
                     </TouchableOpacity>
                     <TouchableOpacity
+                      onPress={() => handleSaveExample(example, messageIdx ?? 0, index)}
                       style={[
                         styles.compactActionButton,
                         example.saved && styles.savedExampleButton
@@ -591,7 +630,7 @@ const ChatScreen = () => {
           onLayout={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 50)}
           onContentSizeChange={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 50)}
         >
-          {(messages || []).map(renderMessage)}
+          {(messages || []).map((msg, idx) => renderMessage(msg, idx))}
           
           {isLoading && (
             <View style={styles.loadingContainer}>
