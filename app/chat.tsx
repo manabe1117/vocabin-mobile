@@ -11,10 +11,13 @@ import {
   Platform,
   Text,
   Alert,
+  Modal,
+  TouchableWithoutFeedback,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { Link, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 import { ThemedView } from '../components/ThemedView';
@@ -84,6 +87,12 @@ const ChatScreen = () => {
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const { id: sessionIdFromParams } = useLocalSearchParams<{ id?: string }>();
+  const router = useRouter();
+
+  // カスタムメニュー用 state
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0, width: 0 });
+  const menuButtonRef = useRef<View>(null);
 
   useEffect(() => {
     const fetchHistoryMessages = async (sessionId: string) => {
@@ -123,7 +132,7 @@ const ChatScreen = () => {
 
     if (session && sessionIdFromParams) {
       fetchHistoryMessages(sessionIdFromParams as string);
-    } else if (session) {
+    } else if (session && !sessionIdFromParams && currentSessionId === null) {
       setMessages([
         {
           id: 'initial-ai-message',
@@ -132,12 +141,11 @@ const ChatScreen = () => {
           timestamp: new Date(),
         }
       ]);
-      setCurrentSessionId(null);
-    } else {
+    } else if (!session) {
       setMessages([]);
       setCurrentSessionId(null);
     }
-  }, [session, sessionIdFromParams]);
+  }, [session, sessionIdFromParams, currentSessionId]);
 
   // 会話履歴をAIに渡す形式で生成する関数
   const getChatHistoryForAI = (currentMessages: Message[]): { role: 'user' | 'model'; parts: { text: string }[] }[] => {
@@ -258,110 +266,14 @@ const ChatScreen = () => {
   // テキストをクリップボードにコピーする
   const copyToClipboard = async (text: string) => {
     await Clipboard.setStringAsync(text);
-    Alert.alert('コピー完了', 'テキストをクリップボードにコピーしました');
+    // Alert.alert('コピー完了', 'テキストをクリップボードにコピーしました'); // Alertの代わりにToastなどを検討
+    console.log('Text copied to clipboard');
   };
-
-  // 例文を保存済みリストに追加するヘルパー関数
-  // const addExampleToSavedList = (exampleToAdd: Example) => { // 例文保存機能は後で実装
-  //   setSavedExamples(prev => {
-  //     const isAlreadySaved = prev.some(ex => ex.id === exampleToAdd.id && ex.japanese === exampleToAdd.japanese);
-  //     if (!isAlreadySaved) {
-  //       return [...prev, { ...exampleToAdd, saved: true }];
-  //     }
-  //     return prev;
-  //   });
-  // };
-
-  // 例文を保存済みリストから削除するヘルパー関数
-  // const removeExampleFromSavedList = (exampleToRemove: Example) => { // 例文保存機能は後で実装
-  //   setSavedExamples(prev => prev.filter(ex => !(ex.id === exampleToRemove.id && ex.japanese === exampleToRemove.japanese)));
-  // };
-
-  // 例文を保存する
-  // const saveExample = (messageId: string, exampleId: string) => { // 例文保存機能は後で実装
-    // let foundExample: Example | null = null;
-    // setMessages(prev =>
-    //   prev.map(message => {
-    //     if (message.id === messageId && message.examples) {
-    //       const updatedExamples = message.examples.map(example => {
-    //         if (example.id === exampleId) {
-    //           foundExample = { ...example, saved: !example.saved };
-    //           return foundExample;
-    //         }
-    //         return example;
-    //       });
-    //       return { ...message, examples: updatedExamples };
-    //     }
-    //     // contentBlocks内のexampleも対応
-    //     if (message.id === messageId && message.contentBlocks) {
-    //       const updatedBlocks = message.contentBlocks.map(block => {
-    //         if (block.type === 'example' && block.id === exampleId) {
-    //           const currentExample = block.content as Example;
-    //           foundExample = { ...currentExample, saved: !currentExample.saved };
-    //           return { ...block, content: foundExample };
-    //         }
-    //         return block;
-    //       });
-    //       return { ...message, contentBlocks: updatedBlocks };
-    //     }
-    //     return message;
-    //   })
-    // );
-    // if (foundExample) {
-    //   const currentExample: Example = foundExample;
-    //   if (currentExample.saved) {
-    //     addExampleToSavedList(currentExample);
-    //     Alert.alert('保存完了', '例文を単語帳に追加しました');
-    //   } else {
-    //     removeExampleFromSavedList(currentExample);
-    //     Alert.alert('解除完了', '例文を単語帳から削除しました');
-    //   }
-    // }
-  // };
-
-  // メッセージ内のすべての例文を保存する
-  // const handleSaveAllExamples = (messageId: string) => { // 例文保存機能は後で実装
-    // const targetMessage = messages.find(m => m.id === messageId);
-    // if (!targetMessage || !targetMessage.examples) return;
-    // let newExamplesAdded = false;
-    // const examplesToSave = targetMessage.examples.filter(ex => !ex.saved);
-    // if (examplesToSave.length === 0) {
-    //   Alert.alert('保存済み', 'すべての例文は既に単語帳に保存されています。');
-    //   return;
-    // }
-    // // メッセージ内の例文の保存状態を更新
-    // setMessages(prev =>
-    //   prev.map(message => {
-    //     if (message.id === messageId && message.examples) {
-    //       return {
-    //         ...message,
-    //         examples: message.examples.map((ex: Example) => ({
-    //           id: ex.id,
-    //           japanese: ex.japanese,
-    //           english: ex.english,
-    //           saved: true, 
-    //           note: ex.note,
-    //           // richContent や contentBlocks を持つ Example は現状ないと想定
-    //         })),
-    //       };
-    //     }
-    //     return message;
-    //   })
-    // );
-    // // 保存済み例文リストを更新
-    // examplesToSave.forEach(example => {
-    //   addExampleToSavedList({ ...example, saved: true });
-    //   newExamplesAdded = true;
-    // });
-    // if (newExamplesAdded) {
-    //   Alert.alert('すべて保存完了', '選択された例文を単語帳に追加しました。');
-    // }
-  // };
 
   // リッチコンテンツの例文を保存する
   const saveRichExample = (sectionIndex: number, itemIndex: number, exampleIndex: number) => {
-    // 実装予定
-    Alert.alert('保存機能', '単語帳に保存する機能は今後実装予定です');
+    // Alert.alert('保存機能', '単語帳に保存する機能は今後実装予定です');
+    console.log('Save rich example action triggered');
   };
 
   // リッチコンテンツをレンダリングする関数
@@ -616,6 +528,54 @@ const ChatScreen = () => {
     );
   };
 
+  const closeMenu = () => {
+    setMenuVisible(false);
+  };
+
+  const handleNewChat = () => {
+    setCurrentSessionId(null);
+    router.push('/chat');
+    closeMenu();
+  };
+
+  const handleChatHistory = () => {
+    if (currentSessionId) {
+      router.push({ pathname: '/chat-history', params: { id: currentSessionId } });
+    } else {
+      router.push('/chat-history');
+    }
+    closeMenu();
+  };
+
+  const handleMenuPress = () => {
+    if (menuVisible) {
+      closeMenu();
+      return;
+    }
+    menuButtonRef.current?.measure((fx: number, fy: number, width: number, height: number, px: number, py: number) => {
+      const menuPopupWidth = 160; 
+      const estimatedMenuHeight = 95; // MenuItemの高さ(約45px) * 2 + Separator(約1px) + 微調整。実際の高さに基づいて調整してください。
+      const screenWidth = Dimensions.get('window').width;
+      const screenHeight = Dimensions.get('window').height; // 画面の高さを取得
+
+      let adjustedX = px;
+      if (px + menuPopupWidth > screenWidth) {
+        adjustedX = screenWidth - menuPopupWidth - 10; 
+      }
+      if (adjustedX < 10) adjustedX = 10; 
+
+      let adjustedY = py - estimatedMenuHeight - 5; // ボタンの上に表示するよう変更
+      if (adjustedY < 10) { // 画面上部からはみ出す場合の調整
+        adjustedY = 10;
+      }
+      // ボタンの下に十分なスペースがなく、上に表示すると画面上部をはみ出るほどボタンが上にある場合は、
+      // ボタンの下に表示するフォールバックも検討できますが、ここではシンプルに上表示を優先します。
+
+      setMenuPosition({ x: adjustedX, y: adjustedY, width: menuPopupWidth });
+      setMenuVisible(true);
+    });
+  };
+
   return (
     <ThemedView style={styles.container}>
       <KeyboardAvoidingView
@@ -641,17 +601,13 @@ const ChatScreen = () => {
         </ScrollView>
         
         <View style={styles.inputContainer}>
-          <Link
-            href={currentSessionId ? { pathname: "/chat-history", params: { id: currentSessionId } } : "/chat-history"}
-            asChild
+          <TouchableOpacity 
+            ref={menuButtonRef}
+            style={styles.historyButton}
+            onPress={handleMenuPress}
           >
-            <TouchableOpacity 
-              style={styles.historyButton}
-              onPress={() => setCurrentSessionId(null)}
-            >
-              <Ionicons name="time-outline" size={24} color={COLORS.PRIMARY} />
-            </TouchableOpacity>
-          </Link>
+            <Ionicons name="menu-outline" size={28} color={COLORS.PRIMARY} />
+          </TouchableOpacity>
           <TextInput
             value={inputText}
             onChangeText={setInputText}
@@ -662,7 +618,7 @@ const ChatScreen = () => {
             blurOnSubmit={true}
             onSubmitEditing={() => {
               if (Platform.OS === 'android' && inputText.trim()) {
-                // sendMessage(); // Androidでは送信ボタンを使うことを推奨
+                // sendMessage();
               }
             }}
           />
@@ -686,6 +642,35 @@ const ChatScreen = () => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      <Modal
+        transparent={true}
+        visible={menuVisible}
+        onRequestClose={closeMenu}
+        animationType="fade"
+      >
+        <TouchableWithoutFeedback onPress={closeMenu}>
+          <View style={styles.modalOverlay}>
+            <View 
+              style={[
+                styles.menuContainer, 
+                { top: menuPosition.y, left: menuPosition.x, width: menuPosition.width }
+              ]}
+              onStartShouldSetResponder={() => true} 
+            >
+              <TouchableOpacity style={styles.menuItem} onPress={handleNewChat}>
+                <Ionicons name="add-circle-outline" size={20} color={COLORS.TEXT.PRIMARY} style={styles.menuItemIcon} />
+                <Text style={styles.menuItemText}>新規チャット</Text>
+              </TouchableOpacity>
+              <View style={styles.menuSeparator} />
+              <TouchableOpacity style={styles.menuItem} onPress={handleChatHistory}>
+                <Ionicons name="time-outline" size={20} color={COLORS.TEXT.PRIMARY} style={styles.menuItemIcon} />
+                <Text style={styles.menuItemText}>チャット履歴</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </ThemedView>
   );
 };
@@ -698,6 +683,8 @@ const styles = StyleSheet.create({
   historyButton: {
     padding: 8,
     marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   keyboardAvoid: {
     flex: 1,
@@ -1224,6 +1211,40 @@ const styles = StyleSheet.create({
   exampleItemSeparator: {
     borderBottomWidth: 1,
     borderBottomColor: COLORS.BORDER.LIGHTER,
+  },
+  modalOverlay: {
+    flex: 1,
+  },
+  menuContainer: {
+    position: 'absolute',
+    backgroundColor: COLORS.WHITE,
+    borderRadius: 8,
+    elevation: 5,
+    shadowColor: COLORS.EFFECTS.SHADOW,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    // minWidth: 160, // widthは動的に設定するためminWidthは削除またはコメントアウト
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.LIGHT,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  menuItemIcon: {
+    marginRight: 10,
+  },
+  menuItemText: {
+    fontSize: 16,
+    color: COLORS.TEXT.PRIMARY,
+  },
+  menuSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: COLORS.BORDER.LIGHT, // DEFAULTからLIGHTに変更
+    marginHorizontal: 0,
   },
 });
 
