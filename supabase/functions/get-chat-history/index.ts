@@ -15,6 +15,7 @@ interface HistoryItemOutput {
 interface ChatSession {
   session_id: string;
   created_at: string;
+  last_message_timestamp: string;
   summary?: string | null;
 }
 
@@ -85,12 +86,12 @@ Deno.serve(async (req: Request) => {
     }
     const userId = user.id;
 
-    // 1. ユーザーのチャットセッションを取得 (最新のものから)
+    // 1. ユーザーのチャットセッションを取得 (最終更新日時の降順)
     const { data: sessions, error: sessionsError } = await supabaseClient
       .from('chat_sessions')
-      .select('session_id, created_at, summary')
+      .select('session_id, created_at, last_message_timestamp, summary')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .order('last_message_timestamp', { ascending: false });
 
     if (sessionsError) {
       console.error('Error fetching chat sessions:', sessionsError.message);
@@ -127,7 +128,7 @@ Deno.serve(async (req: Request) => {
           const summary = session.summary || await generateSummaryFromFirstMessage(supabaseClient, session.session_id);
           return {
             id: session.session_id,
-            date: formatDateTimeJp(session.created_at),
+            date: formatDateTimeJp(session.last_message_timestamp),
             summary: summary,
             lastMessage: 'メッセージ取得エラー',
             messageCount: 0,
@@ -147,7 +148,7 @@ Deno.serve(async (req: Request) => {
         
         return {
           id: session.session_id,
-          date: formatDateTimeJp(session.created_at),
+          date: formatDateTimeJp(session.last_message_timestamp),
           summary: summary,
           lastMessage: lastMessageText,
           messageCount: messageCount,

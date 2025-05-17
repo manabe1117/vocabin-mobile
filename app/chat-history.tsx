@@ -33,7 +33,7 @@ const COLORS = {
 
 interface HistoryItem {
   id: string;
-  date: string;
+  lastUpdated: string;
   summary: string;
   lastMessage: string;
   messageCount: number;
@@ -69,7 +69,7 @@ const ChatHistoryScreen = () => {
       if (Array.isArray(historyData)) {
         const transformedItems: HistoryItem[] = historyData.map((item: any) => ({
           id: item.id, 
-          date: item.date,
+          lastUpdated: item.date,
           summary: item.summary || '要約なし',
           lastMessage: item.lastMessage || 'メッセージなし',
           messageCount: item.messageCount || 0,
@@ -115,7 +115,7 @@ const ChatHistoryScreen = () => {
         activeOpacity={0.7}
       >
         <View style={styles.historyItemHeader}>
-          <Text style={styles.historyItemDate}>{item.date}</Text>
+          <Text style={styles.historyItemDate}>{item.lastUpdated}</Text>
           <View style={styles.messageCountBadge}>
             <Text style={styles.messageCountText}>{item.messageCount} 件</Text>
           </View>
