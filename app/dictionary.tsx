@@ -38,6 +38,12 @@ interface SuggestionResponse {
   suggestions: string[];
 }
 
+// 検索履歴の型定義
+interface SearchHistoryEntry {
+  vocabulary: string;
+  searched_at: string; // ISO 8601 形式の文字列を想定
+}
+
 // useVocabularyフックはモックで代用. 実際のアプリでは適切に実装してください。
 const useVocabulary = () => {
   const [vocabulary, setVocabulary] = useState<VocabularyResult | null>(null);
@@ -48,10 +54,10 @@ const useVocabulary = () => {
   const [error, setError] = useState<Error | { message: string } | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const { session } = useAuth();
+  const [searchHistory, setSearchHistory] = useState<SearchHistoryEntry[] | null>(null);
 
   const checkSavedStatus = async (vocabularyId: number) => {
     if (!session) return;
-
     try {
       const { data, error } = await supabase.functions.invoke(`get-study-status?vocabularyId=${vocabularyId}`, {
         method: 'GET',
@@ -59,9 +65,6 @@ const useVocabulary = () => {
           Authorization: `Bearer ${session.access_token}`
         }
       });
-
-      console.log('study-status', data);
-
       if (error) throw error;
       setIsSaved(data.isSaved);
     } catch (error) {
@@ -69,7 +72,28 @@ const useVocabulary = () => {
     }
   };
 
+  const fetchSearchHistory = async () => {
+    if (!session || loading) return; // ローディング中は取得しない
+    try {
+      const { data, error } = await supabase.functions.invoke('get-dictionary-search-history', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      if (error) throw error;
+      setSearchHistory(data && data.length > 0 ? data : null); // 空の場合はnullを設定
+    } catch (err) {
+      console.error('検索履歴の取得エラー:', err);
+      setSearchHistory(null); // エラー時もnullを設定
+    }
+  };
+
   const translate = async (text: string) => {
+    if (!text.trim()) { // 空のテキストの場合は何もしないか、履歴表示を促す
+      await resetAndFetchHistory(); // 空検索なら履歴表示
+      return;
+    }
     setLoading(true);
     setError(null);
     setVocabulary(null);
@@ -77,91 +101,112 @@ const useVocabulary = () => {
     setSuggestions(null);
     setTranslations(null);
     setIsSaved(false);
+    setSearchHistory(null); // 新しい検索の開始時に履歴をクリア
 
     try {
-      const { data, error } = await supabase.functions.invoke('get-dictionary', {
+      const { data, error: invokeError } = await supabase.functions.invoke('get-dictionary', {
         body: { vocabulary: text }
       });
 
-      console.log('data', data);
+      if (invokeError) throw invokeError;
 
-      if (error) throw error;
-
+      let resultsFound = false;
       if (data) {
-        if ('translations' in data && Array.isArray(data.translations)) {
+        if ('translations' in data && Array.isArray(data.translations) && data.translations.length > 0) {
           setTranslations(data.translations);
-          return;
+          resultsFound = true;
         }
-        
-        if ('suggestions' in data && Array.isArray(data.suggestions)) {
+        if ('suggestions' in data && Array.isArray(data.suggestions) && data.suggestions.length > 0) {
           setSuggestions(data.suggestions);
-          return;
+          resultsFound = true;
         }
-
-        if ('suggestion' in data) {
+        if ('suggestion' in data && typeof data.suggestion === 'string' && data.suggestion) {
           setSuggestion(data.suggestion);
-          return;
+          resultsFound = true;
         }
-
-        const formattedData: VocabularyResult = {
-          id: data.id,
-          vocabulary: data.vocabulary || '',
-          meaning: data.meanings ? data.meanings.join(', ') : '',
-          pronunciation: data.pronunciation || '',
-          part_of_speech: data.partOfSpeech || '',
-          examples: data.examples ? data.examples.map((ex: { en: string; ja: string }) => ex) : [],
-          synonyms: data.synonyms || [],
-          conjugations: data.conjugations || undefined,
-          notes: data.notes || '',
-          audio_url: data.audio_url || undefined
-        };
-        setVocabulary(formattedData);
-        await checkSavedStatus(data.id);
-      } else {
-        setError({ message: `「${text}」の翻訳データが見つかりません。` });
+        if (data.id && data.vocabulary) { // Full vocabulary result
+          const formattedData: VocabularyResult = {
+            id: data.id,
+            vocabulary: data.vocabulary || '',
+            meaning: data.meanings ? data.meanings.join(', ') : '',
+            pronunciation: data.pronunciation || '',
+            part_of_speech: data.partOfSpeech || '',
+            examples: data.examples ? data.examples.map((ex: { en: string; ja: string }) => ex) : [],
+            synonyms: data.synonyms || [],
+            conjugations: data.conjugations || undefined,
+            notes: data.notes || '',
+            audio_url: data.audio_url || undefined
+          };
+          setVocabulary(formattedData);
+          await checkSavedStatus(data.id);
+          resultsFound = true;
+        }
       }
-    } catch (err) {
+
+      if (!resultsFound) {
+        setError({ message: `「${text}」の情報は見つかりませんでした。` });
+        await fetchSearchHistory();
+      }
+    } catch (err: any) {
       console.error('Translation error:', err);
       setError(err as Error);
+      await fetchSearchHistory();
     } finally {
       setLoading(false);
     }
   };
 
-  return { 
-    vocabulary, 
-    suggestion, 
+  const resetAndFetchHistory = async () => {
+    setVocabulary(null);
+    setSuggestion(null);
+    setSuggestions(null);
+    setTranslations(null);
+    setIsSaved(false);
+    setError(null);
+    setLoading(false); // ローディング状態も解除
+    await fetchSearchHistory();
+  };
+
+  return {
+    vocabulary,
+    suggestion,
     suggestions,
     translations,
-    loading, 
-    error, 
-    translate, 
-    setVocabulary, 
-    setSuggestion, 
+    loading,
+    error,
+    translate,
+    setVocabulary,
+    setSuggestion,
     setSuggestions,
     setTranslations,
-    isSaved, 
-    setIsSaved 
+    setIsSaved,
+    setError,
+    isSaved,
+    searchHistory,
+    resetAndFetchHistory,
   };
 };
 
 const TranslateScreen = () => {
   const [inputText, setInputText] = useState('');
   const [displayText, setDisplayText] = useState('');
-  const { 
-    vocabulary, 
-    suggestion, 
+  const {
+    vocabulary,
+    suggestion,
     suggestions,
     translations,
-    loading, 
-    error, 
-    translate, 
-    setVocabulary, 
-    setSuggestion, 
+    loading,
+    error,
+    translate,
+    setVocabulary,
+    setSuggestion,
     setSuggestions,
     setTranslations,
-    isSaved, 
-    setIsSaved 
+    setIsSaved,
+    setError,
+    isSaved,
+    searchHistory,
+    resetAndFetchHistory,
   } = useVocabulary();
   const { session } = useAuth();
   const { playSound } = useAudio();
@@ -170,7 +215,16 @@ const TranslateScreen = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [permissionResponse, requestPermission] = Audio.usePermissions();
-  const [voiceLanguage, setVoiceLanguage] = useState<'en-US' | 'ja-JP'>('en-US'); // 音声入力言語
+  const [voiceLanguage, setVoiceLanguage] = useState<'en-US' | 'ja-JP'>('en-US');
+
+  const initialLoadRef = useRef(true);
+
+  useEffect(() => {
+    if (session && initialLoadRef.current && inputText === '' && !loading) {
+      resetAndFetchHistory();
+      initialLoadRef.current = false;
+    }
+  }, [session, inputText, loading, resetAndFetchHistory]);
 
   const handleTranslate = () => {
     setDisplayText(inputText);
@@ -182,14 +236,23 @@ const TranslateScreen = () => {
     setDisplayText(text);
     setSuggestion(null);
     setSuggestions(null);
+    setTranslations(null);
     translate(text);
   };
 
   const handleTranslationClick = (translation: string) => {
     setInputText(translation);
     setDisplayText(translation);
+    setSuggestion(null);
+    setSuggestions(null);
     setTranslations(null);
     translate(translation);
+  };
+
+  const handleSearchHistoryClick = (text: string) => {
+    setInputText(text);
+    setDisplayText(text);
+    translate(text);
   };
 
   const handleSave = async () => {
@@ -229,14 +292,10 @@ const TranslateScreen = () => {
     }
   };
 
-  const clearInput = () => {
+  const clearInput = async () => {
     setInputText('');
     setDisplayText('');
-    setVocabulary(null);
-    setSuggestion(null);
-    setSuggestions(null);
-    setTranslations(null);
-    setIsSaved(false);
+    await resetAndFetchHistory();
   };
 
   async function startRecording() {
@@ -565,6 +624,31 @@ const TranslateScreen = () => {
             </View>
           </View>
         )}
+        {!loading && !vocabulary && !suggestion && !suggestions && !translations && searchHistory && searchHistory.length > 0 && (
+          <View style={styles.suggestionContainer}>
+            <View style={styles.suggestionContent}>
+              <View style={styles.suggestionHeader}>
+                <Ionicons name="time-outline" size={20} color={COLORS.SECONDARY} />
+                <Text style={styles.suggestionText}>検索履歴</Text>
+              </View>
+              {searchHistory.map((item, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.suggestionButton}
+                  onPress={() => handleSearchHistoryClick(item.vocabulary)}
+                >
+                  <Text style={styles.suggestionWord}>{item.vocabulary}</Text>
+                  <View style={styles.historyTimestampContainer}>
+                    <Text style={styles.searchHistoryTimestamp}>
+                      {new Date(item.searched_at).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Tokyo' }).replace(/\//g, '/')}
+                    </Text>
+                    <Ionicons name="arrow-forward" size={20} color={COLORS.SECONDARY} style={styles.historyArrowIcon} />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
         {!loading && vocabulary && (
           <View style={styles.resultCard}>
             <View style={styles.wordHeader}>
@@ -887,6 +971,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.SECONDARY,
     fontWeight: 'bold',
+    flex: 1,
   },
   saveButton: {
     flexDirection: 'row',
@@ -946,6 +1031,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.TEXT.BLUE_LIGHT,
     fontWeight: '500',
+  },
+  searchHistoryTimestamp: {
+    fontSize: 12,
+    color: COLORS.TEXT.LIGHT_GRAY,
+    marginLeft: 8,
+  },
+  historyTimestampContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  historyArrowIcon: {
+    marginLeft: 8,
   },
 });
 
