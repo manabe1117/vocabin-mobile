@@ -525,18 +525,26 @@ const TranslateScreen = () => {
 
     setIsSubmittingReport(true);
     try {
-      console.log('Submitting report:', {
-        vocabularyId: vocabulary.id,
-        issueItems: selectedIssueItems,
-        description: reportDescription,
+      const { data, error } = await supabase.functions.invoke('report-vocabulary-issue', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: {
+          vocabularyId: vocabulary.id,
+          issueItems: selectedIssueItems,
+          description: reportDescription,
+        },
       });
-      await new Promise(resolve => setTimeout(resolve, 1500)); 
-      
+
+      if (error) throw error;
+
+      // console.log('Report submission response:', data);
       Alert.alert('報告完了', '問題のご報告ありがとうございます。');
       handleCloseReportModal();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to submit report:', error);
-      Alert.alert('エラー', '報告の送信に失敗しました。');
+      Alert.alert('エラー', `報告の送信に失敗しました: ${error.message || '不明なエラー'}`);
     } finally {
       setIsSubmittingReport(false);
     }

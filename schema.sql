@@ -3311,6 +3311,86 @@ ALTER SEQUENCE public.vocabulary_id_seq2 OWNED BY public.vocabulary.id;
 
 
 --
+-- Name: vocabulary_issue_reports; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vocabulary_issue_reports (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    user_id uuid NOT NULL,
+    vocabulary_id integer NOT NULL,
+    issue_items text[] NOT NULL,
+    description text,
+    status integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT vocabulary_issue_reports_status_check CHECK ((status = ANY (ARRAY[0, 1, 2])))
+);
+
+
+--
+-- Name: TABLE vocabulary_issue_reports; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.vocabulary_issue_reports IS 'Stores issues reported by users regarding vocabulary entries.';
+
+
+--
+-- Name: COLUMN vocabulary_issue_reports.id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.vocabulary_issue_reports.id IS 'Unique identifier for the reported issue.';
+
+
+--
+-- Name: COLUMN vocabulary_issue_reports.user_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.vocabulary_issue_reports.user_id IS 'ID of the user who reported the issue.';
+
+
+--
+-- Name: COLUMN vocabulary_issue_reports.vocabulary_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.vocabulary_issue_reports.vocabulary_id IS 'ID of the vocabulary entry the issue is about.';
+
+
+--
+-- Name: COLUMN vocabulary_issue_reports.issue_items; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.vocabulary_issue_reports.issue_items IS 'Array of items identified as problematic (e.g., meaning, pronunciation).';
+
+
+--
+-- Name: COLUMN vocabulary_issue_reports.description; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.vocabulary_issue_reports.description IS 'Detailed description of the issue.';
+
+
+--
+-- Name: COLUMN vocabulary_issue_reports.status; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.vocabulary_issue_reports.status IS 'Current status of the reported issue (0: 未対応, 1: 保留, 2: 対応済み).';
+
+
+--
+-- Name: COLUMN vocabulary_issue_reports.created_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.vocabulary_issue_reports.created_at IS 'Timestamp when the issue was reported.';
+
+
+--
+-- Name: COLUMN vocabulary_issue_reports.updated_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.vocabulary_issue_reports.updated_at IS 'Timestamp when the issue was last updated.';
+
+
+--
 -- Name: messages; Type: TABLE; Schema: realtime; Owner: -
 --
 
@@ -3879,6 +3959,14 @@ ALTER TABLE ONLY public.study_status_translation
 
 
 --
+-- Name: vocabulary_issue_reports vocabulary_issue_reports_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vocabulary_issue_reports
+    ADD CONSTRAINT vocabulary_issue_reports_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: bk_vocabulary vocabulary_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4382,6 +4470,27 @@ CREATE INDEX idx_vocabulary_id ON public.study_status USING btree (vocabulary_id
 
 
 --
+-- Name: idx_vocabulary_issue_reports_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_vocabulary_issue_reports_status ON public.vocabulary_issue_reports USING btree (status);
+
+
+--
+-- Name: idx_vocabulary_issue_reports_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_vocabulary_issue_reports_user_id ON public.vocabulary_issue_reports USING btree (user_id);
+
+
+--
+-- Name: idx_vocabulary_issue_reports_vocabulary_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_vocabulary_issue_reports_vocabulary_id ON public.vocabulary_issue_reports USING btree (vocabulary_id);
+
+
+--
 -- Name: idx_vocabulary_languages; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4726,6 +4835,22 @@ ALTER TABLE ONLY public.translation_training_duplicate
 
 ALTER TABLE ONLY public.translation_training
     ADD CONSTRAINT translation_training_level_id_fkey FOREIGN KEY (level_id) REFERENCES public.levels(id);
+
+
+--
+-- Name: vocabulary_issue_reports vocabulary_issue_reports_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vocabulary_issue_reports
+    ADD CONSTRAINT vocabulary_issue_reports_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: vocabulary_issue_reports vocabulary_issue_reports_vocabulary_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vocabulary_issue_reports
+    ADD CONSTRAINT vocabulary_issue_reports_vocabulary_id_fkey FOREIGN KEY (vocabulary_id) REFERENCES public.vocabulary(id) ON DELETE CASCADE;
 
 
 --
@@ -5145,6 +5270,40 @@ ALTER TABLE public.translation_history ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY update_own_history ON public.dictionary_search_history FOR UPDATE USING ((user_id = public.get_my_user_id())) WITH CHECK ((user_id = public.get_my_user_id()));
+
+
+--
+-- Name: vocabulary_issue_reports; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.vocabulary_issue_reports ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: vocabulary_issue_reports vocabulary_issue_reports_delete_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY vocabulary_issue_reports_delete_policy ON public.vocabulary_issue_reports FOR DELETE USING ((auth.uid() = user_id));
+
+
+--
+-- Name: vocabulary_issue_reports vocabulary_issue_reports_insert_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY vocabulary_issue_reports_insert_policy ON public.vocabulary_issue_reports FOR INSERT WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: vocabulary_issue_reports vocabulary_issue_reports_select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY vocabulary_issue_reports_select_policy ON public.vocabulary_issue_reports FOR SELECT USING ((auth.uid() = user_id));
+
+
+--
+-- Name: vocabulary_issue_reports vocabulary_issue_reports_update_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY vocabulary_issue_reports_update_policy ON public.vocabulary_issue_reports FOR UPDATE USING ((auth.uid() = user_id)) WITH CHECK ((auth.uid() = user_id));
 
 
 --
