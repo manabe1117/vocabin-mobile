@@ -467,7 +467,8 @@ async function fetchGeminiApi(vocabulary: string): Promise<VocabularyData | Sugg
     Use Japanese for "part_of_speech", "meanings", "notes". No romaji or translations in Japanese.
     Provide verb conjugations: "原形", "現在分詞", "過去形", "過去分詞", "三人称単数現在".
     Provide noun conjugations: "単数形", "複数形".
-    Provide adjective conjugations: "比較級", "最上級".
+    Provide adjective conjugations: "比較級", "最上級", "副詞形".
+    Provide adverb conjugations: "形容詞形".
     Use English for "synonyms", "antonyms". Use IPA for "pronunciation".
     Include irregular forms. Omit non-existent conjugations.
 

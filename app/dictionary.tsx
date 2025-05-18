@@ -31,6 +31,7 @@ interface VocabularyResult {
   synonyms: string[];
   notes: string;
   audio_url?: string;
+  conjugations?: Record<string, string>; // 活用形
 }
 
 interface SuggestionResponse {
@@ -110,6 +111,7 @@ const useVocabulary = () => {
           part_of_speech: data.partOfSpeech || '',
           examples: data.examples ? data.examples.map((ex: { en: string; ja: string }) => ex) : [],
           synonyms: data.synonyms || [],
+          conjugations: data.conjugations || undefined,
           notes: data.notes || '',
           audio_url: data.audio_url || undefined
         };
@@ -604,6 +606,27 @@ const TranslateScreen = () => {
               </View>
             )}
 
+            {vocabulary.conjugations && Object.keys(vocabulary.conjugations).length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>活用形</Text>
+                <View style={styles.conjugationContainer}>
+                  {Object.entries(vocabulary.conjugations).map(([type, form]) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={styles.conjugationItem}
+                      onPress={() => {
+                        setInputText(form);
+                        translate(form);
+                      }}
+                    >
+                      <Text style={styles.conjugationType}>{type}:</Text>
+                      <Text style={styles.conjugationForm}>{form}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
             {vocabulary.examples.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>例文</Text>
@@ -899,6 +922,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.TEXT.LIGHT_GRAY,
     marginBottom: 4,
+  },
+  conjugationContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  conjugationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.BACKGROUND.BLUE_LIGHT,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  conjugationType: {
+    fontSize: 14,
+    color: COLORS.TEXT.BLUE_LIGHT,
+    fontWeight: '500',
+    marginRight: 4,
+  },
+  conjugationForm: {
+    fontSize: 14,
+    color: COLORS.TEXT.BLUE_LIGHT,
+    fontWeight: '500',
   },
 });
 
