@@ -10,6 +10,7 @@ import {
   Alert,
   Linking,
   Platform,
+  Modal,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons'; // アイコンをインポート
 import { supabase } from '@/lib/supabase';
@@ -216,6 +217,12 @@ const TranslateScreen = () => {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [permissionResponse, requestPermission] = Audio.usePermissions();
   const [voiceLanguage, setVoiceLanguage] = useState<'en-US' | 'ja-JP'>('en-US');
+
+  // States for Report Issue Modal
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [selectedIssueItems, setSelectedIssueItems] = useState<string[]>([]);
+  const [reportDescription, setReportDescription] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
 
   const initialLoadRef = useRef(true);
 
@@ -486,6 +493,68 @@ const TranslateScreen = () => {
     setVoiceLanguage(prev => prev === 'en-US' ? 'ja-JP' : 'en-US');
   };
 
+  // Functions for Report Issue Modal
+  const handleOpenReportModal = () => {
+    if (!vocabulary) {
+      Alert.alert('エラー', '報告対象の単語がありません。');
+      return;
+    }
+    setSelectedIssueItems([]);
+    setReportDescription('');
+    setIsReportModalVisible(true);
+  };
+
+  const handleCloseReportModal = () => {
+    setIsReportModalVisible(false);
+  };
+
+  const handleToggleIssueItem = (itemValue: string) => {
+    setSelectedIssueItems(prev =>
+      prev.includes(itemValue)
+        ? prev.filter(item => item !== itemValue)
+        : [...prev, itemValue]
+    );
+  };
+
+  const handleSubmitReport = async () => {
+    if (selectedIssueItems.length === 0) {
+      Alert.alert('エラー', '問題のある項目を1つ以上選択してください。');
+      return;
+    }
+    if (!session || !vocabulary) return;
+
+    setIsSubmittingReport(true);
+    try {
+      console.log('Submitting report:', {
+        vocabularyId: vocabulary.id,
+        issueItems: selectedIssueItems,
+        description: reportDescription,
+      });
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
+      
+      Alert.alert('報告完了', '問題のご報告ありがとうございます。');
+      handleCloseReportModal();
+    } catch (error) {
+      console.error('Failed to submit report:', error);
+      Alert.alert('エラー', '報告の送信に失敗しました。');
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
+
+  const REPORT_ISSUE_ITEMS = [
+    { label: '単語自体', value: 'vocabulary_itself' },
+    { label: '意味', value: 'meaning' },
+    { label: '発音', value: 'pronunciation' },
+    { label: '品詞', value: 'part_of_speech' },
+    { label: '例文', value: 'examples' },
+    { label: '類義語', value: 'synonyms' },
+    { label: '活用形', value: 'conjugations' },
+    { label: '音声', value: 'audio' },
+    { label: '補足', value: 'notes' },
+    { label: 'その他', value: 'other' },
+  ];
+
   return (
     <View style={[COMMON_STYLES.container, styles.translateContainer]}>
       <View style={styles.searchBarContainer}>
@@ -744,9 +813,94 @@ const TranslateScreen = () => {
                 {isSaved ? '保存済み' : '保存'}
               </Text>
             </TouchableOpacity>
+
+            {/* Add Report Issue Button */}
+            <TouchableOpacity
+              style={styles.reportIssueButton}
+              onPress={handleOpenReportModal}
+            >
+              <Ionicons
+                name="alert-circle-outline"
+                size={20}
+                color={COLORS.TEXT.DARK}
+                style={styles.reportIssueButtonIcon}
+              />
+              <Text style={styles.reportIssueButtonText}>問題を報告する</Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
+
+      {/* Report Issue Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isReportModalVisible}
+        onRequestClose={handleCloseReportModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>問題の報告</Text>
+            
+            <Text style={styles.modalSectionTitle}>問題のある項目 (複数選択可):</Text>
+            <View style={styles.issueTypeContainer}>
+              {REPORT_ISSUE_ITEMS.map((item) => (
+                <TouchableOpacity
+                  key={item.value}
+                  style={[
+                    styles.issueTypeButton,
+                    selectedIssueItems.includes(item.value) && styles.issueTypeButtonSelected,
+                  ]}
+                  onPress={() => handleToggleIssueItem(item.value)}
+                  disabled={isSubmittingReport}
+                >
+                  <Text 
+                    style={[
+                      styles.issueTypeButtonText,
+                      selectedIssueItems.includes(item.value) && styles.issueTypeButtonTextSelected,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.modalSectionTitle}>詳細:</Text>
+            <TextInput
+              style={styles.reportDescriptionInput}
+              placeholder="問題の詳細を具体的に記述してください。"
+              value={reportDescription}
+              onChangeText={setReportDescription}
+              multiline
+              numberOfLines={4}
+              editable={!isSubmittingReport}
+              placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+            />
+
+            <View style={styles.modalButtonContainer}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={handleCloseReportModal}
+                disabled={isSubmittingReport}
+              >
+                <Text style={styles.cancelButtonText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.submitButton, isSubmittingReport && styles.submitButtonDisabled]}
+                onPress={handleSubmitReport}
+                disabled={isSubmittingReport}
+              >
+                {isSubmittingReport ? (
+                  <ActivityIndicator size="small" color={COLORS.WHITE} />
+                ) : (
+                  <Text style={styles.submitButtonText}>送信</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1044,6 +1198,135 @@ const styles = StyleSheet.create({
   historyArrowIcon: {
     marginLeft: 8,
   },
+  reportIssueButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.BACKGROUND.GRAY,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.GRAY,
+  },
+  reportIssueButtonIcon: {
+    marginRight: 8,
+  },
+  reportIssueButtonText: {
+    color: COLORS.TEXT.DARK,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  // Styles for Report Issue Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: COLORS.WHITE,
+    borderRadius: 16,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.TEXT.DARKER,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.TEXT.DARK_GRAY,
+    marginTop: 15,
+    marginBottom: 8,
+  },
+  issueTypeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  issueTypeButton: {
+    justifyContent: 'center',
+    backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.BACKGROUND.GRAY_LIGHT,
+    marginBottom: 10,
+    width: '48%',
+  },
+  issueTypeButtonSelected: {
+    backgroundColor: COLORS.BACKGROUND.BLUE_LIGHT,
+    borderColor: COLORS.PRIMARY,
+  },
+  issueTypeButtonText: {
+    color: COLORS.TEXT.DARK_GRAY,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  issueTypeButtonTextSelected: {
+    color: COLORS.PRIMARY,
+    fontWeight: 'bold',
+  },
+  reportDescriptionInput: {
+    backgroundColor: COLORS.BACKGROUND.MAIN,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.GRAY,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: COLORS.TEXT.DARKER,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    marginBottom: 20,
+  },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    backgroundColor: COLORS.BACKGROUND.GRAY,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.GRAY,
+    marginRight: 8,
+  },
+  submitButton: {
+    backgroundColor: COLORS.PRIMARY,
+    marginLeft: 8,
+  },
+  submitButtonDisabled: {
+    backgroundColor: COLORS.PRIMARY,
+    opacity: 0.7,
+  },
+  modalButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  cancelButtonText: {
+    color: COLORS.TEXT.DARK,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  submitButtonText: {
+    color: COLORS.WHITE,
+    fontSize: 14,
+    fontWeight: '500',
+  }
 });
 
 export default TranslateScreen;
