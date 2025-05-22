@@ -11,6 +11,9 @@ import {
   Linking,
   Platform,
   Modal,
+  KeyboardAvoidingView,
+  SafeAreaView,
+  Dimensions,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons'; // アイコンをインポート
 import { supabase } from '@/lib/supabase';
@@ -43,6 +46,14 @@ interface SuggestionResponse {
 interface SearchHistoryEntry {
   vocabulary: string;
   searched_at: string; // ISO 8601 形式の文字列を想定
+}
+
+// AIとの会話エントリの型定義
+interface AIChatEntry {
+  id: string; // 各メッセージの一意なID
+  type: 'user' | 'ai'; // メッセージの送信者（ユーザーまたはAI）
+  text: string; // メッセージの内容
+  timestamp: Date; // メッセージのタイムスタンプ
 }
 
 // useVocabularyフックはモックで代用. 実際のアプリでは適切に実装してください。
@@ -224,7 +235,19 @@ const TranslateScreen = () => {
   const [reportDescription, setReportDescription] = useState('');
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
 
+  // States for AI Question
+  const [aiQuestion, setAiQuestion] = useState('');
+  const [aiConversation, setAiConversation] = useState<AIChatEntry[]>([]);
+  const [isAskingAi, setIsAskingAi] = useState(false);
+  const [isChatFocusedMode, setIsChatFocusedMode] = useState(false);
+  const [activeChatVocabulary, setActiveChatVocabulary] = useState<VocabularyResult | null>(null);
+  const [isDictionaryDetailsOpen, setIsDictionaryDetailsOpen] = useState(true); // 辞書詳細の開閉状態
+
   const initialLoadRef = useRef(true);
+  const scrollViewRef = useRef<ScrollView | null>(null);
+
+  // AIチャット入力欄表示制御のためのフラグ
+  const showAiInput = vocabulary || isChatFocusedMode || activeChatVocabulary;
 
   useEffect(() => {
     if (session && initialLoadRef.current && inputText === '' && !loading) {
@@ -233,12 +256,28 @@ const TranslateScreen = () => {
     }
   }, [session, inputText, loading, resetAndFetchHistory]);
 
+  useEffect(() => {
+    if (vocabulary) {
+      if (activeChatVocabulary && vocabulary.id !== activeChatVocabulary.id) {
+        setIsChatFocusedMode(false);
+        setAiConversation([]);
+        setActiveChatVocabulary(null); 
+      }
+    } else {
+      setIsChatFocusedMode(false);
+      setAiConversation([]);
+      setActiveChatVocabulary(null);
+    }
+  }, [vocabulary]);
+
   const handleTranslate = () => {
+    setIsDictionaryDetailsOpen(true);
     setDisplayText(inputText);
     translate(inputText);
   };
 
   const handleSuggestionClick = (text: string) => {
+    setIsDictionaryDetailsOpen(true);
     setInputText(text);
     setDisplayText(text);
     setSuggestion(null);
@@ -248,6 +287,7 @@ const TranslateScreen = () => {
   };
 
   const handleTranslationClick = (translation: string) => {
+    setIsDictionaryDetailsOpen(true);
     setInputText(translation);
     setDisplayText(translation);
     setSuggestion(null);
@@ -257,6 +297,7 @@ const TranslateScreen = () => {
   };
 
   const handleSearchHistoryClick = (text: string) => {
+    setIsDictionaryDetailsOpen(true);
     setInputText(text);
     setDisplayText(text);
     translate(text);
@@ -550,6 +591,43 @@ const TranslateScreen = () => {
     }
   };
 
+  // Function to ask AI about vocabulary
+  const handleAskAi = async () => {
+    if (!vocabulary || !aiQuestion.trim()) {
+      Alert.alert('エラー', '単語が選択されていないか、質問が入力されていません。');
+      return;
+    }
+    const userQuestionText = aiQuestion.trim();
+    const newUserMessage: AIChatEntry = {
+      id: Date.now().toString() + '-user',
+      type: 'user',
+      text: userQuestionText,
+      timestamp: new Date(),
+    };
+    
+    // チャット送信時は必ずチャット表示・辞書詳細を折りたたむ
+    setIsChatFocusedMode(true);
+    setActiveChatVocabulary(vocabulary);
+    setIsDictionaryDetailsOpen(false);
+    
+    setAiConversation(prev => [...prev, newUserMessage]);
+    setAiQuestion(''); 
+    setIsAskingAi(true);
+
+    // Simulate API call with dummy data
+    setTimeout(() => {
+      const dummyResponseText = `「${activeChatVocabulary?.vocabulary || vocabulary.vocabulary}」に関するあなたの質問「${userQuestionText}」に対するAIの回答です。これはダミーデータであり、実際のAIからの応答ではありません。ここに詳細な説明や例文などが表示される予定です。次の質問をどうぞ。`;
+      const newAiMessage: AIChatEntry = {
+        id: Date.now().toString() + '-ai',
+        type: 'ai',
+        text: dummyResponseText,
+        timestamp: new Date(),
+      };
+      setAiConversation(prev => [...prev, newAiMessage]);
+      setIsAskingAi(false);
+    }, 2000); 
+  };
+
   const REPORT_ISSUE_ITEMS = [
     { label: '単語自体', value: 'vocabulary_itself' },
     { label: '意味', value: 'meaning' },
@@ -562,6 +640,213 @@ const TranslateScreen = () => {
     { label: '補足', value: 'notes' },
     { label: 'その他', value: 'other' },
   ];
+
+  const renderVocabularyDetails = () => {
+    if (!vocabulary) return null;
+
+    // 収縮時の簡易表示
+    if (!isDictionaryDetailsOpen) {
+      return (
+        <TouchableOpacity
+          style={[
+            styles.resultCard,
+            {
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 16,
+              marginBottom: 8,
+            }
+          ]}
+          activeOpacity={0.8}
+          onPress={() => setIsDictionaryDetailsOpen(true)}
+        >
+          <View style={{ flex: 1 }}>
+            <View style={styles.wordTextContainer}>
+              <View style={{ position: 'relative', width: '100%' }}>
+                <Text style={styles.wordText}>{vocabulary.vocabulary}</Text>
+              </View>
+            </View>
+          </View>
+          <Ionicons name="chevron-down-circle-outline" size={28} color={COLORS.PRIMARY} />
+        </TouchableOpacity>
+      );
+    }
+
+    // 詳細表示
+    return (
+      <View style={styles.resultCard}>
+        <TouchableOpacity
+          style={{ position: 'absolute', right: 12, top: 12, zIndex: 10 }}
+          onPress={() => setIsDictionaryDetailsOpen(false)}
+          accessibilityLabel="詳細を閉じる"
+        >
+          <Ionicons name="chevron-up-circle-outline" size={28} color={COLORS.PRIMARY} />
+        </TouchableOpacity>
+        <View style={styles.wordHeader}>
+          <View style={styles.wordContainer}>
+            <View style={styles.wordTextContainer}>
+              <View style={{ position: 'relative', width: '100%' }}>
+                <Text style={styles.wordText}>{vocabulary.vocabulary}{' '}
+                  <TouchableOpacity 
+                    style={styles.soundButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handlePlaySound(vocabulary.vocabulary);
+                    }}
+                  >
+                    <Ionicons name="volume-high" size={24} color={COLORS.PRIMARY} />
+                  </TouchableOpacity>
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.pronunciation}>{vocabulary.pronunciation}</Text>
+            <Text style={styles.partOfSpeech}>{vocabulary.part_of_speech}</Text>
+          </View>
+        </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>意味</Text>
+          <Text style={styles.sectionText}>{vocabulary.meaning}</Text>
+        </View>
+        {vocabulary.synonyms.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>類義語</Text>
+            <View style={styles.synonymContainer}>
+              {vocabulary.synonyms.map((synonym, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.synonym}
+                  onPress={() => {
+                    setInputText(synonym);
+                    translate(synonym);
+                  }}
+                >
+                  <Text style={styles.synonymText}>{synonym}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+        {vocabulary.conjugations && Object.keys(vocabulary.conjugations).length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>活用形</Text>
+            <View style={styles.conjugationContainer}>
+              {Object.entries(vocabulary.conjugations).map(([type, form]) => (
+                <TouchableOpacity
+                  key={type}
+                  style={styles.conjugationItem}
+                  onPress={() => {
+                    setInputText(form);
+                    translate(form);
+                  }}
+                >
+                  <Text style={styles.conjugationType}>{type}:</Text>
+                  <Text style={styles.conjugationForm}>{form}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+        {vocabulary.examples.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>例文</Text>
+            {vocabulary.examples.map((example, index) => (
+              <View key={index} style={styles.exampleContainer}>
+                <Text style={styles.exampleText}>{example.en}</Text>
+                <Text style={styles.exampleTranslation}>{example.ja}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+        {vocabulary.notes && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>補足</Text>
+            <Text style={styles.sectionText}>{vocabulary.notes}</Text>
+          </View>
+        )}
+        <TouchableOpacity 
+          style={[styles.saveButton, isSaved && styles.savedButton]} 
+          onPress={handleSave}
+        >
+          <Ionicons 
+            name={isSaved ? "checkmark-circle" : "bookmark-outline"} 
+            size={20} 
+            color={isSaved ? COLORS.SUCCESS.DARK : COLORS.WHITE} 
+            style={styles.saveButtonIcon} 
+          />
+          <Text style={[styles.saveButtonText, isSaved && styles.savedButtonText]}>
+            {isSaved ? '保存済み' : '保存'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.reportIssueButton}
+          onPress={handleOpenReportModal}
+        >
+          <Ionicons
+            name="alert-circle-outline"
+            size={20}
+            color={COLORS.TEXT.DARK}
+            style={styles.reportIssueButtonIcon}
+          />
+          <Text style={styles.reportIssueButtonText}>問題を報告する</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+  
+  const renderAiChatSection = () => {
+    // 辞書詳細が展開されている場合はチャット会話部分を非表示
+    if (isDictionaryDetailsOpen) return null;
+    if (!vocabulary && (!isChatFocusedMode || !activeChatVocabulary)) return null;
+    if (!isChatFocusedMode && !vocabulary) return null;
+
+    const currentDisplayVocab = activeChatVocabulary || vocabulary;
+    if (!currentDisplayVocab) return null;
+
+    const hasCollapsedDictionaryView = vocabulary && !isDictionaryDetailsOpen;
+
+    // チャットエリアの高さは自動でOK
+    return (
+      <View
+        style={[
+          styles.aiSection,
+          { flex: 1 }, // 常にflex:1を適用して利用可能な高さを最大限使用
+          hasCollapsedDictionaryView && { paddingTop: 0 }, // 辞書折りたたみビューがある場合はtop paddingを0に
+          { paddingBottom: 0 } // aiSection自体のpaddingBottomは0にし、メインScrollViewに任せる
+        ]}
+      >
+        <View style={{ flex: 1, minHeight: 0 }}>
+          <ScrollView
+            style={styles.aiConversationScrollView}
+            ref={scrollViewRef}
+            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-start', paddingTop: 0 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {aiConversation.map((entry) => (
+              <View
+                key={entry.id}
+                style={[
+                  styles.aiMessageBubble,
+                  entry.type === 'user' ? styles.userMessageBubble : styles.aiMessageBubbleBase
+                ]}
+              >
+                <Text style={[styles.aiMessageText, entry.type === 'user' ? styles.userMessageText : styles.aiMessageTextBase]}>{entry.text}</Text>
+                <Text style={styles.aiMessageTimestamp}>
+                  {entry.timestamp.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+            ))}
+            {isAskingAi && (
+              <View style={[styles.aiMessageBubble, styles.aiMessageBubbleBase, styles.loadingBubble]}>
+                <ActivityIndicator size="small" color={COLORS.PRIMARY} />
+                <Text style={styles.aiMessageTimestamp}>AIが応答中...</Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    );
+  };
 
   return (
     <View style={[COMMON_STYLES.container, styles.translateContainer]}>
@@ -631,7 +916,18 @@ const TranslateScreen = () => {
         </View>
       </View>
 
-      <ScrollView style={styles.scrollView}>
+      {/* 折りたたまれた辞書情報 (固定表示) */}
+      {!loading && vocabulary && !isDictionaryDetailsOpen && (
+        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+          {renderVocabularyDetails()}
+        </View>
+      )}
+
+      <ScrollView
+        style={styles.scrollView}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: showAiInput ? 80 : 16 }} // チャット入力欄の高さ分余白を確保、表示されない場合はデフォルトパディング
+      >
         {loading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.PRIMARY} />
@@ -644,7 +940,7 @@ const TranslateScreen = () => {
             <Text style={styles.loadingText}>音声をテキストに変換中...</Text>
           </View>
         )}
-        {!loading && translations && translations.length > 0 && (
+        {!loading && !isChatFocusedMode && translations && translations.length > 0 && (
           <View style={styles.suggestionContainer}>
             <View style={styles.suggestionContent}>
               <View style={styles.suggestionHeader}>
@@ -664,7 +960,7 @@ const TranslateScreen = () => {
             </View>
           </View>
         )}
-        {!loading && suggestions && suggestions.length > 0 && (
+        {!loading && !isChatFocusedMode && suggestions && suggestions.length > 0 && (
           <View style={styles.suggestionContainer}>
             <View style={styles.suggestionContent}>
               <View style={styles.suggestionHeader}>
@@ -684,7 +980,7 @@ const TranslateScreen = () => {
             </View>
           </View>
         )}
-        {!loading && suggestion && (
+        {!loading && !isChatFocusedMode && suggestion && (
           <View style={styles.suggestionContainer}>
             <View style={styles.suggestionContent}>
               <View style={styles.suggestionHeader}>
@@ -701,7 +997,7 @@ const TranslateScreen = () => {
             </View>
           </View>
         )}
-        {!loading && !vocabulary && !suggestion && !suggestions && !translations && searchHistory && searchHistory.length > 0 && (
+        {!loading && !isChatFocusedMode && !vocabulary && !suggestion && !suggestions && !translations && searchHistory && searchHistory.length > 0 && (
           <View style={styles.suggestionContainer}>
             <View style={styles.suggestionContent}>
               <View style={styles.suggestionHeader}>
@@ -726,120 +1022,71 @@ const TranslateScreen = () => {
             </View>
           </View>
         )}
-        {!loading && vocabulary && (
-          <View style={styles.resultCard}>
-            <View style={styles.wordHeader}>
-              <View style={styles.wordContainer}>
-                <Text style={styles.wordText}>{vocabulary.vocabulary}</Text>
-                <Text style={styles.pronunciation}>{vocabulary.pronunciation}</Text>
-                <Text style={styles.partOfSpeech}>{vocabulary.part_of_speech}</Text>
-              </View>
-              <TouchableOpacity 
-                style={styles.soundButton}
-                onPress={() => handlePlaySound(vocabulary.vocabulary)}
-              >
-                <Ionicons name="volume-high" size={24} color={COLORS.PRIMARY} />
-              </TouchableOpacity>
-            </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>意味</Text>
-              <Text style={styles.sectionText}>{vocabulary.meaning}</Text>
-            </View>
-
-            {vocabulary.synonyms.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>類義語</Text>
-                <View style={styles.synonymContainer}>
-                  {vocabulary.synonyms.map((synonym, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.synonym}
-                      onPress={() => {
-                        setInputText(synonym);
-                        translate(synonym);
-                      }}
-                    >
-                      <Text style={styles.synonymText}>{synonym}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {vocabulary.conjugations && Object.keys(vocabulary.conjugations).length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>活用形</Text>
-                <View style={styles.conjugationContainer}>
-                  {Object.entries(vocabulary.conjugations).map(([type, form]) => (
-                    <TouchableOpacity
-                      key={type}
-                      style={styles.conjugationItem}
-                      onPress={() => {
-                        setInputText(form);
-                        translate(form);
-                      }}
-                    >
-                      <Text style={styles.conjugationType}>{type}:</Text>
-                      <Text style={styles.conjugationForm}>{form}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {vocabulary.examples.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>例文</Text>
-                {vocabulary.examples.map((example, index) => (
-                  <View key={index} style={styles.exampleContainer}>
-                    <Text style={styles.exampleText}>{example.en}</Text>
-                    <Text style={styles.exampleTranslation}>{example.ja}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {vocabulary.notes && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>補足</Text>
-                <Text style={styles.sectionText}>{vocabulary.notes}</Text>
-              </View>
-            )}
-
-            <TouchableOpacity 
-              style={[styles.saveButton, isSaved && styles.savedButton]} 
-              onPress={handleSave}
-            >
-              <Ionicons 
-                name={isSaved ? "checkmark-circle" : "bookmark-outline"} 
-                size={20} 
-                color={isSaved ? COLORS.SUCCESS.DARK : COLORS.WHITE} 
-                style={styles.saveButtonIcon} 
-              />
-              <Text style={[styles.saveButtonText, isSaved && styles.savedButtonText]}>
-                {isSaved ? '保存済み' : '保存'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Add Report Issue Button */}
-            <TouchableOpacity
-              style={styles.reportIssueButton}
-              onPress={handleOpenReportModal}
-            >
-              <Ionicons
-                name="alert-circle-outline"
-                size={20}
-                color={COLORS.TEXT.DARK}
-                style={styles.reportIssueButtonIcon}
-              />
-              <Text style={styles.reportIssueButtonText}>問題を報告する</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* 展開された辞書情報 (スクロール対象) */}
+        {!loading && vocabulary && isDictionaryDetailsOpen && renderVocabularyDetails()}
+        {!loading && renderAiChatSection()}
       </ScrollView>
 
-      {/* Report Issue Modal */}
+      {/* チャット入力欄を絶対配置 */}
+      {(vocabulary || isChatFocusedMode || activeChatVocabulary) && (
+        <SafeAreaView style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: COLORS.WHITE,
+          zIndex: 100,
+          paddingBottom: Platform.OS === 'android' ? 8 : 0,
+          borderTopWidth: 1,
+          borderTopColor: COLORS.BORDER.GRAY_LIGHT,
+          shadowColor: COLORS.BLACK,
+          shadowOffset: { width: 0, height: -1 },
+          shadowOpacity: 0.1,
+          shadowRadius: 2,
+          elevation: 2,
+        }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            style={{ backgroundColor: 'transparent' }}
+          >
+            <View style={styles.aiInputContainer}>
+              <TextInput
+                style={styles.aiTextInput}
+                placeholder={
+                  isAskingAi
+                    ? 'AIが応答中です...'
+                    : (activeChatVocabulary?.vocabulary || vocabulary?.vocabulary)
+                    ? `「${activeChatVocabulary?.vocabulary || vocabulary?.vocabulary}」に関する質問を入力`
+                    : 'AIへの質問を入力...'
+                }
+                value={aiQuestion}
+                onChangeText={setAiQuestion}
+                editable={!isAskingAi && !loading && !!(activeChatVocabulary || vocabulary)}
+                multiline
+                onSubmitEditing={handleAskAi}
+                returnKeyType="send"
+              />
+              <TouchableOpacity
+                style={[
+                  styles.aiSendButton,
+                  (!aiQuestion.trim() || isAskingAi || loading || !(activeChatVocabulary || vocabulary)) && styles.aiSendButtonDisabled,
+                ]}
+                onPress={handleAskAi}
+                disabled={isAskingAi || !aiQuestion.trim() || loading || !(activeChatVocabulary || vocabulary)}
+              >
+                {isAskingAi ? (
+                  <ActivityIndicator size="small" color={COLORS.WHITE} />
+                ) : (
+                  <Ionicons name="send" size={20} color={aiQuestion.trim() ? COLORS.WHITE : COLORS.ICON?.DISABLED || COLORS.TEXT.DISABLED} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      )}
+
       <Modal
         animationType="slide"
         transparent={true}
@@ -1031,22 +1278,33 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 16,
+    marginTop: 20 ,
   },
   wordContainer: {
     flex: 1,
+  },
+  wordTextContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    width: '100%',
   },
   wordText: {
     fontSize: 32,
     fontWeight: 'bold',
     color: COLORS.TEXT.DARKER,
     marginBottom: 4,
+    lineHeight: 40,
   },
   pronunciation: {
     fontSize: 16,
     color: COLORS.TEXT.LIGHT_GRAY,
   },
   soundButton: {
-    padding: 8,
+    width: 24,
+    height: 24,
+    marginLeft: 16,
+    marginRight: 8,
   },
   section: {
     marginBottom: 20,
@@ -1225,7 +1483,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  // Styles for Report Issue Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1321,10 +1578,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.PRIMARY,
     opacity: 0.7,
   },
-  modalButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
   cancelButtonText: {
     color: COLORS.TEXT.DARK,
     fontSize: 14,
@@ -1334,7 +1587,86 @@ const styles = StyleSheet.create({
     color: COLORS.WHITE,
     fontSize: 14,
     fontWeight: '500',
-  }
+  },
+  aiSection: {
+    marginTop: 0,
+    paddingTop: 0,
+  },
+  aiConversationScrollView: {
+    marginBottom: 16,
+  },
+  aiMessageBubble: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    marginBottom: 8,
+    maxWidth: '80%',
+  },
+  userMessageBubble: {
+    backgroundColor: COLORS.PRIMARY,
+    alignSelf: 'flex-end',
+    borderBottomRightRadius: 4,
+    borderBottomLeftRadius: 18,
+  },
+  aiMessageBubbleBase: {
+    backgroundColor: COLORS.BACKGROUND.GRAY,
+    alignSelf: 'flex-start',
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 18,
+  },
+  aiMessageText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  userMessageText: {
+    color: COLORS.WHITE,
+  },
+  aiMessageTextBase: {
+    color: COLORS.TEXT.DARKER,
+  },
+  aiMessageTimestamp: {
+    fontSize: 10,
+    color: COLORS.TEXT.LIGHT_GRAY,
+    alignSelf: 'flex-end',
+    marginTop: 4,
+  },
+  loadingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  aiInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    marginHorizontal: 8,
+    marginTop: 8,
+    backgroundColor: COLORS.WHITE,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.LIGHT,
+  },
+  aiTextInput: {
+    flex: 1,
+    fontSize: 16,
+    maxHeight: 100,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    color: COLORS.TEXT.PRIMARY,
+  },
+  aiSendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.PRIMARY,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  aiSendButtonDisabled: {
+    backgroundColor: COLORS.BACKGROUND.GRAY,
+  },
 });
 
 export default TranslateScreen;

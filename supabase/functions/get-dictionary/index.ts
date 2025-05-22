@@ -470,7 +470,7 @@ async function fetchGeminiApi(vocabulary: string): Promise<VocabularyData | Sugg
     Provide adjective conjugations: "比較級", "最上級", "副詞形".
     Provide adverb conjugations: "形容詞形".
     Use English for "synonyms", "antonyms". Use IPA for "pronunciation".
-    Include irregular forms. Omit non-existent conjugations.
+    Include irregular forms. Omit non-existent conjugations. If a specific conjugation form (e.g., "副詞形" for an adjective) does not exist, do not include the key for that conjugation in the output at all.
 
     REQUIREMENTS:
     1. Provide at least 2 natural example sentences. If the vocabulary has multiple distinct meanings or common usages, provide up to 3 example sentences, with one example for each distinct meaning or usage. Each example sentence must have both English and Japanese versions.
