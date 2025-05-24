@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   SafeAreaView,
   Dimensions,
+  TextStyle,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons'; // アイコンをインポート
 import { supabase } from '@/lib/supabase';
@@ -24,6 +25,16 @@ import { handleApiError } from '../utils/errorHandler';
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import { useSpeech } from '../hooks/useSpeech';
 import * as FileSystem from 'expo-file-system';
+import Markdown from 'react-native-markdown-display';
+
+// Markdown用のスタイル定義（コンポーネント外で定義）
+const markdownStyle: { body: TextStyle } = {
+  body: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: COLORS.TEXT.DARKER,
+  },
+};
 
 interface VocabularyResult {
   id: number;
@@ -593,10 +604,21 @@ const TranslateScreen = () => {
 
   // Function to ask AI about vocabulary
   const handleAskAi = async () => {
-    if (!vocabulary || !aiQuestion.trim()) {
-      Alert.alert('エラー', '単語が選択されていないか、質問が入力されていません。');
+    if (!vocabulary && !activeChatVocabulary) {
+      Alert.alert('エラー', '単語が選択されていません。');
       return;
     }
+    if (!aiQuestion.trim()) {
+      Alert.alert('エラー', '質問が入力されていません。');
+      return;
+    }
+
+    const currentVocab = activeChatVocabulary || vocabulary;
+    if (!currentVocab) {
+      Alert.alert('エラー', '参照する単語情報が見つかりません。');
+      return;
+    }
+
     const userQuestionText = aiQuestion.trim();
     const newUserMessage: AIChatEntry = {
       id: Date.now().toString() + '-user',
@@ -605,27 +627,67 @@ const TranslateScreen = () => {
       timestamp: new Date(),
     };
     
-    // チャット送信時は必ずチャット表示・辞書詳細を折りたたむ
     setIsChatFocusedMode(true);
-    setActiveChatVocabulary(vocabulary);
+    if (!activeChatVocabulary && vocabulary) {
+      setActiveChatVocabulary(vocabulary); 
+    }
     setIsDictionaryDetailsOpen(false);
     
     setAiConversation(prev => [...prev, newUserMessage]);
     setAiQuestion(''); 
     setIsAskingAi(true);
 
-    // Simulate API call with dummy data
-    setTimeout(() => {
-      const dummyResponseText = `「${activeChatVocabulary?.vocabulary || vocabulary.vocabulary}」に関するあなたの質問「${userQuestionText}」に対するAIの回答です。これはダミーデータであり、実際のAIからの応答ではありません。ここに詳細な説明や例文などが表示される予定です。次の質問をどうぞ。`;
-      const newAiMessage: AIChatEntry = {
-        id: Date.now().toString() + '-ai',
+    try {
+      // 新しいSupabase Edge Function を呼び出す (仮称: get-dictionary-chat-response)
+      const { data: aiResponseMessageData, error: functionError } = await supabase.functions.invoke('get-dictionary-chat-response', {
+        body: {
+          userInput: userQuestionText,
+          context: {
+            vocabulary: currentVocab.vocabulary,
+            meaning: currentVocab.meaning,
+            pronunciation: currentVocab.pronunciation,
+            part_of_speech: currentVocab.part_of_speech,
+            examples: currentVocab.examples,
+            synonyms: currentVocab.synonyms,
+            conjugations: currentVocab.conjugations,
+            notes: currentVocab.notes,
+          },
+        },
+      });
+
+      if (functionError) {
+        console.error('Supabase function invocation error:', functionError);
+        // ユーザーに表示するエラーメッセージを具体的にする
+        const displayError = functionError.message.includes('Function not found')
+          ? 'AIチャット機能がまだ利用できません。'
+          : `AIチャットサーバーとの通信に失敗しました: ${functionError.message}`;
+        throw new Error(displayError);
+      }
+
+      if (aiResponseMessageData && aiResponseMessageData.text) {
+        const newAiMessage: AIChatEntry = {
+          id: Date.now().toString() + '-ai',
+          type: 'ai',
+          text: aiResponseMessageData.text,
+          timestamp: new Date(),
+        };
+        setAiConversation(prev => [...prev, newAiMessage]);
+      } else {
+        console.error('AI response is not in the expected format:', aiResponseMessageData);
+        throw new Error('AIからの応答形式が正しくありません。');
+      }
+    } catch (error: any) {
+      console.error('Failed to get AI response:', error);
+      const errorAiMessage: AIChatEntry = {
+        id: Date.now().toString() + '-ai-error',
         type: 'ai',
-        text: dummyResponseText,
+        text: error.message || 'AIとのチャット中に不明なエラーが発生しました。',
         timestamp: new Date(),
       };
-      setAiConversation(prev => [...prev, newAiMessage]);
+      setAiConversation(prev => [...prev, errorAiMessage]);
+    } finally {
       setIsAskingAi(false);
-    }, 2000); 
+    }
   };
 
   const REPORT_ISSUE_ITEMS = [
@@ -809,9 +871,9 @@ const TranslateScreen = () => {
       <View
         style={[
           styles.aiSection,
-          { flex: 1 }, // 常にflex:1を適用して利用可能な高さを最大限使用
-          hasCollapsedDictionaryView && { paddingTop: 0 }, // 辞書折りたたみビューがある場合はtop paddingを0に
-          { paddingBottom: 0 } // aiSection自体のpaddingBottomは0にし、メインScrollViewに任せる
+          { flex: 1 },
+          hasCollapsedDictionaryView && { paddingTop: 0 },
+          { paddingBottom: 0 }
         ]}
       >
         <View style={{ flex: 1, minHeight: 0 }}>
@@ -830,16 +892,16 @@ const TranslateScreen = () => {
                   entry.type === 'user' ? styles.userMessageBubble : styles.aiMessageBubbleBase
                 ]}
               >
-                <Text style={[styles.aiMessageText, entry.type === 'user' ? styles.userMessageText : styles.aiMessageTextBase]}>{entry.text}</Text>
-                <Text style={styles.aiMessageTimestamp}>
-                  {entry.timestamp.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
-                </Text>
+                {entry.type === 'ai' ? (
+                  <Markdown style={markdownStyle}>{entry.text}</Markdown>
+                ) : (
+                  <Text style={[styles.aiMessageText, styles.userMessageText]}>{entry.text}</Text>
+                )}
               </View>
             ))}
             {isAskingAi && (
-              <View style={[styles.aiMessageBubble, styles.aiMessageBubbleBase, styles.loadingBubble]}>
+              <View style={styles.aiLoadingOuterContainer}>
                 <ActivityIndicator size="small" color={COLORS.PRIMARY} />
-                <Text style={styles.aiMessageTimestamp}>AIが応答中...</Text>
               </View>
             )}
           </ScrollView>
@@ -1011,12 +1073,6 @@ const TranslateScreen = () => {
                   onPress={() => handleSearchHistoryClick(item.vocabulary)}
                 >
                   <Text style={styles.suggestionWord}>{item.vocabulary}</Text>
-                  <View style={styles.historyTimestampContainer}>
-                    <Text style={styles.searchHistoryTimestamp}>
-                      {new Date(item.searched_at).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Tokyo' }).replace(/\//g, '/')}
-                    </Text>
-                    <Ionicons name="arrow-forward" size={20} color={COLORS.SECONDARY} style={styles.historyArrowIcon} />
-                  </View>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1624,17 +1680,6 @@ const styles = StyleSheet.create({
   aiMessageTextBase: {
     color: COLORS.TEXT.DARKER,
   },
-  aiMessageTimestamp: {
-    fontSize: 10,
-    color: COLORS.TEXT.LIGHT_GRAY,
-    alignSelf: 'flex-end',
-    marginTop: 4,
-  },
-  loadingBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   aiInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1666,6 +1711,10 @@ const styles = StyleSheet.create({
   },
   aiSendButtonDisabled: {
     backgroundColor: COLORS.BACKGROUND.GRAY,
+  },
+  aiLoadingOuterContainer: {
+    alignItems: 'center',
+    paddingVertical: 10,
   },
 });
 
