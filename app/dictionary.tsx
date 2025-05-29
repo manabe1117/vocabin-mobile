@@ -255,10 +255,25 @@ const TranslateScreen = () => {
   const [isDictionaryDetailsOpen, setIsDictionaryDetailsOpen] = useState(true); // 辞書詳細の開閉状態
 
   const initialLoadRef = useRef(true);
-  const scrollViewRef = useRef<ScrollView | null>(null);
+  const aiChatScrollViewRef = useRef<ScrollView | null>(null);
 
   // AIチャット入力欄表示制御のためのフラグ
   const showAiInput = vocabulary || isChatFocusedMode || activeChatVocabulary;
+
+  // --- チャットボックス最大高さの計算 ---
+  const HEADER_HEIGHT = 64; // 検索バー
+  const COLLAPSED_CARD_HEIGHT = 80; // 折りたたみ時の辞書カード
+  const AI_INPUT_HEIGHT = 80; // チャット入力欄
+  const SAFE_AREA = Platform.OS === 'ios' ? 24 : 0;
+  const MARGIN = 32; // その他余白
+
+  const COLLAPSED_CONTENT_HEIGHT =
+    Dimensions.get('window').height -
+    HEADER_HEIGHT -
+    COLLAPSED_CARD_HEIGHT -
+    AI_INPUT_HEIGHT -
+    SAFE_AREA -
+    MARGIN;
 
   useEffect(() => {
     if (session && initialLoadRef.current && inputText === '' && !loading) {
@@ -634,6 +649,9 @@ const TranslateScreen = () => {
     setIsDictionaryDetailsOpen(false);
     
     setAiConversation(prev => [...prev, newUserMessage]);
+    setTimeout(() => {
+      aiChatScrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
     setAiQuestion(''); 
     setIsAskingAi(true);
 
@@ -712,15 +730,11 @@ const TranslateScreen = () => {
         <TouchableOpacity
           style={[
             styles.resultCard,
-            {
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingVertical: 16,
-              marginBottom: 8,
-            }
+            styles.resultCardCollapsed,
           ]}
           activeOpacity={0.8}
           onPress={() => setIsDictionaryDetailsOpen(true)}
+          accessibilityLabel="詳細を閉じる"
         >
           <View style={{ flex: 1 }}>
             <View style={styles.wordTextContainer}>
@@ -858,31 +872,29 @@ const TranslateScreen = () => {
   const renderAiChatSection = () => {
     // 辞書詳細が展開されている場合はチャット会話部分を非表示
     if (isDictionaryDetailsOpen) return null;
-    if (!vocabulary && (!isChatFocusedMode || !activeChatVocabulary)) return null;
-    if (!isChatFocusedMode && !vocabulary) return null;
+    // AIチャットを表示する条件を絞り込み
+    if (!isChatFocusedMode && !vocabulary && !activeChatVocabulary) return null;
 
     const currentDisplayVocab = activeChatVocabulary || vocabulary;
+    // currentDisplayVocab が null の場合も何も表示しない
     if (!currentDisplayVocab) return null;
 
-    const hasCollapsedDictionaryView = vocabulary && !isDictionaryDetailsOpen;
-
-    // チャットエリアの高さは自動でOK
     return (
-      <View
-        style={[
-          styles.aiSection,
-          { flex: 1 },
-          hasCollapsedDictionaryView && { paddingTop: 0 },
-          { paddingBottom: 0 }
-        ]}
-      >
-        <View style={{ flex: 1, minHeight: 0 }}>
+      <View style={styles.aiSection}>
+        <View style={{ flexGrow: 1, minHeight: 0 }}>
           <ScrollView
-            style={styles.aiConversationScrollView}
-            ref={scrollViewRef}
-            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-            contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-start', paddingTop: 0 }}
+            style={[
+              styles.aiConversationScrollView,
+              { maxHeight: !isDictionaryDetailsOpen ? COLLAPSED_CONTENT_HEIGHT : undefined }
+            ]}
+            ref={aiChatScrollViewRef}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => {
+              setTimeout(() => aiChatScrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+            }}
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-start', paddingTop: 16 }}
             keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true}
           >
             {aiConversation.map((entry) => (
               <View
@@ -978,114 +990,198 @@ const TranslateScreen = () => {
         </View>
       </View>
 
-      {/* 折りたたまれた辞書情報 (固定表示) */}
-      {!loading && vocabulary && !isDictionaryDetailsOpen && (
-        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+      {isDictionaryDetailsOpen ? (
+        <ScrollView
+          style={styles.scrollView}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ 
+            paddingBottom: showAiInput ? (Platform.OS === 'ios' ? 80 : 90) : 16,
+            flexGrow: 1 
+          }}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled
+        >
+          {loading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={COLORS.PRIMARY} />
+              <Text style={styles.loadingText}>検索中...</Text>
+            </View>
+          )}
+          {!loading && isTranscribing && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={COLORS.PRIMARY} />
+              <Text style={styles.loadingText}>音声をテキストに変換中...</Text>
+            </View>
+          )}
+          {!loading && !isChatFocusedMode && translations && translations.length > 0 && (
+            <View style={styles.suggestionContainer}>
+              <View style={styles.suggestionContent}>
+                <View style={styles.suggestionHeader}>
+                  <Ionicons name="language" size={20} color={COLORS.SECONDARY} />
+                  <Text style={styles.suggestionText}>翻訳候補</Text>
+                </View>
+                {translations.map((translation, index) => (
+                  <TouchableOpacity 
+                    key={index}
+                    style={styles.suggestionButton}
+                    onPress={() => handleTranslationClick(translation)}
+                  >
+                    <Text style={styles.suggestionWord}>{translation}</Text>
+                    <Ionicons name="arrow-forward" size={20} color={COLORS.SECONDARY} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+          {!loading && !isChatFocusedMode && suggestions && suggestions.length > 0 && (
+            <View style={styles.suggestionContainer}>
+              <View style={styles.suggestionContent}>
+                <View style={styles.suggestionHeader}>
+                  <Ionicons name="search-circle" size={20} color={COLORS.SECONDARY} />
+                  <Text style={styles.suggestionText}>もしかして？</Text>
+                </View>
+                {suggestions.map((suggestionText, index) => (
+                  <TouchableOpacity 
+                    key={index}
+                    style={styles.suggestionButton}
+                    onPress={() => handleSuggestionClick(suggestionText)}
+                  >
+                    <Text style={styles.suggestionWord}>{suggestionText}</Text>
+                    <Ionicons name="arrow-forward" size={20} color={COLORS.SECONDARY} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+          {!loading && !isChatFocusedMode && suggestion && (
+            <View style={styles.suggestionContainer}>
+              <View style={styles.suggestionContent}>
+                <View style={styles.suggestionHeader}>
+                  <Ionicons name="search-circle" size={20} color={COLORS.SECONDARY} />
+                  <Text style={styles.suggestionText}>もしかして？</Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.suggestionButton}
+                  onPress={() => handleSuggestionClick(suggestion)}
+                >
+                  <Text style={styles.suggestionWord}>{suggestion}</Text>
+                  <Ionicons name="arrow-forward" size={20} color={COLORS.SECONDARY} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          {!loading && !isChatFocusedMode && !vocabulary && !suggestion && !suggestions && !translations && searchHistory && searchHistory.length > 0 && (
+            <View style={styles.suggestionContainer}>
+              <View style={styles.suggestionContent}>
+                <View style={styles.suggestionHeader}>
+                  <Ionicons name="time-outline" size={20} color={COLORS.SECONDARY} />
+                  <Text style={styles.suggestionText}>検索履歴</Text>
+                </View>
+                {searchHistory.map((item, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.suggestionButton}
+                    onPress={() => handleSearchHistoryClick(item.vocabulary)}
+                  >
+                    <Text style={styles.suggestionWord}>{item.vocabulary}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {!loading && vocabulary && isDictionaryDetailsOpen && renderVocabularyDetails()}
+          {!loading && 
+           !isDictionaryDetailsOpen && 
+           (isChatFocusedMode || vocabulary || activeChatVocabulary) && 
+           <ScrollView
+             style={[
+               styles.aiConversationScrollView,
+               { maxHeight: COLLAPSED_CONTENT_HEIGHT }
+             ]}
+             ref={aiChatScrollViewRef}
+             showsVerticalScrollIndicator={false}
+             contentContainerStyle={{
+               flexGrow: 1,
+               justifyContent: 'flex-start',
+               paddingTop: 16,
+               paddingBottom: AI_INPUT_HEIGHT
+             }}
+             keyboardShouldPersistTaps="handled"
+             nestedScrollEnabled={true}
+           >
+             {aiConversation.map((entry) => (
+               <View
+                 key={entry.id}
+                 style={[
+                   styles.aiMessageBubble,
+                   entry.type === 'user' ? styles.userMessageBubble : styles.aiMessageBubbleBase
+                 ]}
+               >
+                 {entry.type === 'ai' ? (
+                   <Markdown style={markdownStyle}>{entry.text}</Markdown>
+                 ) : (
+                   <Text style={[styles.aiMessageText, styles.userMessageText]}>{entry.text}</Text>
+                 )}
+               </View>
+             ))}
+             {isAskingAi && (
+               <View style={styles.aiLoadingOuterContainer}>
+                 <ActivityIndicator size="small" color={COLORS.PRIMARY} />
+               </View>
+             )}
+           </ScrollView>
+          }
+        </ScrollView>
+      ) : (
+        <View
+          style={[
+            styles.scrollView,
+            { flex: 1 }
+          ]}
+        >
           {renderVocabularyDetails()}
+          <ScrollView
+            style={[
+              styles.aiConversationScrollView,
+              { maxHeight: COLLAPSED_CONTENT_HEIGHT }
+            ]}
+            ref={aiChatScrollViewRef}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              flexGrow: 1,
+              justifyContent: 'flex-start',
+              paddingTop: 16,
+              paddingBottom: AI_INPUT_HEIGHT
+            }}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true}
+          >
+            {aiConversation.map((entry) => (
+              <View
+                key={entry.id}
+                style={[
+                  styles.aiMessageBubble,
+                  entry.type === 'user' ? styles.userMessageBubble : styles.aiMessageBubbleBase
+                ]}
+              >
+                {entry.type === 'ai' ? (
+                  <Markdown style={markdownStyle}>{entry.text}</Markdown>
+                ) : (
+                  <Text style={[styles.aiMessageText, styles.userMessageText]}>{entry.text}</Text>
+                )}
+              </View>
+            ))}
+            {isAskingAi && (
+              <View style={styles.aiLoadingOuterContainer}>
+                <ActivityIndicator size="small" color={COLORS.PRIMARY} />
+              </View>
+            )}
+          </ScrollView>
         </View>
       )}
 
-      <ScrollView
-        style={styles.scrollView}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: showAiInput ? 80 : 16 }} // チャット入力欄の高さ分余白を確保、表示されない場合はデフォルトパディング
-      >
-        {loading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.PRIMARY} />
-            <Text style={styles.loadingText}>検索中...</Text>
-          </View>
-        )}
-        {!loading && isTranscribing && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.PRIMARY} />
-            <Text style={styles.loadingText}>音声をテキストに変換中...</Text>
-          </View>
-        )}
-        {!loading && !isChatFocusedMode && translations && translations.length > 0 && (
-          <View style={styles.suggestionContainer}>
-            <View style={styles.suggestionContent}>
-              <View style={styles.suggestionHeader}>
-                <Ionicons name="language" size={20} color={COLORS.SECONDARY} />
-                <Text style={styles.suggestionText}>翻訳候補</Text>
-              </View>
-              {translations.map((translation, index) => (
-                <TouchableOpacity 
-                  key={index}
-                  style={styles.suggestionButton}
-                  onPress={() => handleTranslationClick(translation)}
-                >
-                  <Text style={styles.suggestionWord}>{translation}</Text>
-                  <Ionicons name="arrow-forward" size={20} color={COLORS.SECONDARY} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-        {!loading && !isChatFocusedMode && suggestions && suggestions.length > 0 && (
-          <View style={styles.suggestionContainer}>
-            <View style={styles.suggestionContent}>
-              <View style={styles.suggestionHeader}>
-                <Ionicons name="search-circle" size={20} color={COLORS.SECONDARY} />
-                <Text style={styles.suggestionText}>もしかして？</Text>
-              </View>
-              {suggestions.map((suggestionText, index) => (
-                <TouchableOpacity 
-                  key={index}
-                  style={styles.suggestionButton}
-                  onPress={() => handleSuggestionClick(suggestionText)}
-                >
-                  <Text style={styles.suggestionWord}>{suggestionText}</Text>
-                  <Ionicons name="arrow-forward" size={20} color={COLORS.SECONDARY} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-        {!loading && !isChatFocusedMode && suggestion && (
-          <View style={styles.suggestionContainer}>
-            <View style={styles.suggestionContent}>
-              <View style={styles.suggestionHeader}>
-                <Ionicons name="search-circle" size={20} color={COLORS.SECONDARY} />
-                <Text style={styles.suggestionText}>もしかして？</Text>
-              </View>
-              <TouchableOpacity 
-                style={styles.suggestionButton}
-                onPress={() => handleSuggestionClick(suggestion)}
-              >
-                <Text style={styles.suggestionWord}>{suggestion}</Text>
-                <Ionicons name="arrow-forward" size={20} color={COLORS.SECONDARY} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-        {!loading && !isChatFocusedMode && !vocabulary && !suggestion && !suggestions && !translations && searchHistory && searchHistory.length > 0 && (
-          <View style={styles.suggestionContainer}>
-            <View style={styles.suggestionContent}>
-              <View style={styles.suggestionHeader}>
-                <Ionicons name="time-outline" size={20} color={COLORS.SECONDARY} />
-                <Text style={styles.suggestionText}>検索履歴</Text>
-              </View>
-              {searchHistory.map((item, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.suggestionButton}
-                  onPress={() => handleSearchHistoryClick(item.vocabulary)}
-                >
-                  <Text style={styles.suggestionWord}>{item.vocabulary}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* 展開された辞書情報 (スクロール対象) */}
-        {!loading && vocabulary && isDictionaryDetailsOpen && renderVocabularyDetails()}
-        {!loading && renderAiChatSection()}
-      </ScrollView>
-
-      {/* チャット入力欄を絶対配置 */}
-      {(vocabulary || isChatFocusedMode || activeChatVocabulary) && (
+      {showAiInput && (
         <SafeAreaView style={{
           position: 'absolute',
           left: 0,
@@ -1104,7 +1200,7 @@ const TranslateScreen = () => {
         }}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             style={{ backgroundColor: 'transparent' }}
           >
             <View style={styles.aiInputContainer}>
@@ -1304,7 +1400,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    padding: 16,
     width: '100%',
   },
   loadingContainer: {
@@ -1321,13 +1416,26 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.WHITE,
     borderRadius: 16,
     padding: 20,
-    marginBottom: 20,
-    width: '100%',
+    paddingHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 0,
+    width: '92%',
+    alignSelf: 'center',
     shadowColor: COLORS.BLACK,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+  },
+  resultCardCollapsed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    width: '92%',
+    alignSelf: 'center',
   },
   wordHeader: {
     flexDirection: 'row',
@@ -1414,7 +1522,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.WHITE,
     padding: 16,
     borderRadius: 16,
-    marginBottom: 20,
+    marginTop: 16,
+    marginBottom: 10,
+    width: '92%',
+    alignSelf: 'center',
     shadowColor: COLORS.BLACK,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1644,42 +1755,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  aiSection: {
-    marginTop: 0,
-    paddingTop: 0,
-  },
-  aiConversationScrollView: {
-    marginBottom: 16,
-  },
-  aiMessageBubble: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 18,
-    marginBottom: 8,
-    maxWidth: '80%',
-  },
-  userMessageBubble: {
-    backgroundColor: COLORS.PRIMARY,
-    alignSelf: 'flex-end',
-    borderBottomRightRadius: 4,
-    borderBottomLeftRadius: 18,
-  },
-  aiMessageBubbleBase: {
-    backgroundColor: COLORS.BACKGROUND.GRAY,
-    alignSelf: 'flex-start',
-    borderBottomLeftRadius: 4,
-    borderBottomRightRadius: 18,
-  },
-  aiMessageText: {
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  userMessageText: {
-    color: COLORS.WHITE,
-  },
-  aiMessageTextBase: {
-    color: COLORS.TEXT.DARKER,
-  },
   aiInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1715,6 +1790,45 @@ const styles = StyleSheet.create({
   aiLoadingOuterContainer: {
     alignItems: 'center',
     paddingVertical: 10,
+  },
+  aiSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  aiConversationScrollView: {
+    // maxHeightはここでは指定しない
+    paddingHorizontal: 16,
+  },
+  aiMessageBubble: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    marginBottom: 8,
+    maxWidth: '95%',
+  },
+  userMessageBubble: {
+    backgroundColor: COLORS.PRIMARY,
+    alignSelf: 'flex-end',
+    borderBottomRightRadius: 4,
+    borderBottomLeftRadius: 18,
+  },
+  aiMessageBubbleBase: {
+    backgroundColor: COLORS.BACKGROUND.GRAY,
+    alignSelf: 'flex-start',
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 18,
+  },
+  aiMessageText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  userMessageText: {
+    color: COLORS.WHITE,
+  },
+  aiMessageTextBase: {
+    color: COLORS.TEXT.DARKER,
+    fontSize: 15,
+    lineHeight: 22,
   },
 });
 
