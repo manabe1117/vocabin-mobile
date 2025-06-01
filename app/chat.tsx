@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import Markdown from 'react-native-markdown-display';
 
 import { ThemedView } from '../components/ThemedView';
 import { useSpeech } from '../hooks/useSpeech';
@@ -77,6 +78,15 @@ interface ContentBlock {
   id: string;
   content: any;
 }
+
+// Markdown用のスタイル定義（dictionary.tsxから流用）
+const markdownStyle = {
+  body: {
+    fontSize: 16,
+    lineHeight: 22,
+    color: COLORS.TEXT.PRIMARY,
+  },
+};
 
 const ChatScreen = () => {
   const { session } = useAuth();
@@ -525,12 +535,16 @@ const ChatScreen = () => {
           isUserMessage ? styles.userBubble : styles.aiBubble,
         ]}
       >
-        <Text style={[
-          styles.messageText,
-          { color: isUserMessage ? COLORS.WHITE : COLORS.TEXT.PRIMARY }
-        ]}>
-          {message.text}
-        </Text>
+        {isUserMessage ? (
+          <Text style={[
+            styles.messageText,
+            { color: COLORS.WHITE }
+          ]}>
+            {message.text}
+          </Text>
+        ) : (
+          <Markdown style={markdownStyle}>{message.text}</Markdown>
+        )}
         
         {!isUserMessage && (
           <View style={styles.messageActions}>

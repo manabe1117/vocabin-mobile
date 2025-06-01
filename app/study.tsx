@@ -373,7 +373,7 @@ const StudyScreen = () => {
           style={styles.reloadButton}
           onPress={() => {
             if (flashcards.length >= 50) {
-              // もう一度学習するの場合は、同じ画面に再度遷移する
+              // 続けて学習するの場合は、同じ画面に再度遷移する
               // これにより、コンポーネントが再マウントされ、最初から始まる
               router.replace('/study');
             } else {
@@ -382,7 +382,7 @@ const StudyScreen = () => {
           }}
         >
           <Text style={styles.reloadButtonText}>
-            {flashcards.length >= 50 ? 'もう一度学習する' : 'ホーム画面に戻る'}
+            {flashcards.length >= 50 ? '続けて学習する' : 'ホーム画面に戻る'}
           </Text>
         </TouchableOpacity>
       </View>
