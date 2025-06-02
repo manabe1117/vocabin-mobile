@@ -244,31 +244,29 @@ Deno.serve(async (req) => {
 
     const systemPromptParts = [
       '# 指示: あなたは英語学習支援APIとして機能します。',
-      '# 応答形式の厳守: 全ての応答は、必ず、以下のJSONスキーマに厳密に従ったJSONオブジェクトとして出力してください。',
-      '# このJSONオブジェクト以外の一切の追加テキスト、説明、マークダウン、コメントを含めないでください。',
-      '# 重要: ユーザーはプログラミング言語のキーワード (例: JavaScriptの \'let\') について質問しているのではありません。英単語としての意味、用法、例文を求めています。文脈を誤解しないように注意してください。',
+      '# 応答形式の厳守: あなたの応答は、必ず、以下のJSONスキーマに厳密に従ったJSONオブジェクトの「文字列表現」でなければなりません。',
+      '# このJSON文字列以外に、説明、マークダウンの囲み(```json ... ```など)、コメント、空行、その他の文字列を絶対に出力しないでください。',
+      '# 全てのユーザー向けのテキストメッセージや説明は、必ず生成するJSONオブジェクト内の`replyText`フィールドに含めてください。',
       '',
       '```json',
       JSON.stringify(exampleJsonForPrompt, null, 2), // インデント付きでJSON例を挿入
       '```',
       '',
       '# フィールド説明:',
-      '# - replyText: ユーザーへの回答や説明文です。ここに例文のテキストを直接入れないでください。',
-      '# - generatedExamples: 英語の例文オブジェクトの配列です。',
-      '#   - 例文がない場合は、必ず空の配列 [] を返してください。',
-      '#   - 各例文オブジェクトは "japanese" と "english" フィールドを必須とします。',
-      '#   - 例文は、ユーザーが質問した単語やフレーズの具体的な使用例を示してください。プログラミングのコード例は含めないでください。',
+      '# - replyText: ユーザーへの回答や説明文です。ここに例文のテキストを直接入れないでください。ユーザーへのメッセージ、AIとしての見解、指示されたタスクに対する返答などはすべてこのフィールドに含めます。',
+      '# - generatedExamples: 英語の例文オブジェクトの配列です。例文がない場合は、必ず空の配列 [] を返してください。',
       '',
       '# 重要な注意:',
-      '# - ユーザーからの入力に対して、上記JSON形式を生成することがあなたの唯一のタスクです。',
-      '# - JSONを```json ... ```で囲む必要はありません。生のJSONオブジェクトを直接返してください。',
+      '# - あなたのタスクは、上記の指示とスキーマに従って、単一のJSON文字列を生成し、それ「だけ」を返すことです。',
+      '# - JSON文字列を ```json ... ``` や他のマークダウンで囲まないでください。生のJSON文字列を直接返してください。',
+      '# - 例文が1つも生成できない場合も、`replyText`と`generatedExamples: []` を持つJSON文字列を必ず返してください。',
       '',
       '# 具体例1: ユーザーが「こんにちは」の例文を求めた場合',
-      '# 期待されるJSON応答:',
+      '# 期待されるJSON文字列応答:',
       JSON.stringify(exampleUserRequest1, null, 2), // 具体例1を挿入
       '',
       '# 具体例2: ユーザーが「ありがとうの別の言い方は？」と質問し、例文がない場合',
-      '# 期待されるJSON応答:',
+      '# 期待されるJSON文字列応答:',
       JSON.stringify(exampleUserRequest2, null, 2), // 具体例2を挿入
     ];
 
@@ -293,6 +291,7 @@ Deno.serve(async (req) => {
         temperature: 0.7,
         topK: 40,
         topP: 0.95,
+        maxOutputTokens: 2048,
       },
     };
 
@@ -324,67 +323,165 @@ Deno.serve(async (req) => {
       console.error("Invalid Gemini API response structure: candidates or parts missing", geminiData);
       throw new Error("Failed to parse Gemini API response: No text found in expected path");
     }
-    console.log("Gemini API raw response text (from parts[0].text):", rawAiTextFromGemini); // Log the raw text itself
+    console.log("Gemini API raw response text (from parts[0].text):", rawAiTextFromGemini);
 
-    let textToParse = rawAiTextFromGemini.trim();
-    console.log("Initial textToParse (after trim):", JSON.stringify(textToParse));
+    // replyText と generatedExamples をこのスコープで宣言し、
+    // 以下の解析ロジックでこれらの値を設定する。
+    let replyText: string = "";
+    let generatedExamples: any[] = []; 
+    let jsonSuccessfullyProcessed = false;
 
-    // Markdown形式のJSONコードブロックを除去する試み
-    // パターン1: 完全な ```json ... ``` または ``` ... ```
-    const fullBlockMatch = textToParse.match(/^\s*\`\`\`(?:json)?\s*([\s\S]*?)\s*\`\`\`\s*$/);
+    // Attempt 1: Is the entire string a JSON object?
+    try {
+      const parsed = JSON.parse(rawAiTextFromGemini);
+      if (parsed.replyText !== undefined && Array.isArray(parsed.generatedExamples)) {
+        replyText = parsed.replyText;
+        generatedExamples = parsed.generatedExamples;
+        jsonSuccessfullyProcessed = true;
+        console.log("Attempt 1: Successfully parsed raw AI response directly as JSON object.");
+      } else {
+        console.log("Attempt 1: Parsed directly, but missing replyText or generatedExamples fields.");
+      }
+    } catch (e: any) {
+      console.error("Attempt 1: Failed to parse raw AI response directly. Error: " + e.message, "Stack: " + e.stack);
+    }
 
-    if (fullBlockMatch && fullBlockMatch[1]) {
-      textToParse = fullBlockMatch[1].trim();
-      console.log("Extracted JSON string from full Markdown block:", textToParse);
-    } else {
-      console.log("Full Markdown block did NOT match. Attempting direct string manipulation for cleaning...");
-      let cleanedText = textToParse;
+    // Attempt 2: Is there a ```json ... ``` block?
+    if (!jsonSuccessfullyProcessed) {
+      const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/;
+      const match = rawAiTextFromGemini.match(codeBlockRegex);
 
-      // 既知のプレフィックスを順番に試す
-      const prefixesToRemove = ["```json", "```"];
-      for (const prefix of prefixesToRemove) {
-        if (cleanedText.startsWith(prefix)) {
-          cleanedText = cleanedText.substring(prefix.length);
-          console.log("Removed prefix \"" + prefix + "\". Current text:", JSON.stringify(cleanedText));
-          cleanedText = cleanedText.trimStart(); // プレフィックス除去後に残る可能性のある先頭の空白や改行を除去
-          console.log("After trimStart post prefix removal. Current text:", JSON.stringify(cleanedText));
-          break; // 一致したらループを抜ける
+      if (match && match[1]) {
+        const jsonContent = match[1].trim();
+        console.log("Attempt 2: Extracted JSON content from Markdown block for parsing:", jsonContent);
+        try {
+          const parsedJson = JSON.parse(jsonContent);
+          if (parsedJson.replyText !== undefined && Array.isArray(parsedJson.generatedExamples)) {
+            let extractedReplyText = parsedJson.replyText;
+            generatedExamples = parsedJson.generatedExamples;
+
+            const blockStartIndex = rawAiTextFromGemini.indexOf(match[0]);
+            let prefix = "";
+            if (blockStartIndex > 0) {
+              prefix = rawAiTextFromGemini.substring(0, blockStartIndex).trim();
+            } else if (blockStartIndex === -1) {
+                console.warn("Attempt 2: Matched code block but could not find its start index.");
+            }
+            
+            const pTrimmed = prefix.trim();
+            const jTrimmed = (typeof extractedReplyText === 'string' ? extractedReplyText.trim() : '');
+
+            if (jTrimmed.length === 0) {
+                replyText = pTrimmed;
+            } else if (pTrimmed.length === 0) {
+                replyText = jTrimmed;
+            } else if (pTrimmed.includes(jTrimmed)) {
+                replyText = pTrimmed;
+            } else if (jTrimmed.includes(pTrimmed)) {
+                replyText = jTrimmed;
+            } else {
+                replyText = pTrimmed + "\n" + jTrimmed;
+            }
+            
+            jsonSuccessfullyProcessed = true;
+            console.log("Attempt 2: Successfully processed JSON from Markdown block.");
+          } else {
+             console.log("Attempt 2: Parsed JSON from Markdown, but missing/invalid replyText or generatedExamples fields.");
+          }
+        } catch (e: any) {
+          console.error("Attempt 2: Failed to parse JSON content from Markdown block. Error: " + e.message, "JSON content was:" , jsonContent, "Stack:" + e.stack);
+        }
+      }
+    }
+
+    // Attempt 3: Is there a simple { ... } JSON substring (without Markdown)?
+    if (!jsonSuccessfullyProcessed) {
+        const firstBrace = rawAiTextFromGemini.indexOf('{');
+        const lastBrace = rawAiTextFromGemini.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+            const potentialJsonSubstring = rawAiTextFromGemini.substring(firstBrace, lastBrace + 1);
+            console.log("Attempt 3: Extracted potential JSON substring for parsing:", potentialJsonSubstring);
+            try {
+                const parsedSubstringJson = JSON.parse(potentialJsonSubstring);
+                if (parsedSubstringJson.replyText !== undefined && Array.isArray(parsedSubstringJson.generatedExamples)) {
+                    let extractedReplyText = parsedSubstringJson.replyText;
+                    generatedExamples = parsedSubstringJson.generatedExamples;
+
+                    let prefix = "";
+                    if (firstBrace > 0) {
+                        prefix = rawAiTextFromGemini.substring(0, firstBrace).trim();
+                    }
+                    
+                    const pTrimmed = prefix.trim();
+                    const jTrimmed = (typeof extractedReplyText === 'string' ? extractedReplyText.trim() : '');
+
+                    if (jTrimmed.length === 0) {
+                        replyText = pTrimmed;
+                    } else if (pTrimmed.length === 0) {
+                        replyText = jTrimmed;
+                    } else if (pTrimmed.includes(jTrimmed)) {
+                        replyText = pTrimmed;
+                    } else if (jTrimmed.includes(pTrimmed)) {
+                        replyText = jTrimmed;
+                    } else {
+                        replyText = pTrimmed + "\n" + jTrimmed;
+                    }
+                    jsonSuccessfullyProcessed = true;
+                    console.log("Attempt 3: Successfully processed JSON from simple substring.");
+                } else {
+                     console.log("Attempt 3: Parsed simple JSON substring, but missing/invalid replyText or generatedExamples fields.");
+                }
+            } catch (e: any) {
+                console.error("Attempt 3: Simple substring is not valid JSON or parsing failed. Error: " + e.message, "Substring was:", potentialJsonSubstring, "Stack:" + e.stack);
+            }
+        }
+    }
+    
+    // Fallback: If no JSON structure could be reliably processed
+    if (!jsonSuccessfullyProcessed) {
+      console.log("Fallback: All JSON processing attempts failed.");
+      
+      const codeBlockMarker = "```json";
+      const simpleBraceMarker = "{";
+
+      let jsonStartIndex = -1;
+      
+      const codeBlockPos = rawAiTextFromGemini.indexOf(codeBlockMarker);
+      const simpleBracePos = rawAiTextFromGemini.indexOf(simpleBraceMarker);
+
+      if (codeBlockPos !== -1) {
+        jsonStartIndex = codeBlockPos;
+      }
+      // If a simple brace appears before a code block marker, it might be the intended start
+      if (simpleBracePos !== -1) {
+        if (jsonStartIndex === -1 || simpleBracePos < jsonStartIndex) {
+          jsonStartIndex = simpleBracePos;
         }
       }
 
-      // 末尾の ``` を除去
-      if (cleanedText.endsWith("```")) {
-        cleanedText = cleanedText.substring(0, cleanedText.length - 3);
-        console.log("Removed suffix \"```\". Current text:", JSON.stringify(cleanedText));
-        cleanedText = cleanedText.trimEnd(); // サフィックス除去後に残る可能性のある末尾の空白や改行を除去
-        console.log("After trimEnd post suffix removal. Current text:", JSON.stringify(cleanedText));
-      }
-
-      textToParse = cleanedText.trim(); // 最終的にもう一度トリム
-      console.log("Attempted to clean incomplete Markdown block, final result for textToParse:", textToParse);
-    }
-
-    let replyText = textToParse; // 初期値は（Markdown除去後の）テキスト全体
-    let generatedExamples: any[] = []; // AIから生成された例文オブジェクト (japanese, english, note)
-    
-    try {
-      const parsedResponse = JSON.parse(textToParse); // Markdown除去後のテキストをパース
-      if (parsedResponse.replyText !== undefined && parsedResponse.generatedExamples !== undefined) {
-        replyText = parsedResponse.replyText;
-        generatedExamples = parsedResponse.generatedExamples;
-        console.log("Successfully parsed AI response with", generatedExamples.length, "examples");
+      if (jsonStartIndex > 0) { 
+        replyText = rawAiTextFromGemini.substring(0, jsonStartIndex).trim();
+        console.log("Fallback: Extracted prefix as replyText:", replyText);
+      } else if (jsonStartIndex === 0) {
+        replyText = ""; // Starts with JSON marker, so no prefix text
+        console.log("Fallback: Response starts with JSON marker, no prefix for replyText.");
       } else {
-        console.log("Parsed JSON, but not the expected structure (missing replyText or generatedExamples). Using textToParse as replyText.");
-        // replyText は textToParse のままなので、ここでは明示的な代入は不要
+        // No clear JSON marker found, attempt to clean the whole string
+        replyText = rawAiTextFromGemini
+          .replace(/```(?:json)?\s*[\s\S]*$/, "") // Remove ```json and everything after to EOL/EOS
+          .replace(/```[\s\S]*$/, "")             // Remove ``` and everything after to EOL/EOS
+          .trim();
+        console.log("Fallback: No JSON marker found or at start. Used cleaned raw text for replyText:", replyText);
       }
-    } catch (e) {
-      console.log("Failed to parse textToParse as JSON, treating as plain text. Error:", e);
-      // replyText は textToParse のままなので、ここでは明示的な代入は不要
+      generatedExamples = []; 
     }
+
+    console.log("Final replyText for client (after all processing):", replyText);
+    console.log("Final generatedExamples for client (count, after all processing):", generatedExamples.length);
 
     // --- 例文処理 & Sentence 保存 ---
     const examples: ExampleOutput[] = [];
-    const aiMessageId = `${Date.now().toString()}-ai`; // AIメッセージのID (クライアント側で一意)
+    const aiMessageId = `${Date.now().toString()}-ai`;
 
     if (generatedExamples && Array.isArray(generatedExamples) && generatedExamples.length > 0) {
       console.log(`Processing ${generatedExamples.length} examples for database insertion...`);
@@ -463,11 +560,14 @@ Deno.serve(async (req) => {
     // クライアントへの応答: AIテキスト, 例文リスト, メッセージID, タイムスタンプ, セッションID
     const responseToClient = {
       id: aiMessageId,
-      sessionId: currentSessionId, // ★ session_id を返す
+      sessionId: currentSessionId,
       text: replyText,
-      examples: examples,
-      timestamp: aiMessageData.timestamp, // 保存したメッセージのタイムスタンプ
+      examples: examples, // このexamplesはDB保存後にsaved状態などが反映されたもの
+      timestamp: new Date().toISOString(), // DB保存のタイムスタンプではなく、最終送信時のものを使う場合
     };
+    
+    // ★★★ 修正: クライアントに返す直前のオブジェクト全体をログに出力する場所を移動 ★★★
+    console.log("FINAL RESPONSE OBJECT TO BE SENT TO CLIENT:", JSON.stringify(responseToClient, null, 2));
     
     return new Response(JSON.stringify(responseToClient), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

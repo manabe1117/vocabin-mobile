@@ -242,6 +242,8 @@ const ChatScreen = () => {
       }
 
       if (aiResponseMessageData) {
+        // ここでAIレスポンスをログ出力
+        console.log('AIレスポンス:', aiResponseMessageData);
         const newSessionIdFromServer = aiResponseMessageData.sessionId;
         if (newSessionIdFromServer) {
           setCurrentSessionId(newSessionIdFromServer);
