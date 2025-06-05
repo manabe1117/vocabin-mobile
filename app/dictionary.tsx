@@ -45,7 +45,7 @@ interface VocabularyResult {
   examples: { en: string; ja: string }[];
   synonyms: string[];
   notes: string;
-  audio_url?: string;
+  //audio_url?: string;
   conjugations?: Record<string, string>; // 活用形
 }
 
@@ -158,7 +158,7 @@ const useVocabulary = () => {
             synonyms: data.synonyms || [],
             conjugations: data.conjugations || undefined,
             notes: data.notes || '',
-            audio_url: data.audio_url || undefined
+            //audio_url: data.audio_url || undefined
           };
           setVocabulary(formattedData);
           await checkSavedStatus(data.id);

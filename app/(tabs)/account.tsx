@@ -31,33 +31,22 @@ export default function AccountScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>設定</Text>
-        <TouchableOpacity style={styles.settingItem}>
-          <Ionicons name="notifications-outline" size={24} color={COLORS.TEXT.SECONDARY} />
-          <Text style={styles.settingText}>通知設定</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.settingItem}>
-          <Ionicons name="language-outline" size={24} color={COLORS.TEXT.SECONDARY} />
-          <Text style={styles.settingText}>言語設定</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.settingItem}>
-          <Ionicons name="moon-outline" size={24} color={COLORS.TEXT.SECONDARY} />
-          <Text style={styles.settingText}>ダークモード</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>その他</Text>
-        <TouchableOpacity style={styles.settingItem}>
-          <Ionicons name="help-circle-outline" size={24} color={COLORS.TEXT.SECONDARY} />
-          <Text style={styles.settingText}>ヘルプとサポート</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.settingItem}>
-          <Ionicons name="information-circle-outline" size={24} color={COLORS.TEXT.SECONDARY} />
-          <Text style={styles.settingText}>アプリについて</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity style={styles.settingItem}>
+        <Ionicons name="notifications-outline" size={24} color={COLORS.TEXT.SECONDARY} />
+        <Text style={styles.settingText}>通知設定</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.settingItem}>
+        <Ionicons name="send-outline" size={24} color={COLORS.TEXT.SECONDARY} />
+        <Text style={styles.settingText}>問い合わせ</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.settingItem}>
+        <Ionicons name="help-circle-outline" size={24} color={COLORS.TEXT.SECONDARY} />
+        <Text style={styles.settingText}>ヘルプとサポート</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.settingItem}>
+        <Ionicons name="information-circle-outline" size={24} color={COLORS.TEXT.SECONDARY} />
+        <Text style={styles.settingText}>アプリについて</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut}>
         <Text style={styles.logoutText}>ログアウト</Text>
@@ -109,6 +98,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 15,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.BORDER.LIGHTER,
   },
