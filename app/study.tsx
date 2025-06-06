@@ -35,6 +35,7 @@ const StudyScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCompletionMessage, setShowCompletionMessage] = useState(false);
+  const [showMeaningOnFront, setShowMeaningOnFront] = useState(false);
 
   const fetchFlashcards = async () => {
     setIsLoading(true);
@@ -233,6 +234,7 @@ const StudyScreen = () => {
         setTouchStartX(gestureState.x0);
         setTouchStartY(gestureState.y0);
         swipeValue.setOffset({ x: 0, y: 0 });
+        setShowMeaningOnFront(true);
         
         const currentIndex = currentCardIndexRef.current;
         const currentCard = flashcardsRef.current[currentIndex];
@@ -360,6 +362,7 @@ const StudyScreen = () => {
     feedbackOpacity.setValue(0);
     setShowBack(false);
     animatedValue.setValue(0);
+    setShowMeaningOnFront(false);
 
     // 新しいカードがセットされたときに音声を再生
     if (currentCard?.vocabulary) {
@@ -456,8 +459,12 @@ const StudyScreen = () => {
           onTouchEnd={flipCard}
         >
           <Text style={styles.cardWord}>{currentCard.vocabulary}</Text>
-          {(currentCard.reviewCount > 0 || currentCard.hasBeenWrong) && (
-            <Text style={styles.cardExample}>{currentCard.examples[0]?.en || ''}</Text>
+          {showMeaningOnFront ? (
+            <Text style={styles.meaningText}>{currentCard.meanings.join('、')}</Text>
+          ) : (
+            (currentCard.reviewCount > 0 || currentCard.hasBeenWrong) && (
+              <Text style={styles.cardExample}>{currentCard.examples[0]?.en || ''}</Text>
+            )
           )}
         </Animated.View>
 
