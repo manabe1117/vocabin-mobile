@@ -24,6 +24,7 @@ interface Flashcard {
     reviewCount: number;
     isCorrect: boolean;
     audioData: string;
+    hasBeenWrong: boolean;
 }
 
 const StudyScreen = () => {
@@ -53,9 +54,11 @@ const StudyScreen = () => {
         throw error;
       }
       console.log('fetchFlashcards: data', data);
-      const fetchedFlashcards = (data || []).map((card: Flashcard) => ({
+      const fetchedFlashcards = (data || []).map((card: any) => ({
         ...card,
-        isCorrect: false
+        reviewCount: card.reviewCount || 0,
+        isCorrect: false,
+        hasBeenWrong: false,
       }));
       console.log('fetchFlashcards: fetchedFlashcards', fetchedFlashcards);
       setFlashcards(fetchedFlashcards);
@@ -161,9 +164,11 @@ const StudyScreen = () => {
       // カードの正解状態を更新
       setFlashcards(prev => {
         const newFlashcards = [...prev];
+        const currentCardData = newFlashcards[currentIndex];
         newFlashcards[currentIndex] = {
-          ...newFlashcards[currentIndex],
-          isCorrect
+          ...currentCardData,
+          isCorrect,
+          hasBeenWrong: currentCardData.hasBeenWrong || !isCorrect,
         };
         return newFlashcards;
       });
@@ -451,7 +456,9 @@ const StudyScreen = () => {
           onTouchEnd={flipCard}
         >
           <Text style={styles.cardWord}>{currentCard.vocabulary}</Text>
-          <Text style={styles.cardExample}>{currentCard.examples[0]?.en || ''}</Text>
+          {(currentCard.reviewCount > 0 || currentCard.hasBeenWrong) && (
+            <Text style={styles.cardExample}>{currentCard.examples[0]?.en || ''}</Text>
+          )}
         </Animated.View>
 
         {/* カードの裏面 */}
