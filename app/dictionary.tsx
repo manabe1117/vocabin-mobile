@@ -254,6 +254,10 @@ const TranslateScreen = () => {
   const [activeChatVocabulary, setActiveChatVocabulary] = useState<VocabularyResult | null>(null);
   const [isDictionaryDetailsOpen, setIsDictionaryDetailsOpen] = useState(true); // 辞書詳細の開閉状態
 
+  // States for editing vocabulary
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editedVocabulary, setEditedVocabulary] = useState<VocabularyResult | null>(null);
+
   const initialLoadRef = useRef(true);
   const aiChatScrollViewRef = useRef<ScrollView | null>(null);
 
@@ -289,10 +293,17 @@ const TranslateScreen = () => {
         setAiConversation([]);
         setActiveChatVocabulary(null); 
       }
+      // 新しい単語が読み込まれた時に編集モードをリセット
+      if (!editedVocabulary || editedVocabulary.id !== vocabulary.id) {
+        setIsEditMode(false);
+        setEditedVocabulary(vocabulary);
+      }
     } else {
       setIsChatFocusedMode(false);
       setAiConversation([]);
       setActiveChatVocabulary(null);
+      setIsEditMode(false);
+      setEditedVocabulary(null);
     }
   }, [vocabulary]);
 
@@ -357,6 +368,97 @@ const TranslateScreen = () => {
       setIsSaved(!isSaved);
     } catch (error) {
       handleApiError(error, '単語の保存');
+    }
+  };
+
+  // 編集モードの切り替え
+  const handleToggleEditMode = () => {
+    setIsEditMode(true);
+    setEditedVocabulary(vocabulary);
+  };
+
+  // 編集完了
+  const handleCompleteEdit = () => {
+    // TODO: 編集内容を保存する処理をここに実装
+    setIsEditMode(false);
+    Alert.alert('編集完了', '編集内容の保存機能は後で実装予定です。');
+  };
+
+  // 編集キャンセル
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    setEditedVocabulary(vocabulary);
+  };
+
+  // 編集内容の更新
+  const handleUpdateEditedField = (field: keyof VocabularyResult, value: any) => {
+    if (!editedVocabulary) return;
+    setEditedVocabulary({
+      ...editedVocabulary,
+      [field]: value
+    });
+  };
+
+  // 編集した例文の更新
+  const handleUpdateExample = (index: number, field: 'en' | 'ja', value: string) => {
+    if (!editedVocabulary) return;
+    const updatedExamples = [...editedVocabulary.examples];
+    updatedExamples[index] = {
+      ...updatedExamples[index],
+      [field]: value
+    };
+    setEditedVocabulary({
+      ...editedVocabulary,
+      examples: updatedExamples
+    });
+  };
+
+  // 例文の追加
+  const handleAddExample = () => {
+    if (!editedVocabulary) return;
+    setEditedVocabulary({
+      ...editedVocabulary,
+      examples: [...editedVocabulary.examples, { en: '', ja: '' }]
+    });
+  };
+
+  // 例文の削除
+  const handleRemoveExample = (index: number) => {
+    if (!editedVocabulary) return;
+    const updatedExamples = editedVocabulary.examples.filter((_, i) => i !== index);
+    setEditedVocabulary({
+      ...editedVocabulary,
+      examples: updatedExamples
+    });
+  };
+
+  // 類義語の更新
+  const handleUpdateSynonyms = (synonymsText: string) => {
+    if (!editedVocabulary) return;
+    const synonymsArray = synonymsText.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    setEditedVocabulary({
+      ...editedVocabulary,
+      synonyms: synonymsArray
+    });
+  };
+
+  // 活用形の更新
+  const handleUpdateConjugations = (conjugationsText: string) => {
+    if (!editedVocabulary) return;
+    try {
+      const conjugations: Record<string, string> = {};
+      conjugationsText.split('\n').forEach(line => {
+        const [key, value] = line.split(':').map(s => s.trim());
+        if (key && value) {
+          conjugations[key] = value;
+        }
+      });
+      setEditedVocabulary({
+        ...editedVocabulary,
+        conjugations
+      });
+    } catch (error) {
+      console.error('活用形の解析エラー:', error);
     }
   };
 
@@ -722,7 +824,7 @@ const TranslateScreen = () => {
   ];
 
   const renderVocabularyDetails = () => {
-    if (!vocabulary) return null;
+    if (!vocabulary || !editedVocabulary) return null;
 
     // 収縮時の簡易表示
     if (!isDictionaryDetailsOpen) {
@@ -739,7 +841,7 @@ const TranslateScreen = () => {
           <View style={{ flex: 1 }}>
             <View style={styles.wordTextContainer}>
               <View style={{ position: 'relative', width: '100%' }}>
-                <Text style={styles.wordText}>{vocabulary.vocabulary}</Text>
+                <Text style={styles.wordText}>{editedVocabulary.vocabulary}</Text>
               </View>
             </View>
           </View>
@@ -751,43 +853,138 @@ const TranslateScreen = () => {
     // 詳細表示
     return (
       <View style={styles.resultCard}>
-        <TouchableOpacity
-          style={{ position: 'absolute', right: 12, top: 12, zIndex: 10 }}
-          onPress={() => setIsDictionaryDetailsOpen(false)}
-          accessibilityLabel="詳細を閉じる"
-        >
-          <Ionicons name="chevron-up-circle-outline" size={28} color={COLORS.PRIMARY} />
-        </TouchableOpacity>
+        <View style={styles.headerControls}>
+          {isEditMode ? (
+            <View style={styles.editModeButtons}>
+              <TouchableOpacity
+                style={styles.completeEditButton}
+                onPress={handleCompleteEdit}
+                accessibilityLabel="編集を完了"
+              >
+                <Ionicons 
+                  name="checkmark" 
+                  size={24} 
+                  color={COLORS.SUCCESS.DARK} 
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelEditButton}
+                onPress={handleCancelEdit}
+                accessibilityLabel="編集をキャンセル"
+              >
+                <Ionicons 
+                  name="close" 
+                  size={24} 
+                  color={COLORS.ERROR.DARK} 
+                />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.editToggleButton}
+              onPress={handleToggleEditMode}
+              accessibilityLabel="編集モードを開始"
+            >
+              <Ionicons 
+                name="pencil-outline" 
+                size={24} 
+                color={COLORS.PRIMARY} 
+              />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.collapseButton}
+            onPress={() => setIsDictionaryDetailsOpen(false)}
+            accessibilityLabel="詳細を閉じる"
+          >
+            <Ionicons name="chevron-up-circle-outline" size={28} color={COLORS.PRIMARY} />
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.wordHeader}>
           <View style={styles.wordContainer}>
             <View style={styles.wordTextContainer}>
               <View style={{ position: 'relative', width: '100%' }}>
-                <Text style={styles.wordText}>{vocabulary.vocabulary}{' '}
-                  <TouchableOpacity 
-                    style={styles.soundButton}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handlePlaySound(vocabulary.vocabulary);
-                    }}
-                  >
-                    <Ionicons name="volume-high" size={24} color={COLORS.PRIMARY} />
-                  </TouchableOpacity>
-                </Text>
+                {isEditMode ? (
+                  <TextInput
+                    style={styles.editableWordText}
+                    value={editedVocabulary.vocabulary}
+                    onChangeText={(text) => handleUpdateEditedField('vocabulary', text)}
+                    placeholder="単語を入力"
+                    placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+                  />
+                ) : (
+                  <Text style={styles.wordText}>{editedVocabulary.vocabulary}{' '}
+                    <TouchableOpacity 
+                      style={styles.soundButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handlePlaySound(editedVocabulary.vocabulary);
+                      }}
+                    >
+                      <Ionicons name="volume-high" size={24} color={COLORS.PRIMARY} />
+                    </TouchableOpacity>
+                  </Text>
+                )}
               </View>
             </View>
-            <Text style={styles.pronunciation}>{vocabulary.pronunciation}</Text>
-            <Text style={styles.partOfSpeech}>{vocabulary.part_of_speech}</Text>
+            
+            {isEditMode ? (
+              <TextInput
+                style={styles.editablePronunciation}
+                value={editedVocabulary.pronunciation}
+                onChangeText={(text) => handleUpdateEditedField('pronunciation', text)}
+                placeholder="発音を入力"
+                placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+              />
+            ) : (
+              <Text style={styles.pronunciation}>{editedVocabulary.pronunciation}</Text>
+            )}
+            
+            {isEditMode ? (
+              <TextInput
+                style={styles.editablePartOfSpeech}
+                value={editedVocabulary.part_of_speech}
+                onChangeText={(text) => handleUpdateEditedField('part_of_speech', text)}
+                placeholder="品詞を入力"
+                placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+              />
+            ) : (
+              <Text style={styles.partOfSpeech}>{editedVocabulary.part_of_speech}</Text>
+            )}
           </View>
         </View>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>意味</Text>
-          <Text style={styles.sectionText}>{vocabulary.meaning}</Text>
+          {isEditMode ? (
+            <TextInput
+              style={styles.editableMeaning}
+              value={editedVocabulary.meaning}
+              onChangeText={(text) => handleUpdateEditedField('meaning', text)}
+              placeholder="意味を入力"
+              placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+              multiline
+            />
+          ) : (
+            <Text style={styles.sectionText}>{editedVocabulary.meaning}</Text>
+          )}
         </View>
-        {vocabulary.synonyms.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>類義語</Text>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>類義語</Text>
+          {isEditMode ? (
+            <TextInput
+              style={styles.editableSynonyms}
+              value={editedVocabulary.synonyms.join(', ')}
+              onChangeText={handleUpdateSynonyms}
+              placeholder="類義語をカンマ区切りで入力"
+              placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+              multiline
+            />
+          ) : (
             <View style={styles.synonymContainer}>
-              {vocabulary.synonyms.map((synonym, index) => (
+              {editedVocabulary.synonyms.map((synonym, index) => (
                 <TouchableOpacity
                   key={index}
                   style={styles.synonym}
@@ -800,45 +997,110 @@ const TranslateScreen = () => {
                 </TouchableOpacity>
               ))}
             </View>
-          </View>
-        )}
-        {vocabulary.conjugations && Object.keys(vocabulary.conjugations).length > 0 && (
+          )}
+        </View>
+
+        {(editedVocabulary.conjugations && Object.keys(editedVocabulary.conjugations).length > 0) || isEditMode ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>活用形</Text>
-            <View style={styles.conjugationContainer}>
-              {Object.entries(vocabulary.conjugations).map(([type, form]) => (
-                <TouchableOpacity
-                  key={type}
-                  style={styles.conjugationItem}
-                  onPress={() => {
-                    setInputText(form);
-                    translate(form);
-                  }}
-                >
-                  <Text style={styles.conjugationType}>{type}:</Text>
-                  <Text style={styles.conjugationForm}>{form}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-        {vocabulary.examples.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>例文</Text>
-            {vocabulary.examples.map((example, index) => (
-              <View key={index} style={styles.exampleContainer}>
-                <Text style={styles.exampleText}>{example.en}</Text>
-                <Text style={styles.exampleTranslation}>{example.ja}</Text>
+            {isEditMode ? (
+              <TextInput
+                style={styles.editableConjugations}
+                value={Object.entries(editedVocabulary.conjugations || {})
+                  .map(([key, value]) => `${key}: ${value}`)
+                  .join('\n')}
+                onChangeText={handleUpdateConjugations}
+                placeholder="活用形を「種類: 形」の形式で改行区切りで入力"
+                placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+                multiline
+              />
+            ) : (
+              <View style={styles.conjugationContainer}>
+                {Object.entries(editedVocabulary.conjugations || {}).map(([type, form]) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={styles.conjugationItem}
+                    onPress={() => {
+                      setInputText(form);
+                      translate(form);
+                    }}
+                  >
+                    <Text style={styles.conjugationType}>{type}:</Text>
+                    <Text style={styles.conjugationForm}>{form}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-            ))}
+            )}
           </View>
-        )}
-        {vocabulary.notes && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>補足</Text>
-            <Text style={styles.sectionText}>{vocabulary.notes}</Text>
+        ) : null}
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>例文</Text>
+            {isEditMode && (
+              <TouchableOpacity
+                style={styles.addExampleButton}
+                onPress={handleAddExample}
+              >
+                <Ionicons name="add-circle-outline" size={24} color={COLORS.PRIMARY} />
+              </TouchableOpacity>
+            )}
           </View>
-        )}
+          {editedVocabulary.examples.map((example, index) => (
+            <View key={index} style={styles.exampleContainer}>
+              {isEditMode ? (
+                <View style={styles.editableExampleContainer}>
+                  <View style={styles.exampleEditRow}>
+                    <TextInput
+                      style={styles.editableExampleText}
+                      value={example.en}
+                      onChangeText={(text) => handleUpdateExample(index, 'en', text)}
+                      placeholder="英語例文"
+                      placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+                      multiline
+                    />
+                    <TouchableOpacity
+                      style={styles.removeExampleButton}
+                      onPress={() => handleRemoveExample(index)}
+                    >
+                      <Ionicons name="close-circle" size={20} color={COLORS.ERROR.DARK} />
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={styles.editableExampleTranslation}
+                    value={example.ja}
+                    onChangeText={(text) => handleUpdateExample(index, 'ja', text)}
+                    placeholder="日本語訳"
+                    placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+                    multiline
+                  />
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.exampleText}>{example.en}</Text>
+                  <Text style={styles.exampleTranslation}>{example.ja}</Text>
+                </>
+              )}
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>補足</Text>
+          {isEditMode ? (
+            <TextInput
+              style={styles.editableNotes}
+              value={editedVocabulary.notes}
+              onChangeText={(text) => handleUpdateEditedField('notes', text)}
+              placeholder="補足情報を入力"
+              placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+              multiline
+            />
+          ) : (
+            <Text style={styles.sectionText}>{editedVocabulary.notes}</Text>
+          )}
+        </View>
+
         <TouchableOpacity 
           style={[styles.saveButton, isSaved && styles.savedButton]} 
           onPress={handleSave}
@@ -853,6 +1115,7 @@ const TranslateScreen = () => {
             {isSaved ? '保存済み' : '保存'}
           </Text>
         </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.reportIssueButton}
           onPress={handleOpenReportModal}
@@ -1829,6 +2092,154 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT.DARKER,
     fontSize: 15,
     lineHeight: 22,
+  },
+  // 編集モード用のスタイル
+  headerControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    zIndex: 10,
+  },
+  editToggleButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  collapseButton: {
+    padding: 4,
+  },
+  editableWordText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: COLORS.TEXT.DARKER,
+    marginBottom: 4,
+    lineHeight: 40,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.BORDER.GRAY_LIGHT,
+    paddingBottom: 4,
+  },
+  editablePronunciation: {
+    fontSize: 16,
+    color: COLORS.TEXT.LIGHT_GRAY,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.BORDER.GRAY_LIGHT,
+    paddingVertical: 4,
+    marginBottom: 8,
+  },
+  editablePartOfSpeech: {
+    fontSize: 16,
+    color: COLORS.TEXT.LIGHT_GRAY,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.BORDER.GRAY_LIGHT,
+    paddingVertical: 4,
+    marginBottom: 4,
+  },
+  editableMeaning: {
+    fontSize: 16,
+    color: COLORS.TEXT.DARK_GRAY,
+    lineHeight: 24,
+    backgroundColor: COLORS.BACKGROUND.MAIN,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.GRAY,
+    borderRadius: 8,
+    padding: 12,
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  editableSynonyms: {
+    fontSize: 16,
+    color: COLORS.TEXT.DARK_GRAY,
+    lineHeight: 24,
+    backgroundColor: COLORS.BACKGROUND.MAIN,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.GRAY,
+    borderRadius: 8,
+    padding: 12,
+    minHeight: 40,
+    textAlignVertical: 'top',
+  },
+  editableConjugations: {
+    fontSize: 16,
+    color: COLORS.TEXT.DARK_GRAY,
+    lineHeight: 24,
+    backgroundColor: COLORS.BACKGROUND.MAIN,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.GRAY,
+    borderRadius: 8,
+    padding: 12,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  editableNotes: {
+    fontSize: 16,
+    color: COLORS.TEXT.DARK_GRAY,
+    lineHeight: 24,
+    backgroundColor: COLORS.BACKGROUND.MAIN,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.GRAY,
+    borderRadius: 8,
+    padding: 12,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  addExampleButton: {
+    padding: 4,
+  },
+  editableExampleContainer: {
+    backgroundColor: COLORS.BACKGROUND.MAIN,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.GRAY,
+    borderRadius: 8,
+    padding: 12,
+  },
+  exampleEditRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  editableExampleText: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.TEXT.DARK_GRAY,
+    lineHeight: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.BORDER.GRAY_LIGHT,
+    paddingBottom: 4,
+    marginRight: 8,
+  },
+  editableExampleTranslation: {
+    fontSize: 14,
+    color: COLORS.TEXT.LIGHT_GRAY,
+    lineHeight: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.BORDER.GRAY_LIGHT,
+    paddingBottom: 4,
+  },
+  removeExampleButton: {
+    padding: 4,
+  },
+  editModeButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  completeEditButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
+  },
+  cancelEditButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
   },
 });
 
