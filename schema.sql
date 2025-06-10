@@ -688,15 +688,21 @@ COMMENT ON FUNCTION extensions.set_graphql_placeholder() IS 'Reintroduces placeh
 
 CREATE FUNCTION pgbouncer.get_auth(p_usename text) RETURNS TABLE(username text, password text)
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-    RAISE WARNING 'PgBouncer auth request: %', p_usename;
+    AS $_$
+  BEGIN
+      RAISE DEBUG 'PgBouncer auth request: %', p_usename;
 
-    RETURN QUERY
-    SELECT usename::TEXT, passwd::TEXT FROM pg_catalog.pg_shadow
-    WHERE usename = p_usename;
-END;
-$$;
+      RETURN QUERY
+      SELECT
+          rolname::text,
+          CASE WHEN rolvaliduntil < now()
+              THEN null
+              ELSE rolpassword::text
+          END
+      FROM pg_authid
+      WHERE rolname=$1 and rolcanlogin;
+  END;
+  $_$;
 
 
 --
@@ -3247,6 +3253,27 @@ COMMENT ON TABLE public.translation_training_duplicate IS 'This is a duplicate o
 
 
 --
+-- Name: user_vocabulary; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_vocabulary (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    user_id uuid NOT NULL,
+    vocabulary_id integer NOT NULL,
+    meanings text[],
+    pronunciation text,
+    part_of_speech text,
+    example_sentences jsonb,
+    synonyms text[],
+    antonyms text[],
+    notes text,
+    conjugations jsonb,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: vocabulary; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3956,6 +3983,22 @@ ALTER TABLE ONLY public.translation_training
 
 ALTER TABLE ONLY public.study_status_translation
     ADD CONSTRAINT unique_user_translation_training_type UNIQUE (user_id, translation_training_id, type);
+
+
+--
+-- Name: user_vocabulary user_vocabulary_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_vocabulary
+    ADD CONSTRAINT user_vocabulary_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_vocabulary user_vocabulary_user_vocab_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_vocabulary
+    ADD CONSTRAINT user_vocabulary_user_vocab_unique UNIQUE (user_id, vocabulary_id);
 
 
 --
@@ -4838,6 +4881,14 @@ ALTER TABLE ONLY public.translation_training
 
 
 --
+-- Name: user_vocabulary user_vocabulary_vocabulary_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_vocabulary
+    ADD CONSTRAINT user_vocabulary_vocabulary_id_fkey FOREIGN KEY (vocabulary_id) REFERENCES public.vocabulary(id) ON DELETE CASCADE;
+
+
+--
 -- Name: vocabulary_issue_reports vocabulary_issue_reports_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5270,6 +5321,40 @@ ALTER TABLE public.translation_history ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY update_own_history ON public.dictionary_search_history FOR UPDATE USING ((user_id = public.get_my_user_id())) WITH CHECK ((user_id = public.get_my_user_id()));
+
+
+--
+-- Name: user_vocabulary; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_vocabulary ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: user_vocabulary user_vocabulary_delete_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY user_vocabulary_delete_policy ON public.user_vocabulary FOR DELETE USING ((user_id = auth.uid()));
+
+
+--
+-- Name: user_vocabulary user_vocabulary_insert_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY user_vocabulary_insert_policy ON public.user_vocabulary FOR INSERT WITH CHECK ((user_id = auth.uid()));
+
+
+--
+-- Name: user_vocabulary user_vocabulary_select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY user_vocabulary_select_policy ON public.user_vocabulary FOR SELECT USING ((user_id = auth.uid()));
+
+
+--
+-- Name: user_vocabulary user_vocabulary_update_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY user_vocabulary_update_policy ON public.user_vocabulary FOR UPDATE USING ((user_id = auth.uid())) WITH CHECK ((user_id = auth.uid()));
 
 
 --

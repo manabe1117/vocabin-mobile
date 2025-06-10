@@ -378,10 +378,33 @@ const TranslateScreen = () => {
   };
 
   // 編集完了
-  const handleCompleteEdit = () => {
-    // TODO: 編集内容を保存する処理をここに実装
-    setIsEditMode(false);
-    Alert.alert('編集完了', '編集内容の保存機能は後で実装予定です。');
+  const handleCompleteEdit = async () => {
+    if (!session || !editedVocabulary) return;
+    try {
+      // Edge Function呼び出し
+      const { data, error } = await supabase.functions.invoke('save-user-vocabulary', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: {
+          vocabularyId: editedVocabulary.id,
+          meanings: editedVocabulary.meaning ? editedVocabulary.meaning.split(',').map((m) => m.trim()).filter(Boolean) : [],
+          pronunciation: editedVocabulary.pronunciation,
+          part_of_speech: editedVocabulary.part_of_speech,
+          example_sentences: editedVocabulary.examples,
+          synonyms: editedVocabulary.synonyms,
+          antonyms: [], // 必要に応じて追加
+          notes: editedVocabulary.notes,
+          conjugations: editedVocabulary.conjugations || {},
+        },
+      });
+      if (error) throw error;
+      setIsEditMode(false);
+      Alert.alert('保存完了', '編集内容を保存しました。');
+    } catch (error: any) {
+      Alert.alert('保存エラー', error.message || '編集内容の保存に失敗しました');
+    }
   };
 
   // 編集キャンセル
