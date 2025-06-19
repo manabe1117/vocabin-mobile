@@ -3269,7 +3269,8 @@ CREATE TABLE public.user_vocabulary (
     notes text,
     conjugations jsonb,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    vocabulary text
 );
 
 
@@ -5358,6 +5359,26 @@ CREATE POLICY user_vocabulary_update_policy ON public.user_vocabulary FOR UPDATE
 
 
 --
+-- Name: vocabulary; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.vocabulary ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: vocabulary vocabulary_delete_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY vocabulary_delete_policy ON public.vocabulary FOR DELETE TO authenticated USING (true);
+
+
+--
+-- Name: vocabulary vocabulary_insert_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY vocabulary_insert_policy ON public.vocabulary FOR INSERT TO authenticated WITH CHECK (true);
+
+
+--
 -- Name: vocabulary_issue_reports; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -5389,6 +5410,20 @@ CREATE POLICY vocabulary_issue_reports_select_policy ON public.vocabulary_issue_
 --
 
 CREATE POLICY vocabulary_issue_reports_update_policy ON public.vocabulary_issue_reports FOR UPDATE USING ((auth.uid() = user_id)) WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: vocabulary vocabulary_select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY vocabulary_select_policy ON public.vocabulary FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: vocabulary vocabulary_update_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY vocabulary_update_policy ON public.vocabulary FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 
 
 --

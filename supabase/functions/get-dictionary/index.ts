@@ -152,6 +152,72 @@ async function upsertDictionarySearchHistory(userId: string, vocabularyId: numbe
   }
 }
 
+/**
+ * ユーザーごとのカスタム単語データを user_vocabulary テーブルから取得する関数
+ * @param userId ユーザーID
+ * @param vocabulary 検索する単語
+ * @returns 存在すれば VocabularyData オブジェクト、存在しなければ null
+ */
+async function fetchUserVocabularyFromSupabase(userId: string, vocabulary: string): Promise<VocabularyData | null> {
+  // user_vocabulary から直接取得
+  const { data, error } = await supabase
+    .from('user_vocabulary')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('vocabulary', vocabulary.trim())
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching user_vocabulary from Supabase:', error);
+    return null;
+  }
+  if (!data) {
+    return null;
+  }
+
+  // example_sentences のパース処理
+  let parsedExamples: { en: string; ja: string; }[] = [];
+  if (data.example_sentences) {
+    if (typeof data.example_sentences === 'string') {
+      try {
+        parsedExamples = JSON.parse(data.example_sentences);
+      } catch (e) {
+        console.error('Error parsing example sentences:', e);
+      }
+    } else if (Array.isArray(data.example_sentences)) {
+      parsedExamples = data.example_sentences;
+    }
+  }
+
+  // conjugations のパース処理
+  let parsedConjugations: { [key: string]: string } | undefined;
+  if (data.conjugations) {
+    if (typeof data.conjugations === 'string') {
+      try {
+        parsedConjugations = JSON.parse(data.conjugations);
+      } catch (e) {
+        console.error('Error parsing conjugations:', e);
+      }
+    } else if (typeof data.conjugations === 'object' && data.conjugations !== null) {
+      parsedConjugations = data.conjugations as { [key: string]: string };
+    }
+  }
+
+  return {
+    id: data.vocabulary_id, // vocabulary_idをidとして返す
+    vocabulary: data.vocabulary, // user_vocabularyのvocabulary列を使う
+    partOfSpeech: data.part_of_speech || '',
+    pronunciation: data.pronunciation,
+    meanings: data.meanings || [],
+    examples: parsedExamples,
+    synonyms: data.synonyms || [],
+    antonyms: data.antonyms || [],
+    conjugations: parsedConjugations,
+    notes: data.notes,
+  } as VocabularyData;
+}
+
 // Deno の HTTP サーバーを起動
 Deno.serve(async (req) => {
   // CORS プリフライトリクエスト (OPTIONS) の処理
@@ -208,9 +274,14 @@ Deno.serve(async (req) => {
     const isEnglishInput = isEnglish(vocabulary);
     console.log(`Input "${vocabulary}" is ${isEnglishInput ? 'English' : 'Japanese'}`);
 
+    // まずuser_vocabularyから取得
+    let existingVocabulary = await fetchUserVocabularyFromSupabase(userId, vocabulary);
+    if (!existingVocabulary) {
+      // なければvocabularyテーブルから取得
+      existingVocabulary = await fetchVocabularyFromSupabase(vocabulary);
+    }
+
     if (isEnglishInput) {
-      // 英語の場合：直接Supabaseで検索
-      const existingVocabulary = await fetchVocabularyFromSupabase(vocabulary);
       if (existingVocabulary) {
         // 履歴保存
         if (typeof existingVocabulary.id === "number") {
@@ -235,14 +306,17 @@ Deno.serve(async (req) => {
       }
 
       if (translations.length === 1) {
-        // 翻訳が1つの場合：Supabaseで検索
-        const existingVocabulary = await fetchVocabularyFromSupabase(translations[0]);
-        if (existingVocabulary) {
+        // 翻訳が1つの場合：user_vocabulary→vocabularyの順で検索
+        let translatedVocabulary = await fetchUserVocabularyFromSupabase(userId, translations[0]);
+        if (!translatedVocabulary) {
+          translatedVocabulary = await fetchVocabularyFromSupabase(translations[0]);
+        }
+        if (translatedVocabulary) {
           // 履歴保存
-          if (typeof existingVocabulary.id === "number") {
-            await upsertDictionarySearchHistory(userId, existingVocabulary.id, existingVocabulary.vocabulary);
+          if (typeof translatedVocabulary.id === "number") {
+            await upsertDictionarySearchHistory(userId, translatedVocabulary.id, translatedVocabulary.vocabulary);
           }
-          return new Response(JSON.stringify(existingVocabulary), {
+          return new Response(JSON.stringify(translatedVocabulary), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
           });

@@ -9,6 +9,7 @@ const supabase = createClient(supabaseUrl!, supabaseServiceRoleKey!);
 // リクエストボディのスキーマ定義
 const saveUserVocabSchema = z.object({
   vocabularyId: z.number().int().positive(),
+  vocabulary: z.string(),
   meanings: z.array(z.string()).optional(),
   pronunciation: z.string().optional(),
   part_of_speech: z.string().optional(),
@@ -60,6 +61,7 @@ Deno.serve(async (req) => {
     }
     const {
       vocabularyId,
+      vocabulary,
       meanings,
       pronunciation,
       part_of_speech,
@@ -76,6 +78,7 @@ Deno.serve(async (req) => {
       .upsert({
         user_id: userId,
         vocabulary_id: vocabularyId,
+        vocabulary,
         meanings,
         pronunciation,
         part_of_speech,

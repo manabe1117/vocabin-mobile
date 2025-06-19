@@ -389,6 +389,7 @@ const TranslateScreen = () => {
         },
         body: {
           vocabularyId: editedVocabulary.id,
+          vocabulary: editedVocabulary.vocabulary, // 追加
           meanings: editedVocabulary.meaning ? editedVocabulary.meaning.split(',').map((m) => m.trim()).filter(Boolean) : [],
           pronunciation: editedVocabulary.pronunciation,
           part_of_speech: editedVocabulary.part_of_speech,
