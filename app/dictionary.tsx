@@ -261,6 +261,9 @@ const TranslateScreen = () => {
   const initialLoadRef = useRef(true);
   const aiChatScrollViewRef = useRef<ScrollView | null>(null);
 
+  // 編集内容を保持するためのRef
+  const savedEditDataRef = useRef<VocabularyResult | null>(null);
+
   // AIチャット入力欄表示制御のためのフラグ
   const showAiInput = vocabulary || isChatFocusedMode || activeChatVocabulary;
 
@@ -293,10 +296,14 @@ const TranslateScreen = () => {
         setAiConversation([]);
         setActiveChatVocabulary(null); 
       }
-      // 新しい単語が読み込まれた時に編集モードをリセット
-      if (!editedVocabulary || editedVocabulary.id !== vocabulary.id) {
+      // 新しい単語が読み込まれた時は編集モードをリセット
+      // ただし、保存された編集データがある場合はそれを使用
+      if (savedEditDataRef.current && savedEditDataRef.current.id === vocabulary.id) {
+        setEditedVocabulary(savedEditDataRef.current);
+      } else {
         setIsEditMode(false);
         setEditedVocabulary(vocabulary);
+        savedEditDataRef.current = null;
       }
     } else {
       setIsChatFocusedMode(false);
@@ -304,6 +311,7 @@ const TranslateScreen = () => {
       setActiveChatVocabulary(null);
       setIsEditMode(false);
       setEditedVocabulary(null);
+      savedEditDataRef.current = null;
     }
   }, [vocabulary]);
 
@@ -374,7 +382,12 @@ const TranslateScreen = () => {
   // 編集モードの切り替え
   const handleToggleEditMode = () => {
     setIsEditMode(true);
-    setEditedVocabulary(vocabulary);
+    // 保存された編集データがある場合はそれを使用、なければvocabularyから初期化
+    if (savedEditDataRef.current && savedEditDataRef.current.id === vocabulary?.id) {
+      setEditedVocabulary(savedEditDataRef.current);
+    } else if (!editedVocabulary) {
+      setEditedVocabulary(vocabulary);
+    }
   };
 
   // 編集完了
@@ -389,20 +402,23 @@ const TranslateScreen = () => {
         },
         body: {
           vocabularyId: editedVocabulary.id,
-          vocabulary: editedVocabulary.vocabulary, // 追加
-          meanings: editedVocabulary.meaning ? editedVocabulary.meaning.split(',').map((m) => m.trim()).filter(Boolean) : [],
+          vocabulary: editedVocabulary.vocabulary,
+          meanings: editedVocabulary.meaning ? editedVocabulary.meaning.split(',').map((m: string) => m.trim()).filter(Boolean) : [],
           pronunciation: editedVocabulary.pronunciation,
           part_of_speech: editedVocabulary.part_of_speech,
           example_sentences: editedVocabulary.examples,
           synonyms: editedVocabulary.synonyms,
-          antonyms: [], // 必要に応じて追加
+          antonyms: [],
           notes: editedVocabulary.notes,
           conjugations: editedVocabulary.conjugations || {},
         },
       });
       if (error) throw error;
+
+      // 保存が成功したら、編集内容をrefに保存し、vocabularyを更新
+      savedEditDataRef.current = editedVocabulary;
+      setVocabulary(editedVocabulary);
       setIsEditMode(false);
-      Alert.alert('保存完了', '編集内容を保存しました。');
     } catch (error: any) {
       Alert.alert('保存エラー', error.message || '編集内容の保存に失敗しました');
     }
@@ -411,6 +427,7 @@ const TranslateScreen = () => {
   // 編集キャンセル
   const handleCancelEdit = () => {
     setIsEditMode(false);
+    // キャンセル時は元のvocabularyに戻す
     setEditedVocabulary(vocabulary);
   };
 
@@ -459,7 +476,7 @@ const TranslateScreen = () => {
   // 類義語の更新
   const handleUpdateSynonyms = (synonymsText: string) => {
     if (!editedVocabulary) return;
-    const synonymsArray = synonymsText.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    const synonymsArray = synonymsText.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
     setEditedVocabulary({
       ...editedVocabulary,
       synonyms: synonymsArray
@@ -472,7 +489,7 @@ const TranslateScreen = () => {
     try {
       const conjugations: Record<string, string> = {};
       conjugationsText.split('\n').forEach(line => {
-        const [key, value] = line.split(':').map(s => s.trim());
+        const [key, value] = line.split(':').map((s: string) => s.trim());
         if (key && value) {
           conjugations[key] = value;
         }
