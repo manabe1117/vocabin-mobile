@@ -875,34 +875,38 @@ LIMIT 30;$$;
 
 CREATE FUNCTION public.get_flashcards_vocabulary(p_user_id uuid) RETURNS TABLE(id integer, vocabulary_id integer, vocabulary text, part_of_speech text, meanings text[], pronunciation text, examples jsonb, synonyms text[], antonyms text[], notes text, box_level integer, last_studied timestamp with time zone)
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$BEGIN
+    AS $$
+BEGIN
   RETURN QUERY
   SELECT
     v.id,
     v.id AS vocabulary_id,
-    v.vocabulary,
-    v.part_of_speech,
-    v.meanings,
-    v.pronunciation,
-    v.example_sentences AS examples,
-    v.synonyms,
-    v.antonyms,
-    v.notes,
+    COALESCE(uv.vocabulary, v.vocabulary) AS vocabulary,
+    COALESCE(uv.part_of_speech, v.part_of_speech) AS part_of_speech,
+    COALESCE(uv.meanings, v.meanings) AS meanings,
+    COALESCE(uv.pronunciation, v.pronunciation) AS pronunciation,
+    COALESCE(uv.example_sentences, v.example_sentences) AS examples,
+    COALESCE(uv.synonyms, v.synonyms) AS synonyms,
+    COALESCE(uv.antonyms, v.antonyms) AS antonyms,
+    COALESCE(uv.notes, v.notes) AS notes,
     COALESCE(ss.box_level, 0) AS box_level,
     ss.study_date AS last_studied
   FROM
     study_status ss
   INNER JOIN -- study_status に対応する vocabulary が存在するレコードのみ対象
     vocabulary v ON ss.vocabulary_id = v.id
+  LEFT JOIN -- user_vocabulary が存在する場合はそちらを優先
+    user_vocabulary uv ON v.id = uv.vocabulary_id AND uv.user_id = p_user_id
   WHERE
     ss.user_id = p_user_id          -- ユーザーIDで絞り込み
     AND ss.delete_flg = FALSE       -- 未削除フラグ
     AND ss.is_completed = FALSE     -- 未完了フラグ
-    AND (ss.next_review_date <= NOW() OR ss.next_review_date is null)-- 次回復習日が現在時刻以前 (時刻を含む比較)
+    AND (ss.next_review_date <= NOW() OR ss.next_review_date is null) -- 次回復習日が現在時刻以前 (時刻を含む比較)
   ORDER BY
     ss.next_review_date ASC         -- 次回復習日で昇順ソート
   LIMIT 50; 
-END;$$;
+END;
+$$;
 
 
 --
