@@ -257,6 +257,11 @@ const TranslateScreen = () => {
   // States for editing vocabulary
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedVocabulary, setEditedVocabulary] = useState<VocabularyResult | null>(null);
+  
+  // 編集用の配列状態
+  const [editedPartOfSpeechArray, setEditedPartOfSpeechArray] = useState<string[]>([]);
+  const [editedMeaningArray, setEditedMeaningArray] = useState<string[]>([]);
+  const [editedConjugationArray, setEditedConjugationArray] = useState<{key: string, value: string}[]>([]);
 
   const initialLoadRef = useRef(true);
   const aiChatScrollViewRef = useRef<ScrollView | null>(null);
@@ -300,10 +305,20 @@ const TranslateScreen = () => {
       // ただし、保存された編集データがある場合はそれを使用
       if (savedEditDataRef.current && savedEditDataRef.current.id === vocabulary.id) {
         setEditedVocabulary(savedEditDataRef.current);
+        // 編集用配列も復元
+        setEditedPartOfSpeechArray(savedEditDataRef.current.part_of_speech ? [savedEditDataRef.current.part_of_speech] : ['']);
+        setEditedMeaningArray(savedEditDataRef.current.meaning ? savedEditDataRef.current.meaning.split(',').map(m => m.trim()).filter(Boolean) : ['']);
+        const savedConjugationEntries = Object.entries(savedEditDataRef.current.conjugations || {}).map(([key, value]) => ({key, value}));
+        setEditedConjugationArray(savedConjugationEntries.length > 0 ? savedConjugationEntries : []);
       } else {
         setIsEditMode(false);
         setEditedVocabulary(vocabulary);
         savedEditDataRef.current = null;
+        // 編集用配列を初期化
+        setEditedPartOfSpeechArray(vocabulary.part_of_speech ? [vocabulary.part_of_speech] : ['']);
+        setEditedMeaningArray(vocabulary.meaning ? vocabulary.meaning.split(',').map(m => m.trim()).filter(Boolean) : ['']);
+        const conjugationEntries = Object.entries(vocabulary.conjugations || {}).map(([key, value]) => ({key, value}));
+        setEditedConjugationArray(conjugationEntries.length > 0 ? conjugationEntries : []);
       }
     } else {
       setIsChatFocusedMode(false);
@@ -312,6 +327,10 @@ const TranslateScreen = () => {
       setIsEditMode(false);
       setEditedVocabulary(null);
       savedEditDataRef.current = null;
+      // 編集用配列もリセット
+      setEditedPartOfSpeechArray([]);
+      setEditedMeaningArray([]);
+      setEditedConjugationArray([]);
     }
   }, [vocabulary]);
 
@@ -385,8 +404,16 @@ const TranslateScreen = () => {
     // 保存された編集データがある場合はそれを使用、なければvocabularyから初期化
     if (savedEditDataRef.current && savedEditDataRef.current.id === vocabulary?.id) {
       setEditedVocabulary(savedEditDataRef.current);
-    } else if (!editedVocabulary) {
+      setEditedPartOfSpeechArray(savedEditDataRef.current.part_of_speech ? [savedEditDataRef.current.part_of_speech] : ['']);
+      setEditedMeaningArray(savedEditDataRef.current.meaning ? savedEditDataRef.current.meaning.split(',').map(m => m.trim()).filter(Boolean) : ['']);
+      const toggleConjugationEntries = Object.entries(savedEditDataRef.current.conjugations || {}).map(([key, value]) => ({key, value}));
+      setEditedConjugationArray(toggleConjugationEntries.length > 0 ? toggleConjugationEntries : []);
+    } else if (!editedVocabulary && vocabulary) {
       setEditedVocabulary(vocabulary);
+              setEditedPartOfSpeechArray(vocabulary.part_of_speech ? [vocabulary.part_of_speech] : ['']);
+        setEditedMeaningArray(vocabulary.meaning ? vocabulary.meaning.split(',').map(m => m.trim()).filter(Boolean) : ['']);
+        const toggleConjugationEntries2 = Object.entries(vocabulary.conjugations || {}).map(([key, value]) => ({key, value}));
+        setEditedConjugationArray(toggleConjugationEntries2.length > 0 ? toggleConjugationEntries2 : []);
     }
   };
 
@@ -394,6 +421,20 @@ const TranslateScreen = () => {
   const handleCompleteEdit = async () => {
     if (!session || !editedVocabulary) return;
     try {
+      // 配列から文字列に変換してeditedVocabularyを更新
+      const updatedVocabulary = {
+        ...editedVocabulary,
+        part_of_speech: editedPartOfSpeechArray.filter(Boolean).join(', ') || '',
+        meaning: editedMeaningArray.filter(Boolean).join(', ') || '',
+        synonyms: editedVocabulary.synonyms.filter(Boolean),
+        conjugations: editedConjugationArray.reduce((acc, item) => {
+          if (item.key && item.value) {
+            acc[item.key] = item.value;
+          }
+          return acc;
+        }, {} as Record<string, string>)
+      };
+
       // Edge Function呼び出し
       const { data, error } = await supabase.functions.invoke('save-user-vocabulary', {
         method: 'POST',
@@ -401,23 +442,24 @@ const TranslateScreen = () => {
           Authorization: `Bearer ${session.access_token}`,
         },
         body: {
-          vocabularyId: editedVocabulary.id,
-          vocabulary: editedVocabulary.vocabulary,
-          meanings: editedVocabulary.meaning ? editedVocabulary.meaning.split(',').map((m: string) => m.trim()).filter(Boolean) : [],
-          pronunciation: editedVocabulary.pronunciation,
-          part_of_speech: editedVocabulary.part_of_speech,
-          example_sentences: editedVocabulary.examples,
-          synonyms: editedVocabulary.synonyms,
+          vocabularyId: updatedVocabulary.id,
+          vocabulary: updatedVocabulary.vocabulary,
+          meanings: editedMeaningArray.filter(Boolean),
+          pronunciation: updatedVocabulary.pronunciation,
+          part_of_speech: editedPartOfSpeechArray.filter(Boolean).join(', '),
+          example_sentences: updatedVocabulary.examples,
+          synonyms: updatedVocabulary.synonyms,
           antonyms: [],
-          notes: editedVocabulary.notes,
-          conjugations: editedVocabulary.conjugations || {},
+          notes: updatedVocabulary.notes,
+          conjugations: updatedVocabulary.conjugations || {},
         },
       });
       if (error) throw error;
 
       // 保存が成功したら、編集内容をrefに保存し、vocabularyを更新
-      savedEditDataRef.current = editedVocabulary;
-      setVocabulary(editedVocabulary);
+      savedEditDataRef.current = updatedVocabulary;
+      setVocabulary(updatedVocabulary);
+      setEditedVocabulary(updatedVocabulary);
       setIsEditMode(false);
     } catch (error: any) {
       Alert.alert('保存エラー', error.message || '編集内容の保存に失敗しました');
@@ -473,34 +515,86 @@ const TranslateScreen = () => {
     });
   };
 
-  // 類義語の更新
-  const handleUpdateSynonyms = (synonymsText: string) => {
+  // 品詞の操作
+  const handleAddPartOfSpeech = () => {
+    setEditedPartOfSpeechArray([...editedPartOfSpeechArray, '']);
+  };
+
+  const handleRemovePartOfSpeech = (index: number) => {
+    const updated = editedPartOfSpeechArray.filter((_, i) => i !== index);
+    setEditedPartOfSpeechArray(updated);
+  };
+
+  const handleUpdatePartOfSpeech = (index: number, value: string) => {
+    const updated = [...editedPartOfSpeechArray];
+    updated[index] = value;
+    setEditedPartOfSpeechArray(updated);
+  };
+
+  // 意味の操作
+  const handleAddMeaning = () => {
+    setEditedMeaningArray([...editedMeaningArray, '']);
+  };
+
+  const handleRemoveMeaning = (index: number) => {
+    const updated = editedMeaningArray.filter((_, i) => i !== index);
+    setEditedMeaningArray(updated);
+  };
+
+  const handleUpdateMeaning = (index: number, value: string) => {
+    const updated = [...editedMeaningArray];
+    updated[index] = value;
+    setEditedMeaningArray(updated);
+  };
+
+  // 類義語の操作
+  const handleAddSynonym = () => {
     if (!editedVocabulary) return;
-    const synonymsArray = synonymsText.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
     setEditedVocabulary({
       ...editedVocabulary,
-      synonyms: synonymsArray
+      synonyms: [...(editedVocabulary.synonyms || []), '']
     });
   };
 
-  // 活用形の更新
-  const handleUpdateConjugations = (conjugationsText: string) => {
+  const handleRemoveSynonym = (index: number) => {
     if (!editedVocabulary) return;
-    try {
-      const conjugations: Record<string, string> = {};
-      conjugationsText.split('\n').forEach(line => {
-        const [key, value] = line.split(':').map((s: string) => s.trim());
-        if (key && value) {
-          conjugations[key] = value;
-        }
-      });
-      setEditedVocabulary({
-        ...editedVocabulary,
-        conjugations
-      });
-    } catch (error) {
-      console.error('活用形の解析エラー:', error);
-    }
+    const updated = (editedVocabulary.synonyms || []).filter((_, i) => i !== index);
+    setEditedVocabulary({
+      ...editedVocabulary,
+      synonyms: updated
+    });
+  };
+
+  const handleUpdateSynonym = (index: number, value: string) => {
+    if (!editedVocabulary) return;
+    const updated = [...(editedVocabulary.synonyms || [])];
+    updated[index] = value;
+    setEditedVocabulary({
+      ...editedVocabulary,
+      synonyms: updated
+    });
+  };
+
+  // 活用形の操作
+  const handleAddConjugation = () => {
+    setEditedConjugationArray([...editedConjugationArray, {key: '', value: ''}]);
+  };
+
+  const handleRemoveConjugation = (index: number) => {
+    const updated = editedConjugationArray.filter((_, i) => i !== index);
+    setEditedConjugationArray(updated);
+  };
+
+  const handleUpdateConjugationKey = (index: number, key: string) => {
+    const updated = [...editedConjugationArray];
+    updated[index] = {...updated[index], key};
+    setEditedConjugationArray(updated);
+  };
+
+  const handleUpdateConjugationValue = (index: number, value: string) => {
+    const updated = [...editedConjugationArray];
+    updated[index] = {...updated[index], value};
+    setEditedConjugationArray(updated);
   };
 
   const handlePlaySound = async (text: string) => {
@@ -983,13 +1077,34 @@ const TranslateScreen = () => {
             )}
             
             {isEditMode ? (
-              <TextInput
-                style={styles.editablePartOfSpeech}
-                value={editedVocabulary.part_of_speech}
-                onChangeText={(text) => handleUpdateEditedField('part_of_speech', text)}
-                placeholder="品詞を入力"
-                placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
-              />
+              <View style={styles.editableArrayContainer}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.arraySectionTitle}>品詞</Text>
+                  <TouchableOpacity
+                    style={styles.addButton}
+                    onPress={handleAddPartOfSpeech}
+                  >
+                    <Ionicons name="add-circle-outline" size={24} color={COLORS.PRIMARY} />
+                  </TouchableOpacity>
+                </View>
+                {editedPartOfSpeechArray.map((pos, index) => (
+                  <View key={index} style={styles.editableItemContainer}>
+                    <TextInput
+                      style={styles.editableItemInput}
+                      value={pos}
+                      onChangeText={(text) => handleUpdatePartOfSpeech(index, text)}
+                      placeholder="品詞を入力"
+                      placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+                    />
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemovePartOfSpeech(index)}
+                    >
+                      <Ionicons name="close-circle" size={20} color={COLORS.ERROR.DARK} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
             ) : (
               <Text style={styles.partOfSpeech}>{editedVocabulary.part_of_speech}</Text>
             )}
@@ -997,35 +1112,78 @@ const TranslateScreen = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>意味</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>意味</Text>
+            {isEditMode && (
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={handleAddMeaning}
+              >
+                <Ionicons name="add-circle-outline" size={24} color={COLORS.PRIMARY} />
+              </TouchableOpacity>
+            )}
+          </View>
           {isEditMode ? (
-            <TextInput
-              style={styles.editableMeaning}
-              value={editedVocabulary.meaning}
-              onChangeText={(text) => handleUpdateEditedField('meaning', text)}
-              placeholder="意味を入力"
-              placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
-              multiline
-            />
+            <View>
+              {editedMeaningArray.map((meaning, index) => (
+                <View key={index} style={styles.editableItemContainer}>
+                  <TextInput
+                    style={styles.editableItemInput}
+                    value={meaning}
+                    onChangeText={(text) => handleUpdateMeaning(index, text)}
+                    placeholder="意味を入力"
+                    placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => handleRemoveMeaning(index)}
+                  >
+                    <Ionicons name="close-circle" size={20} color={COLORS.ERROR.DARK} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
           ) : (
             <Text style={styles.sectionText}>{editedVocabulary.meaning}</Text>
           )}
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>類義語</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>類義語</Text>
+            {isEditMode && (
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={handleAddSynonym}
+              >
+                <Ionicons name="add-circle-outline" size={24} color={COLORS.PRIMARY} />
+              </TouchableOpacity>
+            )}
+          </View>
           {isEditMode ? (
-            <TextInput
-              style={styles.editableSynonyms}
-              value={editedVocabulary.synonyms.join(', ')}
-              onChangeText={handleUpdateSynonyms}
-              placeholder="類義語をカンマ区切りで入力"
-              placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
-              multiline
-            />
+            <View>
+              {(editedVocabulary.synonyms || []).map((synonym, index) => (
+                <View key={index} style={styles.editableItemContainer}>
+                  <TextInput
+                    style={styles.editableItemInput}
+                    value={synonym}
+                    onChangeText={(text) => handleUpdateSynonym(index, text)}
+                    placeholder="類義語を入力"
+                    placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+                  />
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => handleRemoveSynonym(index)}
+                  >
+                    <Ionicons name="close-circle" size={20} color={COLORS.ERROR.DARK} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
           ) : (
             <View style={styles.synonymContainer}>
-              {editedVocabulary.synonyms.map((synonym, index) => (
+              {(editedVocabulary.synonyms || []).map((synonym, index) => (
                 <TouchableOpacity
                   key={index}
                   style={styles.synonym}
@@ -1043,18 +1201,44 @@ const TranslateScreen = () => {
 
         {(editedVocabulary.conjugations && Object.keys(editedVocabulary.conjugations).length > 0) || isEditMode ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>活用形</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>活用形</Text>
+              {isEditMode && (
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={handleAddConjugation}
+                >
+                  <Ionicons name="add-circle-outline" size={24} color={COLORS.PRIMARY} />
+                </TouchableOpacity>
+              )}
+            </View>
             {isEditMode ? (
-              <TextInput
-                style={styles.editableConjugations}
-                value={Object.entries(editedVocabulary.conjugations || {})
-                  .map(([key, value]) => `${key}: ${value}`)
-                  .join('\n')}
-                onChangeText={handleUpdateConjugations}
-                placeholder="活用形を「種類: 形」の形式で改行区切りで入力"
-                placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
-                multiline
-              />
+              <View>
+                {editedConjugationArray.map((conjugation, index) => (
+                  <View key={index} style={styles.conjugationEditContainer}>
+                    <TextInput
+                      style={styles.conjugationKeyInput}
+                      value={conjugation.key}
+                      onChangeText={(text) => handleUpdateConjugationKey(index, text)}
+                      placeholder="種類"
+                      placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+                    />
+                    <TextInput
+                      style={styles.conjugationValueInput}
+                      value={conjugation.value}
+                      onChangeText={(text) => handleUpdateConjugationValue(index, text)}
+                      placeholder="活用形"
+                      placeholderTextColor={COLORS.TEXT.MEDIUM_GRAY}
+                    />
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveConjugation(index)}
+                    >
+                      <Ionicons name="close-circle" size={20} color={COLORS.ERROR.DARK} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
             ) : (
               <View style={styles.conjugationContainer}>
                 {Object.entries(editedVocabulary.conjugations || {}).map(([type, form]) => (
@@ -2281,6 +2465,69 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 8,
     backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
+  },
+  // 新しい編集用スタイル
+  editableArrayContainer: {
+    marginBottom: 16,
+  },
+  arraySectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.SECONDARY,
+    marginBottom: 8,
+  },
+  addButton: {
+    padding: 4,
+  },
+  editableItemContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    backgroundColor: COLORS.BACKGROUND.MAIN,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.GRAY,
+    borderRadius: 8,
+    padding: 12,
+  },
+  editableItemInput: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.TEXT.DARK_GRAY,
+    lineHeight: 24,
+    marginRight: 8,
+  },
+  removeButton: {
+    padding: 4,
+  },
+  conjugationEditContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    backgroundColor: COLORS.BACKGROUND.MAIN,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.GRAY,
+    borderRadius: 8,
+    padding: 12,
+  },
+  conjugationKeyInput: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.TEXT.DARK_GRAY,
+    lineHeight: 24,
+    marginRight: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.BORDER.GRAY_LIGHT,
+    paddingBottom: 4,
+  },
+  conjugationValueInput: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.TEXT.DARK_GRAY,
+    lineHeight: 24,
+    marginRight: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.BORDER.GRAY_LIGHT,
+    paddingBottom: 4,
   },
 });
 
