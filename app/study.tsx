@@ -106,6 +106,7 @@ const StudyScreen = () => {
   const [touchStartTime, setTouchStartTime] = useState(0);
   const [touchStartX, setTouchStartX] = useState(0);
   const [touchStartY, setTouchStartY] = useState(0);
+  const [randomExampleIndex, setRandomExampleIndex] = useState(0);
 
   // currentCardIndexの参照を追加
   const currentCardIndexRef = useRef(currentCardIndex);
@@ -364,6 +365,12 @@ const StudyScreen = () => {
     animatedValue.setValue(0);
     setShowMeaningOnFront(false);
 
+    // 新しいカードの例文をランダムに選択
+    if (currentCard?.examples && currentCard.examples.length > 0) {
+      const randomIndex = Math.floor(Math.random() * currentCard.examples.length);
+      setRandomExampleIndex(randomIndex);
+    }
+
     // 新しいカードがセットされたときに音声を再生
     if (currentCard?.vocabulary) {
       speakText(currentCard.vocabulary, '英語');
@@ -463,7 +470,7 @@ const StudyScreen = () => {
             <Text style={styles.meaningText}>{currentCard.meanings.join('、')}</Text>
           ) : (
             (currentCard.reviewCount > 0 || currentCard.hasBeenWrong) && (
-              <Text style={styles.cardExample}>{currentCard.examples[0]?.en || ''}</Text>
+              <Text style={styles.cardExample}>{currentCard.examples[randomExampleIndex]?.en || ''}</Text>
             )
           )}
         </Animated.View>
