@@ -38,6 +38,7 @@ const HomeScreen = () => {
   const router = useRouter();
   const [completedCount, setCompletedCount] = useState<number | null>(null);
   const [learningCount, setLearningCount] = useState<number | null>(null);
+  const [studyCount, setStudyCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,15 +49,27 @@ const HomeScreen = () => {
         setLoading(true);
         setError(null);
         try {
-          const { data, error } = await supabase.functions.invoke('count-study-status', {
+          // 学習状況の件数を取得
+          const { data: studyStatusData, error: studyStatusError } = await supabase.functions.invoke('count-study-status', {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${session.access_token}`,
             },
           });
-          if (error) throw error;
-          setCompletedCount(data.completedCount ?? 0);
-          setLearningCount(data.learningCount ?? 0);
+          if (studyStatusError) throw studyStatusError;
+          setCompletedCount(studyStatusData.completedCount ?? 0);
+          setLearningCount(studyStatusData.learningCount ?? 0);
+          console.log('studyStatusData.completedCount', studyStatusData.completedCount);
+          // 学習する単語の件数を取得
+          const { data: studyCountData, error: studyCountError } = await supabase.functions.invoke('get-study-count', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          });
+          console.log('studyCountData.count', studyCountData.count);
+          if (studyCountError) throw studyCountError;
+          setStudyCount(studyCountData.count ?? 0);
         } catch (e: any) {
           setError(e.message || '件数の取得に失敗しました');
         } finally {
@@ -180,8 +193,16 @@ const HomeScreen = () => {
           {/* 学習カード */}
           <Link href="/study" asChild>
             <TouchableOpacity style={[styles.card, { width: cardWidth }]}>
-              <View style={[styles.iconCircle, { backgroundColor: colors.accentOrangeLight }]}>
-                <MaterialIcons name="school" size={32} color={colors.accentOrange} />
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconCircle, { backgroundColor: colors.accentOrangeLight }]}>
+                  <MaterialIcons name="school" size={32} color={colors.accentOrange} />
+                </View>
+                {/* 学習件数バッジ */}
+                {!loading && !error && studyCount !== null && studyCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{studyCount}</Text>
+                  </View>
+                )}
               </View>
               <Text style={styles.cardTitle}>学習</Text>
               {/* <Text style={styles.cardDescription}>単語帳やクイズ</Text> */}
@@ -367,6 +388,31 @@ const styles = StyleSheet.create({
   },
   aiChevron: {
     // 右向きシェブロンのスタイル
+  },
+  // --- 学習カードのバッジスタイル ---
+  cardHeader: {
+    position: 'relative',
+    alignItems: 'flex-start',
+  },
+  badge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: colors.accentBlue,
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    borderWidth: 2,
+    borderColor: colors.cardBackground,
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+    lineHeight: 14,
   },
 });
 
