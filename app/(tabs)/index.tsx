@@ -59,7 +59,6 @@ const HomeScreen = () => {
           if (studyStatusError) throw studyStatusError;
           setCompletedCount(studyStatusData.completedCount ?? 0);
           setLearningCount(studyStatusData.learningCount ?? 0);
-          console.log('studyStatusData.completedCount', studyStatusData.completedCount);
           // 学習する単語の件数を取得
           const { data: studyCountData, error: studyCountError } = await supabase.functions.invoke('get-study-count', {
             method: 'POST',
@@ -67,7 +66,6 @@ const HomeScreen = () => {
               Authorization: `Bearer ${session.access_token}`,
             },
           });
-          console.log('studyCountData.count', studyCountData.count);
           if (studyCountError) throw studyCountError;
           setStudyCount(studyCountData.count ?? 0);
         } catch (e: any) {
