@@ -148,6 +148,7 @@ export const COMMON_STYLES = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: COLORS.WHITE,
   },
   loadingText: {
     marginTop: 10,
@@ -159,6 +160,7 @@ export const COMMON_STYLES = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: COLORS.WHITE,
   },
   errorText: {
     fontSize: 16,

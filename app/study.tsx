@@ -9,7 +9,6 @@ import { supabase } from '../lib/supabase';
 import { ANIMATION } from '../constants/animation';
 import { COMMON_STYLES, COLORS } from '../constants/styles';
 import { useSpeech } from '../hooks/useSpeech';
-import { ThemedView } from '../components/ThemedView';
 import { ThemedText } from '../components/ThemedText';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -384,7 +383,7 @@ const StudyScreen = () => {
 
   if (showCompletionMessage) {
     return (
-      <ThemedView style={styles.completionContainer}>
+      <View style={styles.completionContainer}>
         <Card style={styles.completionCard}>
           <Ionicons name="checkmark-circle" size={80} color={COLORS.SUCCESS.DEFAULT} style={styles.completionIcon} />
           <ThemedText type="title" style={styles.completionTitle}>You Did It!</ThemedText>
@@ -405,22 +404,22 @@ const StudyScreen = () => {
             style={styles.completionButton}
           />
         </Card>
-      </ThemedView>
+      </View>
     );
   }
 
   if (isLoading) {
     return (
-      <ThemedView style={COMMON_STYLES.loadingContainer}>
+      <View style={COMMON_STYLES.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.PRIMARY} />
         <ThemedText style={COMMON_STYLES.loadingText}>フラッシュカードを読み込み中...</ThemedText>
-      </ThemedView>
+      </View>
     );
   }
 
   if (error) {
     return (
-      <ThemedView style={COMMON_STYLES.errorContainer}>
+      <View style={COMMON_STYLES.errorContainer}>
         <Ionicons name="alert-circle" size={64} color={COLORS.ERROR.DEFAULT} style={styles.errorIcon} />
         <ThemedText style={COMMON_STYLES.errorText}>{error}</ThemedText>
         <Button
@@ -429,13 +428,13 @@ const StudyScreen = () => {
           type="primary"
           style={styles.retryButton}
         />
-      </ThemedView>
+      </View>
     );
   }
 
   if (!isLoading && (!flashcards || flashcards.length === 0)) {
     return (
-      <ThemedView style={styles.emptyContainer}>
+      <View style={styles.emptyContainer}>
         <Ionicons name="book-outline" size={80} color={COLORS.TEXT.LIGHTER} style={styles.emptyIcon} />
         <ThemedText style={styles.emptyTitle}>学習する単語がありません</ThemedText>
         <ThemedText style={styles.emptyDescription}>
@@ -458,7 +457,7 @@ const StudyScreen = () => {
             style={styles.emptyButton}
           />
         </View>
-      </ThemedView>
+      </View>
     );
   }
 
@@ -469,7 +468,7 @@ const StudyScreen = () => {
   }
 
   return (
-    <ThemedView style={styles.studyContainer}>
+    <View style={styles.studyContainer}>
       {/* プログレスヘッダー */}
              <View style={styles.progressHeader}>
          <View style={styles.progressInfo}>
@@ -624,7 +623,7 @@ const StudyScreen = () => {
           </Button>
         </View>
       </View>
-    </ThemedView>
+    </View>
   );
 };
 
@@ -632,6 +631,7 @@ const styles = StyleSheet.create({
   studyContainer: {
     flex: 1,
     paddingTop: 10,
+    backgroundColor: COLORS.WHITE,
   },
   
   // プログレスヘッダー
@@ -892,6 +892,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: COLORS.WHITE,
   },
   completionCard: {
     alignItems: 'center',
@@ -930,6 +931,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: COLORS.WHITE,
   },
   emptyIcon: {
     marginBottom: 20,

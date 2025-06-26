@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Stack, SplashScreen, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { TouchableOpacity, Platform } from 'react-native';
+import { TouchableOpacity, Platform, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 // スプラッシュスクリーンが自動で隠れるのを防ぐ
@@ -87,12 +87,25 @@ function RootLayoutNav() {
           title: '辞書',
           headerTitleAlign: 'center',
           headerLeft: () => (
-            <TouchableOpacity 
-              onPress={() => router.replace('/(tabs)')} 
-              style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0, padding: 5 }}
+            <View
+              style={{
+                marginLeft: Platform.OS === 'ios' ? 10 : 0, 
+                padding: 12,
+                minWidth: 44,
+                minHeight: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onTouchEnd={() => {
+                router.replace('/(tabs)');
+              }}
             >
-              <Ionicons name="arrow-back" size={24} color={Platform.OS === 'ios' ? '#007AFF' : 'black'} />
-            </TouchableOpacity>
+              <Ionicons 
+                name="arrow-back" 
+                size={24} 
+                color={Platform.OS === 'ios' ? '#007AFF' : 'black'} 
+              />
+            </View>
           ),
         }} 
       />
@@ -103,12 +116,25 @@ function RootLayoutNav() {
           title: '翻訳',
           headerTitleAlign: 'center',
           headerLeft: () => (
-            <TouchableOpacity 
-              onPress={() => router.replace('/(tabs)')} 
-              style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0, padding: 5 }}
+            <View
+              style={{
+                marginLeft: Platform.OS === 'ios' ? 10 : 0, 
+                padding: 12,
+                minWidth: 44,
+                minHeight: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onTouchEnd={() => {
+                router.replace('/(tabs)');
+              }}
             >
-              <Ionicons name="arrow-back" size={24} color={Platform.OS === 'ios' ? '#007AFF' : 'black'} />
-            </TouchableOpacity>
+              <Ionicons 
+                name="arrow-back" 
+                size={24} 
+                color={Platform.OS === 'ios' ? '#007AFF' : 'black'}
+              />
+            </View>
           ),
         }} 
       />
@@ -119,12 +145,25 @@ function RootLayoutNav() {
           title: '学習',
           headerTitleAlign: 'center',
           headerLeft: () => (
-            <TouchableOpacity 
-              onPress={() => router.replace('/(tabs)')} 
-              style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0, padding: 5 }}
+            <View
+              style={{
+                marginLeft: Platform.OS === 'ios' ? 10 : 0, 
+                padding: 12,
+                minWidth: 44,
+                minHeight: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onTouchEnd={() => {
+                router.replace('/(tabs)');
+              }}
             >
-              <Ionicons name="arrow-back" size={24} color={Platform.OS === 'ios' ? '#007AFF' : 'black'} />
-            </TouchableOpacity>
+              <Ionicons 
+                name="arrow-back" 
+                size={24} 
+                color={Platform.OS === 'ios' ? '#007AFF' : 'black'}
+              />
+            </View>
           ),
         }} 
       />
@@ -135,12 +174,25 @@ function RootLayoutNav() {
           title: '単語帳',
           headerTitleAlign: 'center',
           headerLeft: () => (
-            <TouchableOpacity 
-              onPress={() => router.replace('/(tabs)')} 
-              style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0, padding: 5 }}
+            <View
+              style={{
+                marginLeft: Platform.OS === 'ios' ? 10 : 0, 
+                padding: 12,
+                minWidth: 44,
+                minHeight: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onTouchEnd={() => {
+                router.replace('/(tabs)');
+              }}
             >
-              <Ionicons name="arrow-back" size={24} color={Platform.OS === 'ios' ? '#007AFF' : 'black'} />
-            </TouchableOpacity>
+              <Ionicons 
+                name="arrow-back" 
+                size={24} 
+                color={Platform.OS === 'ios' ? '#007AFF' : 'black'}
+              />
+            </View>
           ),
         }} 
       />
@@ -151,12 +203,25 @@ function RootLayoutNav() {
           title: 'AIに質問',
           headerTitleAlign: 'center',
           headerLeft: () => (
-            <TouchableOpacity 
-              onPress={() => router.replace('/(tabs)')} 
-              style={{ marginLeft: Platform.OS === 'ios' ? 10 : 0, padding: 5 }}
+            <View
+              style={{
+                marginLeft: Platform.OS === 'ios' ? 10 : 0, 
+                padding: 12,
+                minWidth: 44,
+                minHeight: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onTouchEnd={() => {
+                router.replace('/(tabs)');
+              }}
             >
-              <Ionicons name="arrow-back" size={24} color={Platform.OS === 'ios' ? '#007AFF' : 'black'} />
-            </TouchableOpacity>
+              <Ionicons 
+                name="arrow-back" 
+                size={24} 
+                color={Platform.OS === 'ios' ? '#007AFF' : 'black'}
+              />
+            </View>
           ),
         }} 
       />

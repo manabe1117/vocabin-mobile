@@ -20,7 +20,6 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { COMMON_STYLES, COLORS } from '@/constants/styles';
 import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
 import { useSpeech } from '@/hooks/useSpeech';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useLocalSearchParams } from 'expo-router';
@@ -968,7 +967,7 @@ export default function VocabularyScreen() {
 
   // メインコンテンツ表示
   return (
-    <ThemedView style={styles.container}>
+    <View style={styles.container}>
       {/* フィルターとソートオプション */}
       {renderOptionBar()}
       {/* 並び替えモーダル */}
@@ -1021,7 +1020,7 @@ export default function VocabularyScreen() {
         maxToRenderPerBatch={10}
         updateCellsBatchingPeriod={16}
       />
-    </ThemedView>
+    </View>
   );
 }
 
@@ -1029,6 +1028,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingTop: Platform.OS === 'android' ? 10 : 20,
+    backgroundColor: COLORS.WHITE,
   },
   optionBarContainer: {
     paddingVertical: 8,
