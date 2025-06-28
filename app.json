@@ -8,6 +8,7 @@
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "description": "AI搭載の英語学習アプリ。翻訳、単語帳、チャット機能で効率的に英語を学習できます。",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.takumi.vocabin",
@@ -23,6 +24,9 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.takumi.vocabin",
+      "versionCode": 1,
+      "targetSdkVersion": 34,
+      "compileSdkVersion": 34,
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",

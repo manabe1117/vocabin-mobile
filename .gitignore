@@ -38,3 +38,9 @@ yarn-error.*
 app-example
 
 .env
+
+# keystore
+*.keystore
+
+# gradle
+android/gradle.properties
