@@ -1341,7 +1341,7 @@ const TranslateScreen = () => {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.reportIssueButton}
           onPress={handleOpenReportModal}
         >
@@ -1352,7 +1352,7 @@ const TranslateScreen = () => {
             style={styles.reportIssueButtonIcon}
           />
           <Text style={styles.reportIssueButtonText}>問題を報告する</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
     );
   };
@@ -1697,9 +1697,7 @@ const TranslateScreen = () => {
                 placeholder={
                   isAskingAi
                     ? 'AIが応答中です...'
-                    : (activeChatVocabulary?.vocabulary || vocabulary?.vocabulary)
-                    ? `「${activeChatVocabulary?.vocabulary || vocabulary?.vocabulary}」に関する質問を入力`
-                    : 'AIへの質問を入力...'
+                    : 'このフレーズに関する質問を入力'
                 }
                 value={aiQuestion}
                 onChangeText={setAiQuestion}
