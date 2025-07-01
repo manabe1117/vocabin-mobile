@@ -200,7 +200,9 @@ const StudyScreen = () => {
         setFeedbackMessage(null);
         feedbackOpacity.setValue(0);
         setShowBack(false);
+        showBackRef.current = false;
         animatedValue.setValue(0);
+        setShowMeaningOnFront(false);
         
         // 状態の更新を確実に行う
         requestAnimationFrame(() => {
@@ -208,6 +210,21 @@ const StudyScreen = () => {
           setCurrentCardIndex(nextIndex);
           swipeValue.setValue({ x: 0, y: 0 });
           setIsAnimating(false);
+          
+          // 次のカードの音声を再生（同じカードでも再生）
+          const nextCard = flashcardsRef.current[nextIndex];
+          if (nextCard?.vocabulary) {
+            // 少し遅延させて確実に再生
+            setTimeout(() => {
+              speakText(nextCard.vocabulary, '英語');
+            }, 100);
+          }
+          
+          // 新しいカードの例文をランダムに選択
+          if (nextCard?.examples && nextCard.examples.length > 0) {
+            const randomIndex = Math.floor(Math.random() * nextCard.examples.length);
+            setRandomExampleIndex(randomIndex);
+          }
         });
       });
     } catch (err) {
@@ -258,6 +275,7 @@ const StudyScreen = () => {
 
         // タップ判定：移動距離が小さく、タッチ時間が短い場合
         if (totalDistance < 30 && touchDuration < 500) {
+          setShowMeaningOnFront(false);
           flipCard();
         } else {
           // スワイプ判定
@@ -274,6 +292,8 @@ const StudyScreen = () => {
           if (direction !== 0) {
             handleCardAction(direction === 1);
           } else {
+            // スワイプがキャンセルされた場合、意味表示を隠す
+            setShowMeaningOnFront(false);
             Animated.spring(swipeValue, {
               toValue: { x: 0, y: 0 },
               friction: 9,
