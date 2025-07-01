@@ -45,27 +45,19 @@ const StudyScreen = () => {
     setIsLoading(true);
     setError(null);
     try {
-      console.log('fetchFlashcards: session', session);
       if (!session?.access_token) {
         throw new Error('認証トークンがありません');
       }
       const { data, error } = await supabase.functions.invoke('get-flashcards');
-      console.log('fetchFlashcards: API response', { data, error });
       if (error) {
-        if (error.context && typeof error.context.json === 'function') {
-          const errorDetail = await error.context.json();
-          console.log('fetchFlashcards: error.context.json()', errorDetail);
-        }
         throw error;
       }
-      console.log('fetchFlashcards: data', data);
       const fetchedFlashcards = (data || []).map((card: any) => ({
         ...card,
         reviewCount: card.reviewCount || 0,
         isCorrect: false,
         hasBeenWrong: false,
       }));
-      console.log('fetchFlashcards: fetchedFlashcards', fetchedFlashcards);
       setFlashcards(fetchedFlashcards);
       flashcardsRef.current = fetchedFlashcards;
 
@@ -76,7 +68,6 @@ const StudyScreen = () => {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '予期せぬエラーが発生しました';
       setError(errorMessage);
-      console.log('fetchFlashcards error', err);
       flashcardsRef.current = [];
     } finally {
       setIsLoading(false);
@@ -98,6 +89,7 @@ const StudyScreen = () => {
 
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [showBack, setShowBack] = useState(false);
+  const showBackRef = useRef(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; color: string; position: 'topLeft' | 'topRight' } | null>(null);
@@ -107,7 +99,7 @@ const StudyScreen = () => {
   const screenWidth = Dimensions.get('window').width;
   const [swipeDistance, setSwipeDistance] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
-  const [touchStartTime, setTouchStartTime] = useState(0);
+  const touchStartTimeRef = useRef(0);
   const [touchStartX, setTouchStartX] = useState(0);
   const [touchStartY, setTouchStartY] = useState(0);
   const [randomExampleIndex, setRandomExampleIndex] = useState(0);
@@ -121,11 +113,8 @@ const StudyScreen = () => {
   }, [currentCardIndex]);
 
   useEffect(() => {
-    console.log('Current card index updated:', {
-      state: currentCardIndex,
-      ref: currentCardIndexRef.current
-    });
-  }, [currentCardIndex]);
+    showBackRef.current = showBack;
+  }, [showBack]);
 
   const showFeedback = (text: string, color: string, position: 'topLeft' | 'topRight') => {
     setFeedbackMessage({ text, color, position });
@@ -163,8 +152,8 @@ const StudyScreen = () => {
           isCorrect,
           studyDate: new Date().toISOString(),
         }
-      }).catch(err => {
-        console.error('学習状態の更新に失敗しました:', err);
+      }).catch(() => {
+        // エラーを無視（ユーザー体験に影響しないため）
       });
 
       // カードの正解状態を更新
@@ -222,7 +211,6 @@ const StudyScreen = () => {
         });
       });
     } catch (err) {
-      console.error('学習状態の更新に失敗しました:', err);
       setIsAnimating(false);
     }
   };
@@ -235,60 +223,64 @@ const StudyScreen = () => {
         if (isAnimating || isFlipping) return;
         setSwipeDistance(0);
         setIsSwiping(false);
-        setTouchStartTime(Date.now());
+        touchStartTimeRef.current = Date.now();
         setTouchStartX(gestureState.x0);
         setTouchStartY(gestureState.y0);
         swipeValue.setOffset({ x: 0, y: 0 });
         setShowMeaningOnFront(true);
-        
-        const currentIndex = currentCardIndexRef.current;
-        const currentCard = flashcardsRef.current[currentIndex];
-        console.log('Current card on swipe start:', {
-          index: currentIndex,
-          card: currentCard,
-          vocabulary: currentCard?.vocabulary,
-          meanings: currentCard?.meanings
-        });
       },
       onPanResponderMove: (evt, gestureState) => {
         if (isAnimating || isFlipping) return;
-        const dx = Math.abs(gestureState.moveX - touchStartX);
-        const dy = Math.abs(gestureState.moveY - touchStartY);
-        setSwipeDistance(dx);
-        if (dx > 10 || dy > 10) {
+        const dx = Math.abs(gestureState.dx);
+        const dy = Math.abs(gestureState.dy);
+        const totalDistance = Math.sqrt(dx * dx + dy * dy);
+        setSwipeDistance(totalDistance);
+        
+        if (totalDistance > 15) {
           setIsSwiping(true);
         }
+        
         swipeValue.setValue({
           x: gestureState.dx,
           y: gestureState.dy
         });
       },
       onPanResponderRelease: (evt, gestureState) => {
-        console.log('onPanResponderRelease');
         if (isAnimating || isFlipping) return;
+        
+        const dx = gestureState.dx;
+        const dy = gestureState.dy;
+        const totalDistance = Math.sqrt(dx * dx + dy * dy);
+        const touchDuration = Date.now() - touchStartTimeRef.current;
+        
         setSwipeDistance(0);
         setIsSwiping(false);
 
-        const SWIPE_THRESHOLD = screenWidth / 3;
-        const dx = gestureState.dx;
-        const vx = gestureState.vx;
-
-        let direction = 0;
-        if (dx > SWIPE_THRESHOLD || vx > 0.5) {
-          direction = 1;
-        } else if (dx < -SWIPE_THRESHOLD || vx < -0.5) {
-          direction = -1;
-        }
-
-        if (direction !== 0) {
-          handleCardAction(direction === 1);
+        // タップ判定：移動距離が小さく、タッチ時間が短い場合
+        if (totalDistance < 30 && touchDuration < 500) {
+          flipCard();
         } else {
-          Animated.spring(swipeValue, {
-            toValue: { x: 0, y: 0 },
-            friction: 9,
-            tension: 40,
-            useNativeDriver: true,
-          }).start();
+          // スワイプ判定
+          const SWIPE_THRESHOLD = screenWidth / 3;
+          const vx = gestureState.vx;
+
+          let direction = 0;
+          if (dx > SWIPE_THRESHOLD || vx > 0.5) {
+            direction = 1;
+          } else if (dx < -SWIPE_THRESHOLD || vx < -0.5) {
+            direction = -1;
+          }
+
+          if (direction !== 0) {
+            handleCardAction(direction === 1);
+          } else {
+            Animated.spring(swipeValue, {
+              toValue: { x: 0, y: 0 },
+              friction: 9,
+              tension: 40,
+              useNativeDriver: true,
+            }).start();
+          }
         }
       },
     })
@@ -305,29 +297,27 @@ const StudyScreen = () => {
   const currentCard = flashcards[currentCardIndex];
 
   const flipCard = () => {
-    if (!currentCard || isAnimating || isFlipping || isSwiping) {
-      console.log('Cannot flip card now.');
-      return;
-    }
+    const currentIndex = currentCardIndexRef.current;
+    const actualCurrentCard = flashcardsRef.current[currentIndex];
+    
+    if (!actualCurrentCard || isAnimating || isFlipping) return;
 
-    if (swipeDistance > ANIMATION.THRESHOLD.SWIPE) {
-      console.log('Cannot flip while swiping.');
-      return;
-    }
-
-    if (Date.now() - touchStartTime > ANIMATION.THRESHOLD.TAP_DURATION) {
-      console.log('Not a tap.');
-      return;
-    }
+    // スワイプ中でなければフリップを実行
+    if (isSwiping && swipeDistance > 50) return;
 
     setIsFlipping(true);
+    
+    const currentShowBack = showBackRef.current;
+    const targetValue = currentShowBack ? 0 : 180;
+    
     Animated.timing(animatedValue, {
-      toValue: showBack ? ANIMATION.VALUES.FLIP.START : ANIMATION.VALUES.FLIP.END,
-      duration: ANIMATION.DURATION.SHORT,
+      toValue: targetValue,
+      duration: 300,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start(() => {
-      setShowBack(!showBack);
+      const newShowBack = !currentShowBack;
+      setShowBack(newShowBack);
       setIsFlipping(false);
     });
   };
@@ -366,6 +356,7 @@ const StudyScreen = () => {
     setFeedbackMessage(null);
     feedbackOpacity.setValue(0);
     setShowBack(false);
+    showBackRef.current = false;
     animatedValue.setValue(0);
     setShowMeaningOnFront(false);
 
@@ -462,7 +453,6 @@ const StudyScreen = () => {
   }
 
   if (!currentCard) {
-    console.error("Error: currentCard is invalid. Index:", currentCardIndex, "Flashcards length:", flashcards.length);
     setCurrentCardIndex(0);
     return null;
   }
@@ -494,7 +484,6 @@ const StudyScreen = () => {
           {/* カードの表面 */}
           <Animated.View
             style={[styles.flashCard, styles.cardFront, frontAnimatedStyle]}
-            onTouchEnd={flipCard}
           >
             <Card style={styles.cardContent}>
               <ThemedText type="title" style={styles.vocabularyText}>
@@ -521,7 +510,6 @@ const StudyScreen = () => {
           {/* カードの裏面 */}
           <Animated.View
             style={[styles.flashCard, styles.cardBack, backAnimatedStyle]}
-            onTouchEnd={flipCard}
           >
             <Card style={styles.cardContent}>
               <ScrollView showsVerticalScrollIndicator={false} style={styles.cardBackScrollView} contentContainerStyle={styles.cardBackScrollContent}>
@@ -545,17 +533,17 @@ const StudyScreen = () => {
                           
                           if (firstExampleLength > 20 && secondExampleLength > 20) {
                             return (
-                              <View style={styles.exampleItem}>
-                                <ThemedText style={styles.exampleEn}>{currentCard.examples[0].en}</ThemedText>
-                                <ThemedText style={styles.exampleJa}>{currentCard.examples[0].ja}</ThemedText>
+                              <View style={styles.exampleContainer}>
+                                <ThemedText style={styles.exampleText}>{currentCard.examples[0].en}</ThemedText>
+                                <ThemedText style={styles.exampleTranslation}>{currentCard.examples[0].ja}</ThemedText>
                               </View>
                             );
                           }
                           
                           return currentCard.examples.slice(0, 2).map((example, index) => (
-                            <View key={index} style={styles.exampleItem}>
-                              <ThemedText style={styles.exampleEn}>{example.en}</ThemedText>
-                              <ThemedText style={styles.exampleJa}>{example.ja}</ThemedText>
+                            <View key={index} style={styles.exampleContainer}>
+                              <ThemedText style={styles.exampleText}>{example.en}</ThemedText>
+                              <ThemedText style={styles.exampleTranslation}>{example.ja}</ThemedText>
                             </View>
                           ));
                         })()}
@@ -804,15 +792,15 @@ const styles = StyleSheet.create({
   
   // 例文
   examplesContainer: {
-    gap: 16,
+    gap: 12,
   },
-  exampleItem: {
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER.LIGHTER,
-    marginBottom: 4,
+  exampleContainer: {
+    backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
   },
-  exampleEn: {
+  exampleText: {
     fontSize: 15,
     color: COLORS.TEXT.DARKER,
     lineHeight: 22,
@@ -820,11 +808,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'left',
   },
-  exampleJa: {
+  exampleTranslation: {
     fontSize: 14,
     color: COLORS.TEXT.SECONDARY,
     lineHeight: 20,
     textAlign: 'left',
+    fontStyle: 'italic',
   },
 
   // フィードバック
