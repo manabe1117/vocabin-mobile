@@ -511,9 +511,9 @@ const StudyScreen = () => {
           <Animated.View
             style={[styles.flashCard, styles.cardBack, backAnimatedStyle]}
           >
-            <Card style={styles.cardContent}>
-              <ScrollView showsVerticalScrollIndicator={false} style={styles.cardBackScrollView} contentContainerStyle={styles.cardBackScrollContent}>
-                <View style={styles.cardBackContent}>
+            <Card style={styles.cardBackContent}>
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.cardBackScrollView} contentContainerStyle={styles.cardBackScrollContentContainer}>
+                <View style={styles.cardBackInnerContent}>
                   <View style={styles.meaningSection}>
                     <ThemedText style={styles.meaningText}>
                       {currentCard.meanings.join('、')}
@@ -694,6 +694,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     elevation: 4,
   },
+  cardBackContent: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    alignItems: 'stretch',
+    padding: 20,
+    paddingTop: 30,
+    paddingBottom: 30,
+    borderRadius: 16,
+    elevation: 4,
+    width: '100%',
+  },
   
   // カード表面
   vocabularyText: {
@@ -734,16 +745,17 @@ const styles = StyleSheet.create({
   cardBackScrollView: {
     flex: 1,
   },
-  cardBackScrollContent: {
+  cardBackScrollContentContainer: {
     flexGrow: 1,
     paddingBottom: 16,
   },
-  cardBackContent: {
+  cardBackInnerContent: {
     flex: 1,
   },
   meaningSection: {
     alignItems: 'flex-start',
     marginBottom: 16,
+    width: '100%',
   },
   meaningText: {
     fontSize: 22,
@@ -763,6 +775,7 @@ const styles = StyleSheet.create({
   // セクション
   section: {
     marginBottom: 12,
+    width: '100%',
   },
   sectionTitle: {
     fontSize: 16,
@@ -793,12 +806,14 @@ const styles = StyleSheet.create({
   // 例文
   examplesContainer: {
     gap: 12,
+    width: '100%',
   },
   exampleContainer: {
     backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
+    width: '100%',
   },
   exampleText: {
     fontSize: 15,
