@@ -211,16 +211,8 @@ const StudyScreen = () => {
           swipeValue.setValue({ x: 0, y: 0 });
           setIsAnimating(false);
           
-          // 次のカードの音声を再生（同じカードでも再生）
-          const nextCard = flashcardsRef.current[nextIndex];
-          if (nextCard?.vocabulary) {
-            // 少し遅延させて確実に再生
-            setTimeout(() => {
-              speakText(nextCard.vocabulary, '英語');
-            }, 100);
-          }
-          
           // 新しいカードの例文をランダムに選択
+          const nextCard = flashcardsRef.current[nextIndex];
           if (nextCard?.examples && nextCard.examples.length > 0) {
             const randomIndex = Math.floor(Math.random() * nextCard.examples.length);
             setRandomExampleIndex(randomIndex);
