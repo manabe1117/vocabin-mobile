@@ -104,6 +104,14 @@ const ChatScreen = () => {
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0, width: 0 });
   const menuButtonRef = useRef<View>(null);
 
+  // テキスト選択モーダル用 state
+  const [textSelectionModalVisible, setTextSelectionModalVisible] = useState(false);
+  const [selectedMessageText, setSelectedMessageText] = useState('');
+  
+  // メッセージ操作モーダル用 state
+  const [messageActionModalVisible, setMessageActionModalVisible] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+
   useEffect(() => {
     const fetchHistoryMessages = async (sessionId: string) => {
       setIsLoading(true);
@@ -325,6 +333,107 @@ const ChatScreen = () => {
     console.log('Text copied to clipboard');
   };
 
+  // メッセージの全コンテンツをプレーンテキストに変換
+  const getFullMessageText = (message: Message): string => {
+    let fullText = message.text;
+
+    // 例文を追加
+    if (message.examples && message.examples.length > 0) {
+      fullText += '\n\n【例文】\n';
+      message.examples.forEach((example, index) => {
+        fullText += `${index + 1}. ${example.english}\n   ${example.japanese}`;
+        if (example.note) {
+          fullText += `\n   注：${example.note}`;
+        }
+        fullText += '\n\n';
+      });
+    }
+
+    // リッチコンテンツを追加
+    if (message.richContent) {
+      if (message.richContent.title) {
+        fullText += `\n【${message.richContent.title}】\n`;
+      }
+      if (message.richContent.description) {
+        fullText += `${message.richContent.description}\n\n`;
+      }
+      
+      message.richContent.sections?.forEach((section) => {
+        fullText += `■ ${section.title}\n`;
+        section.items.forEach((item, index) => {
+          fullText += `${index + 1}. ${item.japaneseText}\n   ${item.englishText}\n`;
+          if (item.description) {
+            fullText += `   ${item.description}\n`;
+          }
+          item.examples?.forEach((example, exIndex) => {
+            fullText += `   例${exIndex + 1}: ${example.japanese}\n        ${example.english}\n`;
+          });
+          fullText += '\n';
+        });
+        fullText += '\n';
+      });
+    }
+
+    // コンテンツブロックを追加
+    if (message.contentBlocks && message.contentBlocks.length > 0) {
+      message.contentBlocks.forEach((block) => {
+        switch (block.type) {
+          case 'header':
+            fullText += `\n【${block.content}】\n`;
+            break;
+          case 'text':
+            fullText += `${block.content}\n\n`;
+            break;
+          case 'note':
+            fullText += `注：${block.content}\n\n`;
+            break;
+          case 'section':
+            const section = block.content;
+            fullText += `${section.number}. ${section.title}\n`;
+            if (section.example) {
+              fullText += `例：${section.example.context}\n`;
+              fullText += `💬 ${section.example.english}\n`;
+              fullText += `   ${section.example.translation}\n\n`;
+            }
+            break;
+          case 'example':
+            const example = block.content as Example;
+            fullText += `${example.english}\n${example.japanese}`;
+            if (example.note) {
+              fullText += `\n注：${example.note}`;
+            }
+            fullText += '\n\n';
+            break;
+        }
+      });
+    }
+
+    return fullText.trim();
+  };
+
+    // メッセージ長押し時のアクションメニューを表示
+  const handleMessageLongPress = (message: Message) => {
+    setSelectedMessage(message);
+    setMessageActionModalVisible(true);
+  };
+
+  // メッセージ操作の実行
+  const handleMessageAction = (action: 'copy' | 'select') => {
+    if (!selectedMessage) return;
+    
+    setMessageActionModalVisible(false);
+    
+    if (action === 'copy') {
+      copyToClipboard(getFullMessageText(selectedMessage));
+      Alert.alert('コピー完了', 'テキストをクリップボードにコピーしました');
+    } else if (action === 'select') {
+      setSelectedMessageText(getFullMessageText(selectedMessage));
+      setTextSelectionModalVisible(true);
+    }
+    
+    setSelectedMessage(null);
+  };
+
   // リッチコンテンツの例文を保存する
   const saveRichExample = (sectionIndex: number, itemIndex: number, exampleIndex: number) => {
     // Alert.alert('保存機能', '単語帳に保存する機能は今後実装予定です');
@@ -530,12 +639,14 @@ const ChatScreen = () => {
     const isUserMessage = message.sender === 'user';
     
     return (
-      <View
+      <TouchableOpacity
         key={message.id}
         style={[
           styles.messageBubble,
           isUserMessage ? styles.userBubble : styles.aiBubble,
         ]}
+        onLongPress={() => handleMessageLongPress(message)}
+        activeOpacity={0.7}
       >
         {isUserMessage ? (
           <Text style={[
@@ -545,7 +656,9 @@ const ChatScreen = () => {
             {message.text}
           </Text>
         ) : (
-          <Markdown style={markdownStyle}>{message.text}</Markdown>
+          <Markdown style={markdownStyle}>
+            {message.text}
+          </Markdown>
         )}
         
         {!isUserMessage && (
@@ -634,7 +747,7 @@ const ChatScreen = () => {
             </View>
           </>
         )}
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -781,6 +894,92 @@ const ChatScreen = () => {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* テキスト選択モーダル */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={textSelectionModalVisible}
+        onRequestClose={() => setTextSelectionModalVisible(false)}
+      >
+        <View style={styles.textSelectionModalOverlay}>
+          <View style={styles.textSelectionModalContent}>
+            <View style={styles.textSelectionModalHeader}>
+              <Text style={styles.textSelectionModalTitle}>テキストを選択</Text>
+              <TouchableOpacity
+                onPress={() => setTextSelectionModalVisible(false)}
+                style={styles.textSelectionModalCloseButton}
+              >
+                <Ionicons name="close" size={24} color={COLORS.TEXT.PRIMARY} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.textSelectionModalTextContainer}>
+              <Text style={styles.textSelectionModalText} selectable>
+                {selectedMessageText}
+              </Text>
+            </ScrollView>
+            
+            <View style={styles.textSelectionModalActions}>
+              <TouchableOpacity
+                style={styles.textSelectionModalCopyButton}
+                onPress={async () => {
+                  await copyToClipboard(selectedMessageText);
+                  setTextSelectionModalVisible(false);
+                  Alert.alert('コピー完了', 'テキストをクリップボードにコピーしました');
+                }}
+              >
+                <Ionicons name="copy-outline" size={20} color={COLORS.WHITE} />
+                <Text style={styles.textSelectionModalCopyButtonText}>全文をコピー</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* メッセージ操作モーダル */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={messageActionModalVisible}
+        onRequestClose={() => setMessageActionModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setMessageActionModalVisible(false)}>
+          <View style={styles.messageActionModalOverlay}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={styles.messageActionModalContent}>
+                <View style={styles.messageActionModalHeader}>
+                  <Text style={styles.messageActionModalTitle}>メッセージ操作</Text>
+                </View>
+                
+                <TouchableOpacity
+                  style={styles.messageActionOption}
+                  onPress={() => handleMessageAction('copy')}
+                >
+                  <Ionicons name="copy-outline" size={24} color={COLORS.TEXT.PRIMARY} />
+                  <Text style={styles.messageActionOptionText}>テキストをコピー</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.messageActionOption}
+                  onPress={() => handleMessageAction('select')}
+                >
+                  <Ionicons name="text-outline" size={24} color={COLORS.TEXT.PRIMARY} />
+                  <Text style={styles.messageActionOptionText}>テキストを選択</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.messageActionOption, styles.messageActionCancelOption]}
+                  onPress={() => setMessageActionModalVisible(false)}
+                >
+                  <Ionicons name="close-outline" size={24} color={COLORS.TEXT.SECONDARY} />
+                  <Text style={[styles.messageActionOptionText, styles.messageActionCancelText]}>キャンセル</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </ThemedView>
   );
 };
@@ -827,7 +1026,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.WHITE,
     alignSelf: 'flex-start',
     borderBottomLeftRadius: 4,
-    maxWidth: '95%',
+        maxWidth: '95%',
   },
   messageText: {
     fontSize: 16,
@@ -1355,6 +1554,116 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: COLORS.BORDER.LIGHT, // DEFAULTからLIGHTに変更
     marginHorizontal: 0,
+  },
+  // テキスト選択モーダル用スタイル
+  textSelectionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  textSelectionModalContent: {
+    backgroundColor: COLORS.WHITE,
+    borderRadius: 16,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  textSelectionModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  textSelectionModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.TEXT.PRIMARY,
+  },
+  textSelectionModalCloseButton: {
+    padding: 8,
+  },
+  textSelectionModalTextContainer: {
+    maxHeight: 400,
+    marginBottom: 20,
+  },
+  textSelectionModalText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: COLORS.TEXT.PRIMARY,
+    padding: 16,
+    backgroundColor: COLORS.BACKGROUND.LIGHTER,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.LIGHT,
+  },
+  textSelectionModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  textSelectionModalCopyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.PRIMARY,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  textSelectionModalCopyButtonText: {
+    color: COLORS.WHITE,
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  // メッセージ操作モーダル用スタイル
+  messageActionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageActionModalContent: {
+    backgroundColor: COLORS.WHITE,
+    borderRadius: 16,
+    padding: 8,
+    width: 280,
+    shadowColor: COLORS.EFFECTS.SHADOW,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  messageActionModalHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.BORDER.LIGHTER,
+  },
+  messageActionModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.TEXT.PRIMARY,
+    textAlign: 'center',
+  },
+  messageActionOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  messageActionOptionText: {
+    fontSize: 16,
+    color: COLORS.TEXT.PRIMARY,
+    marginLeft: 12,
+    flex: 1,
+    textAlign: 'left',
+  },
+  messageActionCancelOption: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.BORDER.LIGHTER,
+  },
+  messageActionCancelText: {
+    color: COLORS.TEXT.SECONDARY,
   },
 });
 

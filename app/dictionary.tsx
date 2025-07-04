@@ -15,6 +15,7 @@ import {
   SafeAreaView,
   Dimensions,
   TextStyle,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons'; // アイコンをインポート
 import { supabase } from '@/lib/supabase';
@@ -25,6 +26,7 @@ import { handleApiError } from '../utils/errorHandler';
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import { useSpeech } from '../hooks/useSpeech';
 import * as FileSystem from 'expo-file-system';
+import * as Clipboard from 'expo-clipboard';
 import Markdown from 'react-native-markdown-display';
 
 // Markdown用のスタイル定義（コンポーネント外で定義）
@@ -253,6 +255,12 @@ const TranslateScreen = () => {
   const [isChatFocusedMode, setIsChatFocusedMode] = useState(false);
   const [activeChatVocabulary, setActiveChatVocabulary] = useState<VocabularyResult | null>(null);
   const [isDictionaryDetailsOpen, setIsDictionaryDetailsOpen] = useState(true); // 辞書詳細の開閉状態
+
+  // メッセージ操作モーダル用 state
+  const [messageActionModalVisible, setMessageActionModalVisible] = useState(false);
+  const [textSelectionModalVisible, setTextSelectionModalVisible] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<AIChatEntry | null>(null);
+  const [selectedMessageText, setSelectedMessageText] = useState('');
 
   // States for editing vocabulary
   const [isEditMode, setIsEditMode] = useState(false);
@@ -601,6 +609,40 @@ const TranslateScreen = () => {
     if (text) {
       speakText(text, '英語');
     }
+  };
+
+  // テキストをクリップボードにコピーする
+  const copyToClipboard = async (text: string) => {
+    await Clipboard.setStringAsync(text);
+    console.log('Text copied to clipboard');
+  };
+
+  // AIチャットメッセージの全コンテンツをプレーンテキストに変換
+  const getFullAiMessageText = (message: AIChatEntry): string => {
+    return message.text; // AIチャットエントリは基本的にテキストのみ
+  };
+
+  // メッセージ長押し時のアクションメニューを表示
+  const handleAiMessageLongPress = (message: AIChatEntry) => {
+    setSelectedMessage(message);
+    setMessageActionModalVisible(true);
+  };
+
+  // メッセージ操作の実行
+  const handleAiMessageAction = (action: 'copy' | 'select') => {
+    if (!selectedMessage) return;
+    
+    setMessageActionModalVisible(false);
+    
+    if (action === 'copy') {
+      copyToClipboard(getFullAiMessageText(selectedMessage));
+      Alert.alert('コピー完了', 'テキストをクリップボードにコピーしました');
+    } else if (action === 'select') {
+      setSelectedMessageText(getFullAiMessageText(selectedMessage));
+      setTextSelectionModalVisible(true);
+    }
+    
+    setSelectedMessage(null);
   };
 
   const clearInput = async () => {
@@ -1385,19 +1427,21 @@ const TranslateScreen = () => {
             nestedScrollEnabled={true}
           >
             {aiConversation.map((entry) => (
-              <View
+              <TouchableOpacity
                 key={entry.id}
                 style={[
                   styles.aiMessageBubble,
                   entry.type === 'user' ? styles.userMessageBubble : styles.aiMessageBubbleBase
                 ]}
+                onLongPress={() => handleAiMessageLongPress(entry)}
+                activeOpacity={0.7}
               >
                 {entry.type === 'ai' ? (
                   <Markdown style={markdownStyle}>{entry.text}</Markdown>
                 ) : (
                   <Text style={[styles.aiMessageText, styles.userMessageText]}>{entry.text}</Text>
                 )}
-              </View>
+              </TouchableOpacity>
             ))}
             {isAskingAi && (
               <View style={styles.aiLoadingOuterContainer}>
@@ -1646,19 +1690,21 @@ const TranslateScreen = () => {
             nestedScrollEnabled={true}
           >
             {aiConversation.map((entry) => (
-              <View
+              <TouchableOpacity
                 key={entry.id}
                 style={[
                   styles.aiMessageBubble,
                   entry.type === 'user' ? styles.userMessageBubble : styles.aiMessageBubbleBase
                 ]}
+                onLongPress={() => handleAiMessageLongPress(entry)}
+                activeOpacity={0.7}
               >
                 {entry.type === 'ai' ? (
                   <Markdown style={markdownStyle}>{entry.text}</Markdown>
                 ) : (
                   <Text style={[styles.aiMessageText, styles.userMessageText]}>{entry.text}</Text>
                 )}
-              </View>
+              </TouchableOpacity>
             ))}
             {isAskingAi && (
               <View style={styles.aiLoadingOuterContainer}>
@@ -1793,6 +1839,92 @@ const TranslateScreen = () => {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* テキスト選択モーダル */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={textSelectionModalVisible}
+        onRequestClose={() => setTextSelectionModalVisible(false)}
+      >
+        <View style={styles.textSelectionModalOverlay}>
+          <View style={styles.textSelectionModalContent}>
+            <View style={styles.textSelectionModalHeader}>
+              <Text style={styles.textSelectionModalTitle}>テキストを選択</Text>
+              <TouchableOpacity
+                onPress={() => setTextSelectionModalVisible(false)}
+                style={styles.textSelectionModalCloseButton}
+              >
+                <Ionicons name="close" size={24} color={COLORS.TEXT.PRIMARY} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.textSelectionModalTextContainer}>
+              <Text style={styles.textSelectionModalText} selectable>
+                {selectedMessageText}
+              </Text>
+            </ScrollView>
+            
+            <View style={styles.textSelectionModalActions}>
+              <TouchableOpacity
+                style={styles.textSelectionModalCopyButton}
+                onPress={async () => {
+                  await copyToClipboard(selectedMessageText);
+                  setTextSelectionModalVisible(false);
+                  Alert.alert('コピー完了', 'テキストをクリップボードにコピーしました');
+                }}
+              >
+                <Ionicons name="copy-outline" size={20} color={COLORS.WHITE} />
+                <Text style={styles.textSelectionModalCopyButtonText}>全文をコピー</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* メッセージ操作モーダル */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={messageActionModalVisible}
+        onRequestClose={() => setMessageActionModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setMessageActionModalVisible(false)}>
+          <View style={styles.messageActionModalOverlay}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={styles.messageActionModalContent}>
+                <View style={styles.messageActionModalHeader}>
+                  <Text style={styles.messageActionModalTitle}>メッセージ操作</Text>
+                </View>
+                
+                <TouchableOpacity
+                  style={styles.messageActionOption}
+                  onPress={() => handleAiMessageAction('copy')}
+                >
+                  <Ionicons name="copy-outline" size={24} color={COLORS.TEXT.PRIMARY} />
+                  <Text style={styles.messageActionOptionText}>テキストをコピー</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.messageActionOption}
+                  onPress={() => handleAiMessageAction('select')}
+                >
+                  <Ionicons name="text-outline" size={24} color={COLORS.TEXT.PRIMARY} />
+                  <Text style={styles.messageActionOptionText}>テキストを選択</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.messageActionOption, styles.messageActionCancelOption]}
+                  onPress={() => setMessageActionModalVisible(false)}
+                >
+                  <Ionicons name="close-outline" size={24} color={COLORS.TEXT.SECONDARY} />
+                  <Text style={[styles.messageActionOptionText, styles.messageActionCancelText]}>キャンセル</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );
@@ -2526,6 +2658,116 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.BORDER.GRAY_LIGHT,
     paddingBottom: 4,
+  },
+  // テキスト選択モーダル用スタイル
+  textSelectionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  textSelectionModalContent: {
+    backgroundColor: COLORS.WHITE,
+    borderRadius: 16,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  textSelectionModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  textSelectionModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.TEXT.PRIMARY,
+  },
+  textSelectionModalCloseButton: {
+    padding: 8,
+  },
+  textSelectionModalTextContainer: {
+    maxHeight: 400,
+    marginBottom: 20,
+  },
+  textSelectionModalText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: COLORS.TEXT.PRIMARY,
+    padding: 16,
+    backgroundColor: COLORS.BACKGROUND.MAIN,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER.GRAY_LIGHT,
+  },
+  textSelectionModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  textSelectionModalCopyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.PRIMARY,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  textSelectionModalCopyButtonText: {
+    color: COLORS.WHITE,
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  // メッセージ操作モーダル用スタイル
+  messageActionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageActionModalContent: {
+    backgroundColor: COLORS.WHITE,
+    borderRadius: 16,
+    padding: 8,
+    width: 280,
+    shadowColor: COLORS.BLACK,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  messageActionModalHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.BORDER.GRAY_LIGHT,
+  },
+  messageActionModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.TEXT.PRIMARY,
+    textAlign: 'center',
+  },
+  messageActionOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  messageActionOptionText: {
+    fontSize: 16,
+    color: COLORS.TEXT.PRIMARY,
+    marginLeft: 12,
+    flex: 1,
+    textAlign: 'left',
+  },
+  messageActionCancelOption: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.BORDER.GRAY_LIGHT,
+  },
+  messageActionCancelText: {
+    color: COLORS.TEXT.LIGHT_GRAY,
   },
 });
 
