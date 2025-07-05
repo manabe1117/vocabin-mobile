@@ -1316,6 +1316,20 @@ $$;
 
 
 --
+-- Name: update_inquiries_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.update_inquiries_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: update_level_progress_type1(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2975,6 +2989,21 @@ CREATE TABLE public.dictionary_search_history (
 
 
 --
+-- Name: inquiries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.inquiries (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    user_id uuid NOT NULL,
+    message text NOT NULL,
+    status integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT inquiries_status_check CHECK ((status = ANY (ARRAY[0, 1, 2, 3])))
+);
+
+
+--
 -- Name: level_progress; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3863,6 +3892,14 @@ ALTER TABLE ONLY public.dictionary_search_history
 
 
 --
+-- Name: inquiries inquiries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inquiries
+    ADD CONSTRAINT inquiries_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: level_progress level_progress_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4616,6 +4653,13 @@ CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXEC
 
 
 --
+-- Name: inquiries update_inquiries_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_inquiries_updated_at BEFORE UPDATE ON public.inquiries FOR EACH ROW EXECUTE FUNCTION public.update_inquiries_updated_at();
+
+
+--
 -- Name: subscription tr_check_filters; Type: TRIGGER; Schema: realtime; Owner: -
 --
 
@@ -4755,6 +4799,14 @@ ALTER TABLE ONLY public.dictionary_search_history
 
 ALTER TABLE ONLY public.dictionary_search_history
     ADD CONSTRAINT dictionary_search_history_vocabulary_id_fkey FOREIGN KEY (vocabulary_id) REFERENCES public.vocabulary(id);
+
+
+--
+-- Name: inquiries inquiries_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inquiries
+    ADD CONSTRAINT inquiries_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 
 --
@@ -5109,6 +5161,13 @@ CREATE POLICY "Everyone can view vocabulary" ON public.bk_vocabulary FOR SELECT 
 
 
 --
+-- Name: inquiries Users can create their own inquiries; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can create their own inquiries" ON public.inquiries FOR INSERT TO authenticated WITH CHECK ((auth.uid() = user_id));
+
+
+--
 -- Name: chat_sessions Users can delete their own chat sessions; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -5137,6 +5196,13 @@ CREATE POLICY "Users can update their own chat sessions" ON public.chat_sessions
 
 
 --
+-- Name: inquiries Users can update their own inquiries; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can update their own inquiries" ON public.inquiries FOR UPDATE TO authenticated USING ((auth.uid() = user_id)) WITH CHECK ((auth.uid() = user_id));
+
+
+--
 -- Name: profiles Users can update their own profile; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -5155,6 +5221,13 @@ CREATE POLICY "Users can update their own translation history" ON public.transla
 --
 
 CREATE POLICY "Users can view their own chat sessions" ON public.chat_sessions FOR SELECT USING ((auth.uid() = user_id));
+
+
+--
+-- Name: inquiries Users can view their own inquiries; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can view their own inquiries" ON public.inquiries FOR SELECT TO authenticated USING ((auth.uid() = user_id));
 
 
 --
@@ -5223,6 +5296,12 @@ CREATE POLICY delete_own_history ON public.dictionary_search_history FOR DELETE 
 --
 
 ALTER TABLE public.dictionary_search_history ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: inquiries; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.inquiries ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: dictionary_search_history insert_own_history; Type: POLICY; Schema: public; Owner: -

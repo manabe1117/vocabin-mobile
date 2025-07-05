@@ -35,7 +35,7 @@ export default function AccountScreen() {
         <Ionicons name="notifications-outline" size={24} color={COLORS.TEXT.SECONDARY} />
         <Text style={styles.settingText}>通知設定</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.settingItem}>
+      <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/inquiry')}>
         <Ionicons name="send-outline" size={24} color={COLORS.TEXT.SECONDARY} />
         <Text style={styles.settingText}>問い合わせ</Text>
       </TouchableOpacity>
