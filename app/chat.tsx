@@ -839,8 +839,8 @@ const ChatScreen = () => {
             placeholder="英語に関する質問を入力..."
             style={styles.textInput}
             multiline
-            returnKeyType="done"
-            blurOnSubmit={true}
+            returnKeyType="default"
+            blurOnSubmit={false}
             onSubmitEditing={() => {
               if (Platform.OS === 'android' && inputText.trim()) {
                 // sendMessage();
