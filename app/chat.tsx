@@ -656,9 +656,11 @@ const ChatScreen = () => {
             {message.text}
           </Text>
         ) : (
-          <Markdown style={markdownStyle}>
-            {message.text}
-          </Markdown>
+          <View style={styles.markdownContainer}>
+            <Markdown style={markdownStyle}>
+              {message.text}
+            </Markdown>
+          </View>
         )}
         
         {!isUserMessage && (
@@ -1026,7 +1028,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.WHITE,
     alignSelf: 'flex-start',
     borderBottomLeftRadius: 4,
-        maxWidth: '95%',
+    maxWidth: '95%',
+    width: '95%',
+  },
+  markdownContainer: {
+    flex: 1,
+    maxWidth: '100%',
   },
   messageText: {
     fontSize: 16,
