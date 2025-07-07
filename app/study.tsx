@@ -40,6 +40,7 @@ const StudyScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [showCompletionMessage, setShowCompletionMessage] = useState(false);
   const [showMeaningOnFront, setShowMeaningOnFront] = useState(false);
+  const [studyCount, setStudyCount] = useState<number | null>(null);
 
   const fetchFlashcards = async () => {
     setIsLoading(true);
@@ -384,6 +385,25 @@ const StudyScreen = () => {
     }
   }, [currentCardIndex]);
 
+  useEffect(() => {
+    const fetchStudyCount = async () => {
+      if (!session?.access_token) return;
+      try {
+        const { data, error } = await supabase.functions.invoke('get-study-count', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+        if (error) throw error;
+        setStudyCount(data?.count ?? 0);
+      } catch (e: any) {
+        setStudyCount(0);
+      }
+    };
+    fetchStudyCount();
+  }, [session?.access_token]);
+
   if (showCompletionMessage) {
     return (
       <View style={styles.completionContainer}>
@@ -391,12 +411,12 @@ const StudyScreen = () => {
           <Ionicons name="checkmark-circle" size={80} color={COLORS.SUCCESS.DEFAULT} style={styles.completionIcon} />
           <ThemedText type="title" style={styles.completionTitle}>You Did It!</ThemedText>
           <ThemedText style={styles.completionDescription}>
-            すべての学習が終了しました！{'\n'}お疲れ様でした。
+            すべての学習が終了しました！{"\n"}お疲れ様でした。
           </ThemedText>
           <Button
-            title={flashcards.length >= 50 ? '続けて学習する' : 'ホーム画面に戻る'}
+            title={studyCount !== null && studyCount > 50 ? '続けて学習する' : 'ホーム画面に戻る'}
             onPress={() => {
-              if (flashcards.length >= 50) {
+              if (studyCount !== null && studyCount > 50) {
                 router.replace('/study');
               } else {
                 router.push('/');
@@ -441,7 +461,7 @@ const StudyScreen = () => {
         <Ionicons name="book-outline" size={80} color={COLORS.TEXT.LIGHTER} style={styles.emptyIcon} />
         <ThemedText style={styles.emptyTitle}>学習する単語がありません</ThemedText>
         <ThemedText style={styles.emptyDescription}>
-          辞書検索で新しい単語を保存するか、{'\n'}時間をおいてから再度確認してください
+          辞書検索で新しい単語を保存するか、{"\n"}時間をおいてから再度確認してください
         </ThemedText>
         <ThemedText style={styles.emptySubDescription}>
           保存した単語は一定間隔で復習対象になります
