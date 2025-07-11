@@ -6,6 +6,7 @@ import { MaterialCommunityIcons, MaterialIcons, Ionicons } from '@expo/vector-ic
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
+import { GoogleAdMobAd } from '../../components/GoogleAdMobAd';
 
 // --- Layout Constants ---
 const { width } = Dimensions.get('window');
@@ -220,6 +221,13 @@ const HomeScreen = () => {
         </View>
       </View>
       */}
+
+      {/* --- バナー広告（最下部） --- */}
+      <GoogleAdMobAd 
+        testMode={false} 
+        adFormat="mediumRectangle" 
+        adUnitId="ca-app-pub-9940045330193360/8835995188" 
+      />
     </ScrollView>
   );
 };
