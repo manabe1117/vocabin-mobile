@@ -31,19 +31,15 @@ export default function AccountScreen() {
         </View>
       </View>
 
-      <TouchableOpacity style={styles.settingItem}>
-        <Ionicons name="notifications-outline" size={24} color={COLORS.TEXT.SECONDARY} />
-        <Text style={styles.settingText}>通知設定</Text>
-      </TouchableOpacity>
       <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/inquiry')}>
         <Ionicons name="send-outline" size={24} color={COLORS.TEXT.SECONDARY} />
         <Text style={styles.settingText}>問い合わせ</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.settingItem}>
+      <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/help')}>
         <Ionicons name="help-circle-outline" size={24} color={COLORS.TEXT.SECONDARY} />
         <Text style={styles.settingText}>ヘルプとサポート</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.settingItem}>
+      <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/about')}>
         <Ionicons name="information-circle-outline" size={24} color={COLORS.TEXT.SECONDARY} />
         <Text style={styles.settingText}>アプリについて</Text>
       </TouchableOpacity>

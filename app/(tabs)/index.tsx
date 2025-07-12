@@ -223,11 +223,11 @@ const HomeScreen = () => {
       */}
 
       {/* --- バナー広告（最下部） --- */}
-      <GoogleAdMobAd 
+      {/* <GoogleAdMobAd 
         testMode={false} 
         adFormat="mediumRectangle" 
         adUnitId="ca-app-pub-9940045330193360/8835995188" 
-      />
+      /> */}
     </ScrollView>
   );
 };
