@@ -4,9 +4,11 @@ import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { COLORS } from '@/constants/styles';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 export default function AccountScreen() {
   const { session, signOut } = useAuth();
+  const { isAdmin } = useFeatureFlags();
 
   const handleSignOut = async () => {
     try {
@@ -31,9 +33,20 @@ export default function AccountScreen() {
         </View>
       </View>
 
+      {/* 管理者向けセクション */}
+      {isAdmin && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>管理者メニュー</Text>
+          <TouchableOpacity style={styles.settingItem} onPress={() => alert('管理者向けの機能管理画面は開発中です')}>
+            <Ionicons name="settings-outline" size={24} color={COLORS.TEXT.SECONDARY} />
+            <Text style={styles.settingText}>機能管理</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/inquiry')}>
         <Ionicons name="send-outline" size={24} color={COLORS.TEXT.SECONDARY} />
-        <Text style={styles.settingText}>問い合わせ</Text>
+        <Text style={styles.settingText}>お問い合わせ</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/help')}>
         <Ionicons name="help-circle-outline" size={24} color={COLORS.TEXT.SECONDARY} />

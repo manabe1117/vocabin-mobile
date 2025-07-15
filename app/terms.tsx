@@ -1,23 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { COLORS } from '@/constants/styles';
 
 export default function TermsScreen() {
-  const handleGoBack = () => {
-    router.back();
-  };
-
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.TEXT.PRIMARY} />
-        </TouchableOpacity>
-        <Text style={styles.title}>利用規約</Text>
-      </View>
-
       <View style={styles.content}>
         <Text style={styles.lastUpdated}>最終更新日: 2025年7月</Text>
 
@@ -127,21 +114,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.WHITE,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER.LIGHTER,
-  },
-  backButton: {
-    marginRight: 15,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.TEXT.PRIMARY,
   },
   content: {
     padding: 20,

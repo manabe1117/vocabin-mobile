@@ -77,13 +77,6 @@ export default function InquiryScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView style={styles.scrollView}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.TEXT.PRIMARY} />
-          </TouchableOpacity>
-          <Text style={styles.title}>問い合わせ</Text>
-        </View>
-
         <View style={styles.content}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>お問い合わせ内容</Text>
@@ -139,22 +132,7 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: Platform.OS === 'android' ? 20 : 40,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER.LIGHTER,
-  },
-  backButton: {
-    marginRight: 15,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.TEXT.PRIMARY,
-  },
+
   content: {
     padding: 20,
   },

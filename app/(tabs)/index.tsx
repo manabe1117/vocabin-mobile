@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import { GoogleAdMobAd } from '../../components/GoogleAdMobAd';
+import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 
 // --- Layout Constants ---
 const { width } = Dimensions.get('window');
@@ -36,6 +37,7 @@ const colors = {
 
 const HomeScreen = () => {
   const { session } = useAuth();
+  const { canAccessFeature, isAdmin } = useFeatureFlags();
   const router = useRouter();
   const [completedCount, setCompletedCount] = useState<number | null>(null);
   const [learningCount, setLearningCount] = useState<number | null>(null);
@@ -128,106 +130,134 @@ const HomeScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* --- AIに質問セクション --- */}
-      <View style={styles.aiSection}>
-        <Link href="/chat" asChild>
-          <TouchableOpacity style={styles.aiCard}>
-            <View style={styles.aiIconContainer}>
-              <Ionicons name="sparkles" size={32} color={colors.aiQuestionText} />
-            </View>
-            <View style={styles.aiTextContainer}>
-              <Text style={styles.aiCardTitle}>AIに質問</Text>
-              <Text style={styles.aiCardDescription}>英語学習に関する疑問をAIに相談できます</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={24} color={colors.aiQuestionText} style={styles.aiChevron} />
-          </TouchableOpacity>
-        </Link>
-      </View>
-
-      {/* --- 言語ツールセクション --- */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>言語ツール</Text>
-        <View style={styles.cardContainer}>
-          {/* 辞書検索カード */}
-          <Link href="/dictionary" asChild>
-            <TouchableOpacity style={[styles.card, { width: cardWidth }]}>
-              <View style={[styles.iconCircle, { backgroundColor: colors.accentBlueLight }]}>
-                <MaterialCommunityIcons name="book-open-page-variant" size={32} color={colors.accentBlue} />
-              </View>
-              <Text style={styles.cardTitle}>辞書</Text>
-              {/* <Text style={styles.cardDescription}>単語や例文を検索</Text> */}
-            </TouchableOpacity>
-          </Link>
-
-          {/* 翻訳カード */}
-          <Link href="/translate" asChild>
-            <TouchableOpacity style={[styles.card, { width: cardWidth }]}>
-              <View style={[styles.iconCircle, { backgroundColor: colors.accentGreenLight }]}>
-                <MaterialIcons name="translate" size={32} color={colors.accentGreen} />
-              </View>
-              <Text style={styles.cardTitle}>翻訳</Text>
-              {/* <Text style={styles.cardDescription}>テキストを翻訳</Text> */}
-            </TouchableOpacity>
-          </Link>
-
-          {/* 単語帳カード */}
-          <Link href="/vocabulary" asChild>
-            <TouchableOpacity style={[styles.card, { width: cardWidth }]}>
-              <View style={[styles.iconCircle, { backgroundColor: colors.accentOrangeLight }]}>
-                <Ionicons name="book" size={32} color={colors.accentOrange} />
-              </View>
-              <Text style={styles.cardTitle}>単語帳</Text>
-              {/* <Text style={styles.cardDescription}>保存された単語</Text> */}
-            </TouchableOpacity>
-          </Link>
-          
-          {/* チャットカードはAI質問セクションに移動しました */}
-        </View>
-      </View>
-
-      {/* --- 学習セクション --- */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>学習</Text>
-        <View style={styles.cardContainer}>
-          {/* 学習カード */}
-          <Link href="/study" asChild>
-            <TouchableOpacity style={[styles.card, { width: cardWidth }]}>
-              <View style={styles.cardHeader}>
-                <View style={[styles.iconCircle, { backgroundColor: colors.accentOrangeLight }]}>
-                  <MaterialIcons name="school" size={32} color={colors.accentOrange} />
-                </View>
-                {/* 学習件数バッジ */}
-                {!loading && !error && studyCount !== null && studyCount > 0 && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{studyCount}</Text>
+      {isAdmin ? (
+        <>
+          {/* --- AIに質問セクション --- */}
+          {canAccessFeature('chat') && (
+            <View style={styles.aiSection}>
+              <Link href="/chat" asChild>
+                <TouchableOpacity style={styles.aiCard}>
+                  <View style={styles.aiIconContainer}>
+                    <Ionicons name="sparkles" size={32} color={colors.aiQuestionText} />
                   </View>
-                )}
-              </View>
-              <Text style={styles.cardTitle}>学習</Text>
-              {/* <Text style={styles.cardDescription}>単語帳やクイズ</Text> */}
-            </TouchableOpacity>
-          </Link>
-          {/* --- 将来的にカードを追加する場合のプレースホルダー --- */}
-          {/* <View style={[styles.cardPlaceholder, { width: cardWidth }]} /> */}
-        </View>
-      </View>
+                  <View style={styles.aiTextContainer}>
+                    <Text style={styles.aiCardTitle}>AIに質問</Text>
+                    <Text style={styles.aiCardDescription}>英語学習に関する疑問をAIに相談できます</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={24} color={colors.aiQuestionText} style={styles.aiChevron} />
+                </TouchableOpacity>
+              </Link>
+            </View>
+          )}
 
-      {/* --- 今後セクションが増える可能性を考慮 --- */}
-      {/*
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>その他</Text>
-        <View style={styles.cardContainer}>
-          // 他のカード
-        </View>
-      </View>
-      */}
+          {/* --- 言語ツールセクション --- */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>言語ツール</Text>
+            <View style={styles.cardContainer}>
+              {/* 辞書検索カード */}
+              {canAccessFeature('dictionary') && (
+                <Link href="/dictionary" asChild>
+                  <TouchableOpacity style={[styles.card, { width: cardWidth }]}>
+                    <View style={[styles.iconCircle, { backgroundColor: colors.accentBlueLight }]}>
+                      <MaterialCommunityIcons name="book-open-page-variant" size={32} color={colors.accentBlue} />
+                    </View>
+                    <Text style={styles.cardTitle}>辞書</Text>
+                  </TouchableOpacity>
+                </Link>
+              )}
 
-      {/* --- バナー広告（最下部） --- */}
-      {/* <GoogleAdMobAd 
-        testMode={false} 
-        adFormat="mediumRectangle" 
-        adUnitId="ca-app-pub-9940045330193360/8835995188" 
-      /> */}
+              {/* 翻訳カード */}
+              {canAccessFeature('translate') && (
+                <Link href="/translate" asChild>
+                  <TouchableOpacity style={[styles.card, { width: cardWidth }]}>
+                    <View style={[styles.iconCircle, { backgroundColor: colors.accentGreenLight }]}>
+                      <MaterialIcons name="translate" size={32} color={colors.accentGreen} />
+                    </View>
+                    <Text style={styles.cardTitle}>翻訳</Text>
+                  </TouchableOpacity>
+                </Link>
+              )}
+
+              {/* 単語帳カード */}
+              <Link href="/vocabulary" asChild>
+                <TouchableOpacity style={[styles.card, { width: cardWidth }]}>
+                  <View style={[styles.iconCircle, { backgroundColor: colors.accentOrangeLight }]}>
+                    <Ionicons name="book" size={32} color={colors.accentOrange} />
+                  </View>
+                  <Text style={styles.cardTitle}>単語帳</Text>
+                </TouchableOpacity>
+              </Link>
+            </View>
+          </View>
+
+          {/* --- 学習セクション --- */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>学習</Text>
+            <View style={styles.cardContainer}>
+              {/* 学習カード */}
+              {canAccessFeature('study') && (
+                <Link href="/study" asChild>
+                  <TouchableOpacity style={[styles.card, { width: cardWidth }]}>
+                    <View style={styles.cardHeader}>
+                      <View style={[styles.iconCircle, { backgroundColor: colors.accentOrangeLight }]}>
+                        <MaterialIcons name="school" size={32} color={colors.accentOrange} />
+                      </View>
+                      {/* 学習件数バッジ */}
+                      {!loading && !error && studyCount !== null && studyCount > 0 && (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>{studyCount}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.cardTitle}>学習</Text>
+                  </TouchableOpacity>
+                </Link>
+              )}
+            </View>
+          </View>
+        </>
+      ) : (
+        /* --- 一般ユーザー向け大きなボタン --- */
+        <View style={styles.section}>
+          <View style={styles.largeButtonContainer}>
+            {/* 辞書検索カード（大） */}
+            {canAccessFeature('dictionary') && (
+              <Link href="/dictionary" asChild>
+                <TouchableOpacity style={styles.largeCardDictionary}>
+                  <MaterialCommunityIcons name="book-open-page-variant" size={48} color={colors.accentBlue} style={styles.largeIcon} />
+                  <Text style={styles.largeCardTitle}>辞書検索</Text>
+                  <Text style={styles.largeCardDescription}>単語やフレーズの意味を調べる</Text>
+                </TouchableOpacity>
+              </Link>
+            )}
+
+            {/* 学習カード（大） */}
+            {canAccessFeature('study') && (
+              <Link href="/study" asChild>
+                <TouchableOpacity style={styles.largeCardStudy}>
+                  <MaterialIcons name="school" size={48} color={colors.accentOrange} style={styles.largeIcon} />
+                  <Text style={styles.largeCardTitle}>学習</Text>
+                  <Text style={styles.largeCardDescription}>フラッシュカードで単語やフレーズを覚える</Text>
+                  {/* 学習件数バッジ */}
+                  {!loading && !error && studyCount !== null && studyCount > 0 && (
+                    <View style={[styles.badge, styles.largeBadge]}>
+                      <Text style={styles.largeBadgeText}>{studyCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </Link>
+            )}
+          </View>
+        </View>
+      )}
+      {/* --- バナー広告（最下部・管理者のみ） --- */}
+      {isAdmin && (
+        <GoogleAdMobAd 
+          testMode={false} 
+          adFormat="mediumRectangle" 
+          adUnitId="ca-app-pub-9940045330193360/8835995188" 
+        />
+      )}
     </ScrollView>
   );
 };
@@ -250,8 +280,6 @@ const styles = StyleSheet.create({
     fontWeight: '600', // Semi-bold
     color: colors.textSecondary,
     marginLeft: 4, // 少しインデント
-    // textTransform: 'uppercase', // 大文字にする場合
-    // letterSpacing: 0.5, // 文字間隔を少し広げる場合
   },
   cardContainer: {
     flexDirection: 'row',
@@ -287,27 +315,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     textAlign: 'center', // 中央揃えに戻す場合
   },
-  // カードの説明文を追加する場合のスタイル（オプション）
-  /*
-  cardDescription: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 4, // タイトルとの間隔
-    // textAlign: 'center', // 中央揃えに戻す場合
-  },
-  */
-  // --- カードが1つしかない場合のプレースホルダー（オプション） ---
-  /*
-  cardPlaceholder: {
-    // backgroundColor: 'transparent', // 背景なし
-    // or
-    // backgroundColor: '#eee', // 薄いグレーなど
-    // borderRadius: 16,
-    // borderWidth: 1,
-    // borderColor: '#e2e8f0',
-    // borderStyle: 'dashed',
-  }
-  */
   statsBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -420,6 +427,82 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     lineHeight: 14,
   },
+  largeButtonContainer: {
+    gap: 16,
+    alignItems: 'center',
+  },
+  largeCard: {
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    minHeight: 160,
+  },
+  largeCardDictionary: {
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    minHeight: 180,
+    backgroundColor: colors.accentBlueLight,
+  },
+  largeCardStudy: {
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    minHeight: 180,
+    backgroundColor: colors.accentOrangeLight,
+  },
+  largeCardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 6,
+    textAlign: 'center',
+
+  },
+  largeCardDescription: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  largeBadge: {
+    top: 16,
+    right: 16,
+    borderColor: colors.accentOrangeLight,
+    minWidth: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  largeBadgeText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  largeIcon: {
+    marginBottom: 12,
+  },
 });
 
 export default HomeScreen;
+

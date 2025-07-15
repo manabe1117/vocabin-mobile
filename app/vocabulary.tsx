@@ -23,6 +23,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { useSpeech } from '@/hooks/useSpeech';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useLocalSearchParams } from 'expo-router';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 // 単語の型定義
 /**
@@ -138,6 +139,7 @@ const BoxLevelInfoModal = ({ visible, onClose }: { visible: boolean; onClose: ()
 export default function VocabularyScreen() {
   const { session } = useAuth();
   const { speakText } = useSpeech();
+  const { isAdmin } = useFeatureFlags();
   const params = useLocalSearchParams<{ studyStatus?: string }>();
   const initialStudyStatus = params.studyStatus as StudyStatusType | undefined;
   const [vocabulary, setVocabulary] = useState<VocabularyItem[]>([]);
@@ -149,9 +151,14 @@ export default function VocabularyScreen() {
   const [activeFilters, setActiveFilters] = useState<FilterType[]>(['all']);
   const [studyStatus, setStudyStatus] = useState<StudyStatusType>(() => {
     if (initialStudyStatus && ['未学習', '学習中', '学習済み'].includes(initialStudyStatus)) {
+      // 管理者でない場合は「未学習」を選択できない
+      if (!isAdmin && initialStudyStatus === '未学習') {
+        return '学習中';
+      }
       return initialStudyStatus as StudyStatusType;
     }
-    return '未学習';
+    // 管理者でない場合は初期値を「学習中」に設定
+    return isAdmin ? '未学習' : '学習中';
   });
   const [sortOrder, setSortOrder] = useState<SortOrder>('alphabetical_asc');
   const [page, setPage] = useState(1);
@@ -471,6 +478,7 @@ export default function VocabularyScreen() {
           }}
         >
           <PanGestureHandler
+            enabled={isAdmin}
             onGestureEvent={getGestureHandler(item).onGestureEvent}
             onHandlerStateChange={getGestureHandler(item).onHandlerStateChange}
             activeOffsetX={
@@ -748,7 +756,12 @@ export default function VocabularyScreen() {
             style={styles.filterIconButton}
             onPress={() => {
               setTempActiveFilters(activeFilters);
-              setTempStudyStatus(studyStatus);
+              // 管理者でない場合は「未学習」を選択できない
+              if (!isAdmin && studyStatus === '未学習') {
+                setTempStudyStatus('学習中');
+              } else {
+                setTempStudyStatus(studyStatus);
+              }
               setFilterModalVisible(true);
             }}
           >
@@ -790,7 +803,7 @@ export default function VocabularyScreen() {
 
     // 学習状態フィルターのUI
     const studyStatusOptions: { label: string; value: StudyStatusType }[] = [
-      { label: '未学習', value: '未学習' },
+      ...(isAdmin ? [{ label: '未学習', value: '未学習' as StudyStatusType }] : []),
       { label: '学習中', value: '学習中' },
       { label: '学習済み', value: '学習済み' },
     ];
@@ -889,7 +902,8 @@ export default function VocabularyScreen() {
                 style={styles.resetButton}
                 onPress={() => {
                   setTempActiveFilters(['all']);
-                  setTempStudyStatus('未学習');
+                  // 管理者でない場合は「未学習」ではなく「学習中」に設定
+                  setTempStudyStatus(isAdmin ? '未学習' : '学習中');
                 }}
               >
                 <ThemedText style={styles.resetButtonText}>リセット</ThemedText>
@@ -898,7 +912,9 @@ export default function VocabularyScreen() {
                 style={styles.applyButton}
                 onPress={() => {
                   setActiveFilters(tempActiveFilters);
-                  setStudyStatus(tempStudyStatus);
+                  // 管理者でない場合は「未学習」を選択できない
+                  const finalStudyStatus = (!isAdmin && tempStudyStatus === '未学習') ? '学習中' : tempStudyStatus;
+                  setStudyStatus(finalStudyStatus);
                   setFilterModalVisible(false);
                 }}
               >

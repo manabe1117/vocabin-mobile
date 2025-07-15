@@ -1316,6 +1316,22 @@ $$;
 
 
 --
+-- Name: is_admin(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.is_admin() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    AS $$
+begin
+  return exists(
+    select 1 from public.profiles 
+    where id = auth.uid() and is_admin = true
+  );
+end;
+$$;
+
+
+--
 -- Name: update_inquiries_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3073,6 +3089,7 @@ CREATE TABLE public.profiles (
     daily_goal integer DEFAULT 10,
     streak_count integer DEFAULT 0,
     last_study_date timestamp with time zone,
+    is_admin boolean DEFAULT false,
     CONSTRAINT profiles_language_level_check CHECK ((language_level = ANY (ARRAY['beginner'::text, 'intermediate'::text, 'advanced'::text]))),
     CONSTRAINT username_length CHECK ((char_length(username) >= 3))
 );
