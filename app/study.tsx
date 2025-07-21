@@ -104,6 +104,7 @@ const StudyScreen = () => {
   const [touchStartX, setTouchStartX] = useState(0);
   const [touchStartY, setTouchStartY] = useState(0);
   const [randomExampleIndex, setRandomExampleIndex] = useState(0);
+  const [cardChangeKey, setCardChangeKey] = useState(0); // カード変更を追跡するキー
 
   // currentCardIndexの参照を追加
   const currentCardIndexRef = useRef(currentCardIndex);
@@ -209,6 +210,7 @@ const StudyScreen = () => {
         requestAnimationFrame(() => {
           currentCardIndexRef.current = nextIndex;
           setCurrentCardIndex(nextIndex);
+          setCardChangeKey(prev => prev + 1); // カード変更キーを更新
           swipeValue.setValue({ x: 0, y: 0 });
           setIsAnimating(false);
           
@@ -383,7 +385,7 @@ const StudyScreen = () => {
     if (currentCard?.vocabulary) {
       speakText(currentCard.vocabulary, '英語');
     }
-  }, [currentCardIndex]);
+  }, [currentCardIndex, cardChangeKey]); // cardChangeKeyを依存配列に追加
 
   useEffect(() => {
     const fetchStudyCount = async () => {
