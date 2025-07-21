@@ -1437,7 +1437,9 @@ const TranslateScreen = () => {
                 activeOpacity={0.7}
               >
                 {entry.type === 'ai' ? (
-                  <Markdown style={markdownStyle}>{entry.text}</Markdown>
+                  <View style={styles.markdownContainer}>
+                    <Markdown style={markdownStyle}>{entry.text}</Markdown>
+                  </View>
                 ) : (
                   <Text style={[styles.aiMessageText, styles.userMessageText]}>{entry.text}</Text>
                 )}
@@ -1651,7 +1653,9 @@ const TranslateScreen = () => {
                  ]}
                >
                  {entry.type === 'ai' ? (
-                   <Markdown style={markdownStyle}>{entry.text}</Markdown>
+                   <View style={styles.markdownContainer}>
+                     <Markdown style={markdownStyle}>{entry.text}</Markdown>
+                   </View>
                  ) : (
                    <Text style={[styles.aiMessageText, styles.userMessageText]}>{entry.text}</Text>
                  )}
@@ -1700,7 +1704,9 @@ const TranslateScreen = () => {
                 activeOpacity={0.7}
               >
                 {entry.type === 'ai' ? (
-                  <Markdown style={markdownStyle}>{entry.text}</Markdown>
+                  <View style={styles.markdownContainer}>
+                    <Markdown style={markdownStyle}>{entry.text}</Markdown>
+                  </View>
                 ) : (
                   <Text style={[styles.aiMessageText, styles.userMessageText]}>{entry.text}</Text>
                 )}
@@ -2429,24 +2435,34 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     borderBottomRightRadius: 4,
     borderBottomLeftRadius: 18,
+    maxWidth: '95%',
   },
   aiMessageBubbleBase: {
     backgroundColor: COLORS.BACKGROUND.GRAY,
     alignSelf: 'flex-start',
     borderBottomLeftRadius: 4,
     borderBottomRightRadius: 18,
+    maxWidth: '95%',
+    width: '95%',
   },
   aiMessageText: {
     fontSize: 15,
     lineHeight: 22,
+    flexWrap: 'wrap',
   },
   userMessageText: {
     color: COLORS.WHITE,
+    flexWrap: 'wrap',
   },
   aiMessageTextBase: {
     color: COLORS.TEXT.DARKER,
     fontSize: 15,
     lineHeight: 22,
+    flexWrap: 'wrap',
+  },
+  markdownContainer: {
+    flex: 1,
+    maxWidth: '100%',
   },
   // 編集モード用のスタイル
   headerControls: {
