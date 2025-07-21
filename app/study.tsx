@@ -62,9 +62,13 @@ const StudyScreen = () => {
       setFlashcards(fetchedFlashcards);
       flashcardsRef.current = fetchedFlashcards;
 
-      // 最初のカードの音声を再生
+      // 最初のカードの例文を選択し、音声を再生
       if (fetchedFlashcards.length > 0) {
-        speakText(fetchedFlashcards[0].vocabulary, '英語');
+        const firstCard = fetchedFlashcards[0];
+        if (firstCard.examples && firstCard.examples.length > 0) {
+          selectRandomExamples(firstCard.examples);
+        }
+        speakText(firstCard.vocabulary, '英語');
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '予期せぬエラーが発生しました';
@@ -105,6 +109,7 @@ const StudyScreen = () => {
   const [touchStartY, setTouchStartY] = useState(0);
   const [randomExampleIndex, setRandomExampleIndex] = useState(0);
   const [cardChangeKey, setCardChangeKey] = useState(0); // カード変更を追跡するキー
+  const [selectedExamples, setSelectedExamples] = useState<{ en: string; ja: string }[]>([]); // 選択された例文
 
   // currentCardIndexの参照を追加
   const currentCardIndexRef = useRef(currentCardIndex);
@@ -117,6 +122,29 @@ const StudyScreen = () => {
   useEffect(() => {
     showBackRef.current = showBack;
   }, [showBack]);
+
+  // 例文をランダムに選択する関数
+  const selectRandomExamples = (examples: { en: string; ja: string }[]) => {
+    if (examples.length === 0) return;
+    
+    // 例文をシャッフル
+    const shuffled = [...examples].sort(() => Math.random() - 0.5);
+    
+    // 表示数の調整ロジックを適用
+    const firstExampleLength = shuffled[0]?.ja?.length || 0;
+    const secondExampleLength = shuffled[1]?.ja?.length || 0;
+    
+    if (firstExampleLength > 20 && secondExampleLength > 20) {
+      // 長い例文の場合は1つだけ選択
+      setSelectedExamples([shuffled[0]]);
+      setRandomExampleIndex(0); // 表面用のインデックス
+    } else {
+      // 短い例文の場合は最大2つ選択
+      const selected = shuffled.slice(0, 2);
+      setSelectedExamples(selected);
+      setRandomExampleIndex(0); // 表面用のインデックス（最初の選択された例文）
+    }
+  };
 
   const showFeedback = (text: string, color: string, position: 'topLeft' | 'topRight') => {
     setFeedbackMessage({ text, color, position });
@@ -217,8 +245,7 @@ const StudyScreen = () => {
           // 新しいカードの例文をランダムに選択
           const nextCard = flashcardsRef.current[nextIndex];
           if (nextCard?.examples && nextCard.examples.length > 0) {
-            const randomIndex = Math.floor(Math.random() * nextCard.examples.length);
-            setRandomExampleIndex(randomIndex);
+            selectRandomExamples(nextCard.examples);
           }
         });
       });
@@ -377,8 +404,7 @@ const StudyScreen = () => {
 
     // 新しいカードの例文をランダムに選択
     if (currentCard?.examples && currentCard.examples.length > 0) {
-      const randomIndex = Math.floor(Math.random() * currentCard.examples.length);
-      setRandomExampleIndex(randomIndex);
+      selectRandomExamples(currentCard.examples);
     }
 
     // 新しいカードがセットされたときに音声を再生
@@ -528,9 +554,9 @@ const StudyScreen = () => {
                   {currentCard.meanings.join('、')}
                 </ThemedText>
               ) : (
-                (currentCard.reviewCount > 0 || currentCard.hasBeenWrong) && currentCard.examples[randomExampleIndex] && (
+                (currentCard.reviewCount > 1 || currentCard.hasBeenWrong) && selectedExamples[0] && (
                   <ThemedText style={styles.examplePreviewText}>
-                    {currentCard.examples[randomExampleIndex].en}
+                    {selectedExamples[0].en}
                   </ThemedText>
                 )
               )}
@@ -557,33 +583,20 @@ const StudyScreen = () => {
                     </ThemedText>
                   </View>
 
-                  {currentCard.examples.length > 0 && (
+                  {selectedExamples.length > 0 && (
                     <View style={styles.section}>
                       <ThemedText style={styles.sectionTitle}>例文</ThemedText>
                       <View style={styles.examplesContainer}>
-                        {(() => {
-                          const firstExampleLength = currentCard.examples[0]?.ja?.length || 0;
-                          const secondExampleLength = currentCard.examples[1]?.ja?.length || 0;
-                          
-                          if (firstExampleLength > 20 && secondExampleLength > 20) {
-                            return (
-                              <View style={styles.exampleContainer}>
-                                <ThemedText style={styles.exampleText}>{currentCard.examples[0].en}</ThemedText>
-                                <ThemedText style={styles.exampleTranslation}>{currentCard.examples[0].ja}</ThemedText>
-                              </View>
-                            );
-                          }
-                          
-                          return currentCard.examples.slice(0, 2).map((example, index) => (
-                            <View key={index} style={styles.exampleContainer}>
-                              <ThemedText style={styles.exampleText}>{example.en}</ThemedText>
-                              <ThemedText style={styles.exampleTranslation}>{example.ja}</ThemedText>
-                            </View>
-                          ));
-                        })()}
+                        {selectedExamples.map((example, index) => (
+                          <View key={index} style={styles.exampleContainer}>
+                            <ThemedText style={styles.exampleText}>{example.en}</ThemedText>
+                            <ThemedText style={styles.exampleTranslation}>{example.ja}</ThemedText>
+                          </View>
+                        ))}
                       </View>
                     </View>
                   )}
+
                 </View>
               </ScrollView>
             </Card>
