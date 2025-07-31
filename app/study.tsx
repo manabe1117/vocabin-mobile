@@ -852,12 +852,13 @@ const styles = StyleSheet.create({
   
   // 例文
   examplesContainer: {
-    gap: 12,
+    gap: 2,
     width: '100%',
   },
   exampleContainer: {
     backgroundColor: COLORS.BACKGROUND.GRAY_LIGHT,
-    padding: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 8,
     marginBottom: 8,
     width: '100%',
@@ -866,7 +867,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.TEXT.DARKER,
     lineHeight: 22,
-    marginBottom: 6,
+    marginBottom: 2,
     fontWeight: '500',
     textAlign: 'left',
   },
