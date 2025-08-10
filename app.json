@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "vocabin-mobile",
-    "slug": "vocabin-mobile",
+    "name": "Vocabin",
+    "slug": "Vocabin",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
