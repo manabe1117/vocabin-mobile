@@ -9,7 +9,11 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest --watchAll",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:android": "eas build --platform android --profile production",
+    "build:android:preview": "eas build --platform android --profile preview",
+    "submit:android": "eas submit --platform android --latest",
+    "deploy:google-play": "node scripts/build-for-google-play.js --build --submit --track internal"
   },
   "jest": {
     "preset": "jest-expo"

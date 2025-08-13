@@ -16,9 +16,9 @@ export default function AboutScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>アプリの概要</Text>
           <Text style={styles.paragraph}>
-            Vocabinは、効率的な語学学習を支援するモバイルアプリです。
+            Vocabinは、効率的な英語学習を支援するアプリです。
             辞書機能、学習機能、学習進捗機能を組み合わせて、
-            あなたの語学力向上をサポートします。
+            あなたの英語力向上をサポートします。
           </Text>
         </View>
 

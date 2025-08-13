@@ -1,14 +1,14 @@
 {
   "expo": {
     "name": "Vocabin",
-    "slug": "Vocabin",
+    "slug": "vocabin-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "description": "AI搭載の英語学習アプリ。翻訳、単語帳、チャット機能で効率的に英語を学習できます。",
+    "description": "開発者が毎日使う英語学習アプリ。辞書機能、学習機能、学習進捗機能で効率的に英語力を向上させます。",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.takumi.vocabin",
@@ -32,6 +32,10 @@
         "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
+      ],
+      "blockedPermissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ]
     },
     "web": {
@@ -70,6 +74,7 @@
       "eas": {
         "projectId": "de364276-098c-4e49-9ec7-5db36ed895d5"
       }
-    }
+    },
+    "owner": "manabe1117"
   }
 }

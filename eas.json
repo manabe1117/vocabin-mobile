@@ -15,7 +15,11 @@
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease"
+        "gradleCommand": ":app:bundleRelease",
+        "withoutCredentials": false,
+        "env": {
+          "GRADLE_OPTS": "-Dorg.gradle.jvmargs=-Xmx2048m -XX:MaxPermSize=512m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8"
+        }
       }
     },
     "production-apk": {
@@ -35,8 +39,7 @@
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleDebug"
-      },
-      "distribution": "internal"
+      }
     },
     "production-no-proguard": {
       "extends": "production-apk",
