@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+
     "description": "開発者が毎日使う英語学習アプリ。辞書機能、学習機能、学習進捗機能で効率的に英語力を向上させます。",
     "ios": {
       "supportsTablet": true,
@@ -67,6 +67,7 @@
     "experiments": {
       "typedRoutes": true
     },
+    "newArchEnabled": false,
     "extra": {
       "router": {
         "origin": false
