@@ -68,6 +68,7 @@ const StudyScreen = () => {
         if (firstCard.examples && firstCard.examples.length > 0) {
           selectRandomExamples(firstCard.examples);
         }
+        // 最初のカードの音声を再生
         speakText(firstCard.vocabulary, '英語');
       }
     } catch (err) {
@@ -242,10 +243,14 @@ const StudyScreen = () => {
           swipeValue.setValue({ x: 0, y: 0 });
           setIsAnimating(false);
           
-          // 新しいカードの例文をランダムに選択
+          // 新しいカードの例文をランダムに選択し、音声を再生
           const nextCard = flashcardsRef.current[nextIndex];
           if (nextCard?.examples && nextCard.examples.length > 0) {
             selectRandomExamples(nextCard.examples);
+          }
+          // 新しいカードの音声を再生
+          if (nextCard?.vocabulary) {
+            speakText(nextCard.vocabulary, '英語');
           }
         });
       });
@@ -407,8 +412,8 @@ const StudyScreen = () => {
       selectRandomExamples(currentCard.examples);
     }
 
-    // 新しいカードがセットされたときに音声を再生
-    if (currentCard?.vocabulary) {
+    // 新しいカードがセットされたときに音声を再生（最初のカードのみ）
+    if (currentCard?.vocabulary && currentCardIndex === 0) {
       speakText(currentCard.vocabulary, '英語');
     }
   }, [currentCardIndex, cardChangeKey]); // cardChangeKeyを依存配列に追加
@@ -639,7 +644,7 @@ const StudyScreen = () => {
         <View style={styles.buttonContainer}>
                     <Button
             onPress={handleUnknown}
-            disabled={isAnimating || isFlipping}
+            disabled={isAnimating || isFlipping || isSwiping}
             type="error"
             size="large"
             style={styles.unknownActionButton}
@@ -649,7 +654,7 @@ const StudyScreen = () => {
           
           <Button
             onPress={handleNextCard}
-            disabled={isAnimating || isFlipping}
+            disabled={isAnimating || isFlipping || isSwiping}
             type="success"
             size="large"
             style={styles.knownActionButton}
