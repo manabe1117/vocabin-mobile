@@ -68,8 +68,10 @@ const StudyScreen = () => {
         if (firstCard.examples && firstCard.examples.length > 0) {
           selectRandomExamples(firstCard.examples);
         }
-        // 最初のカードの音声を再生
-        speakText(firstCard.vocabulary, '英語');
+        // 最初のカードの音声を再生（最初の読み込み時のみ）
+        if (flashcards.length === 0) {
+          speakText(firstCard.vocabulary, '英語');
+        }
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '予期せぬエラーが発生しました';
@@ -412,10 +414,7 @@ const StudyScreen = () => {
       selectRandomExamples(currentCard.examples);
     }
 
-    // 新しいカードがセットされたときに音声を再生（最初のカードのみ）
-    if (currentCard?.vocabulary && currentCardIndex === 0) {
-      speakText(currentCard.vocabulary, '英語');
-    }
+    // 音声再生は最初の読み込み時のみ（useEffect内では再生しない）
   }, [currentCardIndex, cardChangeKey]); // cardChangeKeyを依存配列に追加
 
   useEffect(() => {
