@@ -60,6 +60,10 @@ export default function AccountScreen() {
       <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut}>
         <Text style={styles.logoutText}>ログアウト</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity style={styles.deleteAccountButton} onPress={() => router.push('/account-deletion')}>
+        <Text style={styles.deleteAccountText}>アカウント削除</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -124,6 +128,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoutText: {
+    color: COLORS.WHITE,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteAccountButton: {
+    margin: 20,
+    marginTop: 10,
+    padding: 15,
+    backgroundColor: '#FF0000',
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  deleteAccountText: {
     color: COLORS.WHITE,
     fontSize: 16,
     fontWeight: '600',
