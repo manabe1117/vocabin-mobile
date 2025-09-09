@@ -30,7 +30,7 @@ export default function AboutScreen() {
             <View style={styles.featureContent}>
               <Text style={styles.featureTitle}>辞書機能</Text>
               <Text style={styles.featureDescription}>
-                豊富な辞書データベースから、単語の意味、発音、例文を検索できます。
+                辞書データベースやAI技術を活用して、単語の意味、発音、例文をリアルタイムで取得できます。
               </Text>
             </View>
           </View>
