@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vocabin",
     "slug": "vocabin-mobile",
-    "version": "1.0.0",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
@@ -24,9 +24,9 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.takumi.vocabin",
-      "versionCode": 1,
-      "targetSdkVersion": 34,
-      "compileSdkVersion": 34,
+      "versionCode": 6,
+      "targetSdkVersion": 35,
+      "compileSdkVersion": 35,
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
@@ -37,6 +37,12 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION"
       ]
+    },
+    "androidStatusBar": {
+      "backgroundColor": "#ffffff",
+      "translucent": false,
+      "barStyle": "dark-content",
+      "hidden": false
     },
     "web": {
       "bundler": "metro",

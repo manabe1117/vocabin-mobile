@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Link, useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
@@ -45,7 +45,7 @@ const ChatHistoryScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const { session } = useAuth() as { session: any | null };
   const router = useRouter();
-  const { id: sessionIdFromParams } = useLocalSearchParams<{ id?: string }>();
+  
 
   const fetchHistory = async () => {
     if (!session?.user) {
@@ -156,18 +156,6 @@ const ChatHistoryScreen = () => {
   if (historyItems.length === 0) {
     return (
       <View style={styles.container}>
-        <View style={styles.headerContainer}>
-          <Link
-            href={sessionIdFromParams ? { pathname: "/chat", params: { id: sessionIdFromParams } } : "/chat"}
-            asChild
-          >
-            <TouchableOpacity style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={COLORS.PRIMARY} />
-            </TouchableOpacity>
-          </Link>
-          <Text style={styles.headerTitle}>チャット履歴</Text>
-          <View style={{ width: 40 }} />
-        </View>
         <View style={styles.centered}>
           <Ionicons name="chatbubbles-outline" size={48} color={COLORS.TEXT.SECONDARY} />
           <Text style={styles.emptyText}>チャット履歴はありません。</Text>
@@ -178,19 +166,6 @@ const ChatHistoryScreen = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerContainer}>
-        <Link
-          href={sessionIdFromParams ? { pathname: "/chat", params: { id: sessionIdFromParams } } : "/chat"}
-          asChild
-        >
-          <TouchableOpacity style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.PRIMARY} />
-          </TouchableOpacity>
-        </Link>
-        <Text style={styles.headerTitle}>チャット履歴</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
@@ -230,26 +205,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.TEXT.SECONDARY,
   },
-  headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
-    paddingBottom: 10,
-    backgroundColor: COLORS.WHITE,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER.LIGHT,
-  },
-  backButton: {
-    padding: 8,
-    marginLeft: -8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.TEXT.PRIMARY,
-  },
+  
   scrollView: {
     flex: 1,
   },

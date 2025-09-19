@@ -4,8 +4,10 @@ import React, { useEffect, useState } from 'react';
 import { Stack, SplashScreen, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { TouchableOpacity, Platform, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { TopSafeArea } from '@/components/TopSafeArea';
+import { CompactHeader } from '@/components/CompactHeader';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 // スプラッシュスクリーンが自動で隠れるのを防ぐ
@@ -66,27 +68,30 @@ function RootLayoutNav() {
 
   console.log("Rendering Stack Navigator.");
   
-  const createBackButton = () => (
-    <View
-      style={{
-        marginLeft: Platform.OS === 'ios' ? 10 : 0, 
-        padding: 12,
-        minWidth: 44,
-        minHeight: 44,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      onTouchEnd={() => {
-        router.back();
-      }}
-    >
-      <Ionicons 
-        name="arrow-back" 
-        size={24} 
-        color={Platform.OS === 'ios' ? '#007AFF' : 'black'} 
+  // すべてのサブページで上部インセットを無効化し、44dpのカスタムヘッダーに統一
+  const commonHeaderOptions = {
+    headerShown: true,
+    headerTitleAlign: 'center' as const,
+    headerTopInsetEnabled: false,
+  };
+
+  const buildHeaderOptions = (title: string, back: boolean | 'home') => ({
+    ...commonHeaderOptions,
+    title,
+    // React Navigation の header 差し替え
+    header: ({ navigation, options }: any) => (
+      <CompactHeader
+        title={(options?.title ?? title) as string}
+        onPressBack={
+          back
+            ? back === 'home'
+              ? () => navigation.navigate('(tabs)')
+              : () => navigation.goBack()
+            : undefined
+        }
       />
-    </View>
-  );
+    ),
+  });
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -97,12 +102,7 @@ function RootLayoutNav() {
       {canAccessFeature('dictionary') && (
         <Stack.Screen 
           name="dictionary" 
-          options={{
-            headerShown: true, 
-            title: '辞書',
-            headerTitleAlign: 'center',
-            headerLeft: createBackButton,
-          }} 
+          options={buildHeaderOptions('辞書', true)} 
         />
       )}
       
@@ -110,12 +110,7 @@ function RootLayoutNav() {
       {canAccessFeature('translate') && (
         <Stack.Screen 
           name="translate" 
-          options={{
-            headerShown: true, 
-            title: '翻訳',
-            headerTitleAlign: 'center',
-            headerLeft: createBackButton,
-          }} 
+          options={buildHeaderOptions('翻訳', true)} 
         />
       )}
       
@@ -123,12 +118,7 @@ function RootLayoutNav() {
       {canAccessFeature('study') && (
         <Stack.Screen 
           name="study" 
-          options={{
-            headerShown: true, 
-            title: '学習',
-            headerTitleAlign: 'center',
-            headerLeft: createBackButton,
-          }} 
+          options={buildHeaderOptions('学習', true)} 
         />
       )}
       
@@ -136,12 +126,7 @@ function RootLayoutNav() {
       {canAccessFeature('vocabulary') && (
         <Stack.Screen 
           name="vocabulary" 
-          options={{
-            headerShown: true, 
-            title: '単語帳',
-            headerTitleAlign: 'center',
-            headerLeft: createBackButton,
-          }} 
+          options={buildHeaderOptions('単語帳', true)} 
         />
       )}
       
@@ -149,12 +134,7 @@ function RootLayoutNav() {
       {canAccessFeature('chat') && (
         <Stack.Screen 
           name="chat" 
-          options={{
-            headerShown: true, 
-            title: 'AIに質問',
-            headerTitleAlign: 'center',
-            headerLeft: createBackButton,
-          }} 
+          options={buildHeaderOptions('AIに質問', 'home')} 
         />
       )}
       
@@ -162,70 +142,36 @@ function RootLayoutNav() {
       {canAccessFeature('chat-history') && (
         <Stack.Screen 
           name="chat-history" 
-          options={{
-            headerShown: true, 
-            title: 'チャット履歴',
-            headerTitleAlign: 'center',
-            headerLeft: createBackButton,
-          }} 
+          options={buildHeaderOptions('チャット履歴', true)} 
         />
       )}
       
       {/* Auth Screen - 認証画面 */}
       <Stack.Screen 
         name="auth/login" 
-        options={{ 
-          title: 'ログイン', 
-          headerShown: true,
-          headerTitleAlign: 'center'
-        }} 
+        options={buildHeaderOptions('ログイン', false)} 
       />
       
       {/* Static Pages - 静的ページ */}
       <Stack.Screen 
         name="about" 
-        options={{
-          headerShown: true, 
-          title: 'アプリについて',
-          headerTitleAlign: 'center',
-          headerLeft: createBackButton,
-        }} 
+        options={buildHeaderOptions('アプリについて', true)} 
       />
       <Stack.Screen 
         name="help" 
-        options={{
-          headerShown: true, 
-          title: 'ヘルプとサポート',
-          headerTitleAlign: 'center',
-          headerLeft: createBackButton,
-        }} 
+        options={buildHeaderOptions('ヘルプとサポート', true)} 
       />
       <Stack.Screen 
         name="inquiry" 
-        options={{
-          headerShown: true, 
-          title: 'お問い合わせ',
-          headerTitleAlign: 'center',
-          headerLeft: createBackButton,
-        }} 
+        options={buildHeaderOptions('お問い合わせ', true)} 
       />
       <Stack.Screen 
         name="terms" 
-        options={{
-          headerShown: true, 
-          title: '利用規約',
-          headerTitleAlign: 'center',
-          headerLeft: createBackButton,
-        }} 
+        options={buildHeaderOptions('利用規約', true)} 
       />
       <Stack.Screen 
         name="privacy" 
-        options={{
-          headerShown: true, 
-          title: 'プライバシーポリシー',
-          headerTitleAlign: 'center',
-          headerLeft: createBackButton,
-        }} 
+        options={buildHeaderOptions('プライバシーポリシー', true)} 
       />
     </Stack>
   );
@@ -236,9 +182,13 @@ export default function RootLayout() {
   console.log("RootLayout rendering. Wrapping with AuthProvider.");
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-        <RootLayoutNav />
-      </AuthProvider>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <StatusBar style="dark" backgroundColor="#ffffff" translucent={false} />
+          <TopSafeArea color="#ffffff" />
+          <RootLayoutNav />
+        </AuthProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
