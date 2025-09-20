@@ -34,7 +34,7 @@ export default function AccountScreen() {
       </View>
 
       {/* 管理者向けセクション */}
-      {isAdmin && (
+      {/* {isAdmin && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>管理者メニュー</Text>
           <TouchableOpacity style={styles.settingItem} onPress={() => alert('管理者向けの機能管理画面は開発中です')}>
@@ -42,7 +42,7 @@ export default function AccountScreen() {
             <Text style={styles.settingText}>機能管理</Text>
           </TouchableOpacity>
         </View>
-      )}
+      )} */}
 
       <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/inquiry')}>
         <Ionicons name="send-outline" size={24} color={COLORS.TEXT.SECONDARY} />

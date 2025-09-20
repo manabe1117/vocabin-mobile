@@ -11,6 +11,7 @@ import {
   Linking,
   Platform,
   Modal,
+  Keyboard,
   KeyboardAvoidingView,
   SafeAreaView,
   Dimensions,
@@ -265,7 +266,7 @@ const TranslateScreen = () => {
   // States for editing vocabulary
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedVocabulary, setEditedVocabulary] = useState<VocabularyResult | null>(null);
-  
+
   // 編集用の配列状態
   const [editedPartOfSpeechArray, setEditedPartOfSpeechArray] = useState<string[]>([]);
   const [editedMeaningArray, setEditedMeaningArray] = useState<string[]>([]);
@@ -279,6 +280,26 @@ const TranslateScreen = () => {
 
   // AIチャット入力欄表示制御のためのフラグ
   const showAiInput = vocabulary || isChatFocusedMode || activeChatVocabulary;
+
+  // Android専用: キーボード高さに応じて下部入力バーを持ち上げる
+  const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      setAndroidKeyboardHeight(e.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setAndroidKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+  const EXTRA_LIFT_PX = 20; // 計算結果に数pxだけ上乗せ（表示時のみ）
+  const liftedAndroidKeyboardHeight = Platform.OS === 'android'
+    ? (androidKeyboardHeight > 0 ? androidKeyboardHeight + EXTRA_LIFT_PX : 0)
+    : 0;
 
   // --- チャットボックス最大高さの計算 ---
   const HEADER_HEIGHT = 64; // 検索バー
@@ -1529,7 +1550,7 @@ const TranslateScreen = () => {
           style={styles.scrollView}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ 
-            paddingBottom: showAiInput ? (Platform.OS === 'ios' ? 80 : 90) : 16,
+            paddingBottom: showAiInput ? (Platform.OS === 'ios' ? 80 : 80 + liftedAndroidKeyboardHeight) : 16,
             flexGrow: 1 
           }}
           showsVerticalScrollIndicator={false}
@@ -1635,11 +1656,11 @@ const TranslateScreen = () => {
              ]}
              ref={aiChatScrollViewRef}
              showsVerticalScrollIndicator={false}
-             contentContainerStyle={{
+              contentContainerStyle={{
                flexGrow: 1,
                justifyContent: 'flex-start',
                paddingTop: 16,
-               paddingBottom: AI_INPUT_HEIGHT
+                paddingBottom: Platform.OS === 'ios' ? AI_INPUT_HEIGHT : AI_INPUT_HEIGHT + liftedAndroidKeyboardHeight
              }}
              keyboardShouldPersistTaps="handled"
              nestedScrollEnabled={true}
@@ -1684,11 +1705,11 @@ const TranslateScreen = () => {
             ]}
             ref={aiChatScrollViewRef}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
+             contentContainerStyle={{
               flexGrow: 1,
               justifyContent: 'flex-start',
               paddingTop: 16,
-              paddingBottom: AI_INPUT_HEIGHT
+              paddingBottom: Platform.OS === 'ios' ? AI_INPUT_HEIGHT : AI_INPUT_HEIGHT + liftedAndroidKeyboardHeight
             }}
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled={true}
@@ -1726,7 +1747,7 @@ const TranslateScreen = () => {
           position: 'absolute',
           left: 0,
           right: 0,
-          bottom: 0,
+          bottom: Platform.OS === 'android' ? liftedAndroidKeyboardHeight : 0,
           backgroundColor: COLORS.WHITE,
           zIndex: 100,
           paddingBottom: Platform.OS === 'android' ? 8 : 0,

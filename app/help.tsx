@@ -86,7 +86,7 @@ export default function HelpScreen() {
         <Text style={styles.sectionTitle}>アプリ情報</Text>
         <View style={styles.infoCard}>
           <Text style={styles.infoLabel}>バージョン</Text>
-          <Text style={styles.infoValue}>1.0.0</Text>
+          <Text style={styles.infoValue}>1.0.4</Text>
         </View>
       </View>
     </ScrollView>

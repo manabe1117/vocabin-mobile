@@ -98,6 +98,27 @@ const ChatScreen = () => {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const { id: sessionIdFromParams } = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
+  const [isUserNearBottom, setIsUserNearBottom] = useState(true);
+
+  // Android専用: キーボードの高さに応じて下部を持ち上げる
+  const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
+  const ANDROID_EXTRA_LIFT_PX = 20; // 表示中のみ数px上乗せ
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      setAndroidKeyboardHeight((e as any)?.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setAndroidKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+  const liftedAndroidKeyboardHeight = Platform.OS === 'android'
+    ? (androidKeyboardHeight > 0 ? androidKeyboardHeight + ANDROID_EXTRA_LIFT_PX : 0)
+    : 0;
 
   // カスタムメニュー用 state
   const [menuVisible, setMenuVisible] = useState(false);
@@ -811,10 +832,27 @@ const ChatScreen = () => {
         <ScrollView
           ref={scrollViewRef}
           style={styles.messagesContainer}
-          contentContainerStyle={styles.messagesContent}
+          contentContainerStyle={[
+            styles.messagesContent,
+            Platform.OS === 'android'
+              ? { paddingBottom: 8 + liftedAndroidKeyboardHeight }
+              : { paddingBottom: 8 }
+          ]}
           showsVerticalScrollIndicator={false}
-          onLayout={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 50)}
-          onContentSizeChange={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 50)}
+          onLayout={() => {
+            if (Platform.OS === 'android' && liftedAndroidKeyboardHeight > 0) return;
+            if (isUserNearBottom) setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 50);
+          }}
+          onContentSizeChange={() => {
+            if (Platform.OS === 'android' && liftedAndroidKeyboardHeight > 0) return;
+            if (isUserNearBottom) setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 50);
+          }}
+          onScroll={(e) => {
+            const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+            const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+            setIsUserNearBottom(distanceFromBottom < 120);
+          }}
+          scrollEventThrottle={16}
         >
           {(messages || []).map((msg, idx) => renderMessage(msg, idx))}
           
@@ -825,7 +863,10 @@ const ChatScreen = () => {
           )}
         </ScrollView>
         
-        <View style={styles.inputContainer}>
+        <View style={[
+          styles.inputContainer,
+          Platform.OS === 'android' ? { marginBottom: 8 + liftedAndroidKeyboardHeight } : null
+        ]}>
           <TouchableOpacity 
             ref={menuButtonRef}
             style={styles.historyButton}

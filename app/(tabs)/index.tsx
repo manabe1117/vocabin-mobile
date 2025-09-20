@@ -6,7 +6,6 @@ import { MaterialCommunityIcons, MaterialIcons, Ionicons } from '@expo/vector-ic
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
-import { GoogleAdMobAd } from '../../components/GoogleAdMobAd';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 
 // --- Layout Constants ---
@@ -250,14 +249,7 @@ const HomeScreen = () => {
           </View>
         </View>
       )}
-      {/* --- バナー広告（最下部・管理者のみ） --- */}
-      {isAdmin && (
-        <GoogleAdMobAd 
-          testMode={false} 
-          adFormat="mediumRectangle" 
-          adUnitId="ca-app-pub-9940045330193360/8835995188" 
-        />
-      )}
+      {/* 広告は非表示にしました */}
     </ScrollView>
   );
 };
