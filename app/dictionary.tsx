@@ -952,6 +952,7 @@ const TranslateScreen = () => {
     setTimeout(() => {
       aiChatScrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
+    Keyboard.dismiss();
     setAiQuestion(''); 
     setIsAskingAi(true);
 
@@ -1033,7 +1034,7 @@ const TranslateScreen = () => {
             styles.resultCardCollapsed,
           ]}
           activeOpacity={0.8}
-          onPress={() => setIsDictionaryDetailsOpen(true)}
+          onPress={() => { Keyboard.dismiss(); setIsDictionaryDetailsOpen(true); }}
           accessibilityLabel="詳細を閉じる"
         >
           <View style={{ flex: 1 }}>
@@ -1050,7 +1051,8 @@ const TranslateScreen = () => {
 
     // 詳細表示
     return (
-      <View style={styles.resultCard}>
+      <TouchableWithoutFeedback onPress={() => { if (!isEditMode) Keyboard.dismiss(); }} accessible={false}>
+        <View style={styles.resultCard}>
         <View style={styles.headerControls}>
           {isEditMode ? (
             <View style={styles.editModeButtons}>
@@ -1417,6 +1419,7 @@ const TranslateScreen = () => {
           <Text style={styles.reportIssueButtonText}>問題を報告する</Text>
         </TouchableOpacity> */}
       </View>
+      </TouchableWithoutFeedback>
     );
   };
   
@@ -1665,23 +1668,25 @@ const TranslateScreen = () => {
              keyboardShouldPersistTaps="handled"
              nestedScrollEnabled={true}
            >
-             {aiConversation.map((entry) => (
-               <View
-                 key={entry.id}
-                 style={[
-                   styles.aiMessageBubble,
-                   entry.type === 'user' ? styles.userMessageBubble : styles.aiMessageBubbleBase
-                 ]}
-               >
-                 {entry.type === 'ai' ? (
-                   <View style={styles.markdownContainer}>
-                     <Markdown style={markdownStyle}>{entry.text}</Markdown>
-                   </View>
-                 ) : (
-                   <Text style={[styles.aiMessageText, styles.userMessageText]}>{entry.text}</Text>
-                 )}
-               </View>
-             ))}
+            {aiConversation.map((entry) => (
+              <TouchableOpacity
+                key={entry.id}
+                style={[
+                  styles.aiMessageBubble,
+                  entry.type === 'user' ? styles.userMessageBubble : styles.aiMessageBubbleBase
+                ]}
+                activeOpacity={0.7}
+                onPress={() => Keyboard.dismiss()}
+              >
+                {entry.type === 'ai' ? (
+                  <View style={styles.markdownContainer}>
+                    <Markdown style={markdownStyle}>{entry.text}</Markdown>
+                  </View>
+                ) : (
+                  <Text style={[styles.aiMessageText, styles.userMessageText]}>{entry.text}</Text>
+                )}
+              </TouchableOpacity>
+            ))}
              {isAskingAi && (
                <View style={styles.aiLoadingOuterContainer}>
                  <ActivityIndicator size="small" color={COLORS.PRIMARY} />
@@ -1723,6 +1728,7 @@ const TranslateScreen = () => {
                 ]}
                 onLongPress={() => handleAiMessageLongPress(entry)}
                 activeOpacity={0.7}
+                onPress={() => Keyboard.dismiss()}
               >
                 {entry.type === 'ai' ? (
                   <View style={styles.markdownContainer}>

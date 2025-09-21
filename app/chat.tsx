@@ -246,6 +246,7 @@ const ChatScreen = () => {
 
     const currentInput = inputText;
     setInputText('');
+    Keyboard.dismiss();
 
     // UIにユーザーメッセージを即時反映
     setMessages(prev => [...prev, userMessage]);
