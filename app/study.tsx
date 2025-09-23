@@ -305,6 +305,13 @@ const StudyScreen = () => {
         // タップ判定：移動距離が小さく、タッチ時間が短い場合
         if (totalDistance < 30 && touchDuration < 500) {
           setShowMeaningOnFront(false);
+          // 微小移動が残っても必ず中央へスナップ
+          Animated.spring(swipeValue, {
+            toValue: { x: 0, y: 0 },
+            friction: 9,
+            tension: 40,
+            useNativeDriver: true,
+          }).start();
           flipCard();
         } else {
           // スワイプ判定

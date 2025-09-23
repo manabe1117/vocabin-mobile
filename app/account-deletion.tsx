@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, Button, Alert, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, Alert, StyleSheet, ScrollView } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { router } from 'expo-router';
+import { Button } from '../components/ui/Button';
 
 export default function AccountDeletionScreen() {
   const [isDeleting, setIsDeleting] = useState(false);
@@ -99,23 +100,26 @@ export default function AccountDeletionScreen() {
           この操作は取り消すことができません。
         </Text>
 
-        <Button 
-          title={isDeleting ? "削除中..." : "アカウントデータを削除"} 
-          onPress={handleAccountDeletion}
-          disabled={isDeleting}
-          color="#FF0000"
-        />
+        <View style={styles.deleteButtonContainer}>
+          <Button 
+            title={isDeleting ? "削除中..." : "アカウントデータを削除"} 
+            onPress={handleAccountDeletion}
+            disabled={isDeleting}
+            loading={isDeleting}
+            type="error"
+            size="medium"
+          />
+        </View>
 
-        {isDeleting && (
-          <ActivityIndicator size="large" color="#FF0000" style={styles.loader} />
-        )}
-
-        <Button 
-          title="キャンセル" 
-          onPress={() => router.back()}
-          disabled={isDeleting}
-          color="#666"
-        />
+        <View style={styles.cancelButtonContainer}>
+          <Button 
+            title="キャンセル" 
+            onPress={() => router.back()}
+            disabled={isDeleting}
+            type="secondary"
+            size="large"
+          />
+        </View>
       </View>
     </ScrollView>
   );
@@ -184,5 +188,12 @@ const styles = StyleSheet.create({
   loader: {
     marginTop: 20,
     marginBottom: 20,
+  },
+  deleteButtonContainer: {
+    marginTop: 12,
+    marginBottom: 24,
+  },
+  cancelButtonContainer: {
+    marginTop: 8,
   },
 });

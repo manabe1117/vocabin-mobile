@@ -2069,7 +2069,7 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingHorizontal: 16,
     marginTop: 16,
-    marginBottom: 0,
+    marginBottom: 6,
     width: '92%',
     alignSelf: 'center',
     shadowColor: COLORS.BLACK,
