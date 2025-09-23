@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vocabin",
     "slug": "vocabin-mobile",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
@@ -24,7 +24,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.takumi.vocabin",
-      "versionCode": 7,
+      "versionCode": 8,
       "targetSdkVersion": 35,
       "compileSdkVersion": 35,
       "softwareKeyboardLayoutMode": "resize",

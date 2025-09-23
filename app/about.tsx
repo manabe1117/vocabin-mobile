@@ -69,7 +69,7 @@ export default function AboutScreen() {
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>バージョン</Text>
-              <Text style={styles.infoValue}>1.0.4</Text>
+              <Text style={styles.infoValue}>1.0.5</Text>
             </View>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>リリース日</Text>
