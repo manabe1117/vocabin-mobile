@@ -44,3 +44,7 @@ app-example
 
 # gradle
 android/gradle.properties
+
+# ⚠️ 重要: package-lock.jsonは削除しないこと！
+# Shai-Hulud対策のため、package-lock.jsonはコミット必須
+# !package-lock.json

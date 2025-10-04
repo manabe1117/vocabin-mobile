@@ -1,0 +1,38 @@
+# Cursor AI 作業ルール
+
+## ⚠️ 重要: npm インストールの禁止
+
+このプロジェクトはShai-Huludマルウェア対策を実施しています。
+
+### 絶対に実行してはいけないコマンド
+```bash
+# ❌ 絶対に実行禁止
+npm install
+npm install <package-name>
+npm update
+npm ci
+
+# ❌ 特に危険（保護を無効化）
+npm install --ignore-scripts=false
+npm install <package-name> --ignore-scripts=false
+```
+
+### パッケージの追加・更新が必要な場合
+1. ユーザーに明示的に確認を取る
+2. package.jsonの編集のみを行う
+3. 実際のインストールはユーザーが手動で実行
+
+### 例外的に許可されるコマンド
+```bash
+# ✅ 安全（パッケージをインストールしない）
+npm audit
+npm list
+npm outdated
+npm run <script-name>
+```
+
+## 理由
+- Shai-Huludは`postinstall`スクリプトを悪用
+- 既存の依存関係は`package-lock.json`で固定済み
+- 新規インストールは必ずユーザーの承認が必要
+

@@ -2,6 +2,41 @@
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
+## ⚠️ セキュリティ対策（重要）
+
+このプロジェクトはShai-Huludなどのnpmマルウェア対策を実施しています：
+
+### 実施済みの対策
+- ✅ 依存関係のバージョンを正確に固定（`.npmrc` + `package.json`）
+- ✅ `postinstall`スクリプトの自動実行を無効化（`.npmrc`の`ignore-scripts=true`）
+
+### 定期的に実施すべきこと
+
+1. **認証情報のチェック（月1回推奨）**
+   - GitHub Personal Access Token
+   - npm Authentication Token
+   - Supabaseなどのクラウドサービスのキー
+   - 不審なアクティビティがないか確認
+
+2. **セキュリティ監査**
+   ```bash
+   npm audit
+   ```
+
+3. **認証情報のローテーション（必要に応じて）**
+   - 長期間使用しているトークンは再発行
+   - 不要なトークンは削除
+
+### 新しいパッケージをインストールする場合
+
+```bash
+# 通常通りインストール（スクリプトは自動実行されません）
+npm install <package-name>
+
+# 信頼できるパッケージでスクリプト実行が必要な場合のみ
+npm install <package-name> --ignore-scripts=false
+```
+
 ## Get started
 
 1. Install dependencies
