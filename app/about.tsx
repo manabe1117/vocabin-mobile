@@ -2,7 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+
 import { COLORS } from '@/constants/styles';
+import { APP_INFO } from '@/constants/appInfo';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 
 export default function AboutScreen() {
@@ -10,8 +12,8 @@ export default function AboutScreen() {
     <ScreenWrapper style={styles.container}>
       <View style={styles.content}>
         <View style={styles.logoSection}>
-          <Text style={styles.appName}>Vocabin</Text>
-          <Text style={styles.appTagline}>開発者が毎日使うアプリ</Text>
+          <Text style={styles.appName}>{APP_INFO.name}</Text>
+          <Text style={styles.appTagline}>{APP_INFO.tagline}</Text>
         </View>
 
         <View style={styles.section}>
@@ -70,19 +72,19 @@ export default function AboutScreen() {
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>バージョン</Text>
-              <Text style={styles.infoValue}>1.0.5</Text>
+              <Text style={styles.infoValue}>{APP_INFO.version}</Text>
             </View>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>リリース日</Text>
-              <Text style={styles.infoValue}>2025年7月</Text>
+              <Text style={styles.infoValue}>{APP_INFO.releaseDate}</Text>
             </View>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>対応OS</Text>
-              <Text style={styles.infoValue}>Android</Text>
+              <Text style={styles.infoValue}>{APP_INFO.supportedOS}</Text>
             </View>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>言語</Text>
-              <Text style={styles.infoValue}>日本語</Text>
+              <Text style={styles.infoValue}>{APP_INFO.language}</Text>
             </View>
           </View>
         </View>
@@ -104,7 +106,7 @@ export default function AboutScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            © 2025 Vocabin. All rights reserved.
+            {APP_INFO.copyright}
           </Text>
         </View>
       </View>

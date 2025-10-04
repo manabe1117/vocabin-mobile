@@ -2,7 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+
 import { COLORS } from '@/constants/styles';
+import { APP_INFO } from '@/constants/appInfo';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 
 export default function HelpScreen() {
@@ -87,7 +89,7 @@ export default function HelpScreen() {
         <Text style={styles.sectionTitle}>アプリ情報</Text>
         <View style={styles.infoCard}>
           <Text style={styles.infoLabel}>バージョン</Text>
-          <Text style={styles.infoValue}>1.0.4</Text>
+          <Text style={styles.infoValue}>{APP_INFO.version}</Text>
         </View>
       </View>
     </ScreenWrapper>
