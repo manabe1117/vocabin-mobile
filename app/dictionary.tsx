@@ -19,6 +19,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons'; // アイコンをインポート
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useAudio } from '../hooks/useAudio';
@@ -214,6 +215,7 @@ const useVocabulary = () => {
 };
 
 const TranslateScreen = () => {
+  const insets = useSafeAreaInsets();
   const [inputText, setInputText] = useState('');
   const [displayText, setDisplayText] = useState('');
   const {
@@ -296,7 +298,7 @@ const TranslateScreen = () => {
       hideSub.remove();
     };
   }, []);
-  const EXTRA_LIFT_PX = 20; // 計算結果に数pxだけ上乗せ（表示時のみ）
+  const EXTRA_LIFT_PX = 0; // 計算結果に数pxだけ上乗せ（表示時のみ）
   const liftedAndroidKeyboardHeight = Platform.OS === 'android'
     ? (androidKeyboardHeight > 0 ? androidKeyboardHeight + EXTRA_LIFT_PX : 0)
     : 0;
@@ -1446,7 +1448,14 @@ const TranslateScreen = () => {
             onContentSizeChange={() => {
               setTimeout(() => aiChatScrollViewRef.current?.scrollToEnd({ animated: true }), 100);
             }}
-            contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-start', paddingTop: 16 }}
+            contentContainerStyle={{ 
+              flexGrow: 1, 
+              justifyContent: 'flex-start', 
+              paddingTop: 16,
+              paddingBottom: Platform.OS === 'ios' 
+                ? AI_INPUT_HEIGHT + Math.max(insets.bottom, 8) + 16
+                : AI_INPUT_HEIGHT + liftedAndroidKeyboardHeight + Math.max(insets.bottom, 8) + 16
+            }}
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled={true}
           >
@@ -1553,7 +1562,12 @@ const TranslateScreen = () => {
           style={styles.scrollView}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ 
-            paddingBottom: showAiInput ? (Platform.OS === 'ios' ? 80 : 80 + liftedAndroidKeyboardHeight) : 16,
+            paddingBottom: showAiInput 
+              ? (Platform.OS === 'ios' 
+                ? AI_INPUT_HEIGHT + Math.max(insets.bottom, 8) + 16
+                : AI_INPUT_HEIGHT + liftedAndroidKeyboardHeight + Math.max(insets.bottom, 8) + 16
+              ) 
+              : Math.max(insets.bottom, 16),
             flexGrow: 1 
           }}
           showsVerticalScrollIndicator={false}
@@ -1663,7 +1677,9 @@ const TranslateScreen = () => {
                flexGrow: 1,
                justifyContent: 'flex-start',
                paddingTop: 16,
-                paddingBottom: Platform.OS === 'ios' ? AI_INPUT_HEIGHT : AI_INPUT_HEIGHT + liftedAndroidKeyboardHeight
+                paddingBottom: Platform.OS === 'ios' 
+                  ? AI_INPUT_HEIGHT + Math.max(insets.bottom, 8) + 16
+                  : AI_INPUT_HEIGHT + liftedAndroidKeyboardHeight + Math.max(insets.bottom, 8) + 16
              }}
              keyboardShouldPersistTaps="handled"
              nestedScrollEnabled={true}
@@ -1714,7 +1730,9 @@ const TranslateScreen = () => {
               flexGrow: 1,
               justifyContent: 'flex-start',
               paddingTop: 16,
-              paddingBottom: Platform.OS === 'ios' ? AI_INPUT_HEIGHT : AI_INPUT_HEIGHT + liftedAndroidKeyboardHeight
+              paddingBottom: Platform.OS === 'ios' 
+                ? AI_INPUT_HEIGHT + Math.max(insets.bottom, 8) + 16
+                : AI_INPUT_HEIGHT + liftedAndroidKeyboardHeight + Math.max(insets.bottom, 8) + 16
             }}
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled={true}
@@ -1770,7 +1788,7 @@ const TranslateScreen = () => {
             keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             style={{ backgroundColor: 'transparent' }}
           >
-            <View style={styles.aiInputContainer}>
+            <View style={[styles.aiInputContainer, { marginBottom: Math.max(insets.bottom, 8) }]}>
               <TextInput
                 style={styles.aiTextInput}
                 placeholder={
@@ -2069,7 +2087,7 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingHorizontal: 16,
     marginTop: 16,
-    marginBottom: 6,
+    marginBottom: 0,
     width: '92%',
     alignSelf: 'center',
     shadowColor: COLORS.BLACK,

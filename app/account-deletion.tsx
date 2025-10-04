@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, Alert, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, Alert, StyleSheet } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { router } from 'expo-router';
 import { Button } from '../components/ui/Button';
+import { ScreenWrapper } from '../components/ScreenWrapper';
 
 export default function AccountDeletionScreen() {
   const [isDeleting, setIsDeleting] = useState(false);
@@ -63,7 +64,7 @@ export default function AccountDeletionScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScreenWrapper style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>アカウント削除</Text>
         
@@ -121,7 +122,7 @@ export default function AccountDeletionScreen() {
           />
         </View>
       </View>
-    </ScrollView>
+    </ScreenWrapper>
   );
 }
 

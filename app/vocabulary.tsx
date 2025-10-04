@@ -16,6 +16,7 @@ import {
   Pressable
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { COMMON_STYLES, COLORS } from '@/constants/styles';
@@ -137,6 +138,7 @@ const BoxLevelInfoModal = ({ visible, onClose }: { visible: boolean; onClose: ()
 );
 
 export default function VocabularyScreen() {
+  const insets = useSafeAreaInsets();
   const { session } = useAuth();
   const { speakText } = useSpeech();
   const { isAdmin } = useFeatureFlags();
@@ -1000,7 +1002,7 @@ export default function VocabularyScreen() {
         data={vocabulary}
         renderItem={renderItem}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContainer}
+        contentContainerStyle={[styles.listContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -1163,7 +1165,6 @@ const styles = StyleSheet.create({
   listContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 20,
   },
   itemContainer: {
     backgroundColor: COLORS.CARD_BACKGROUND,

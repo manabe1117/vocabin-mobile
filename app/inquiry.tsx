@@ -10,12 +10,14 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/styles';
 
 export default function InquiryScreen() {
+  const insets = useSafeAreaInsets();
   const { session } = useAuth();
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -76,7 +78,10 @@ export default function InquiryScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView style={styles.scrollView}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
+      >
         <View style={styles.content}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>お問い合わせ内容</Text>

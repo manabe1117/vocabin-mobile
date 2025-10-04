@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -7,6 +8,7 @@ import { COLORS } from '@/constants/styles';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 export default function AccountScreen() {
+  const insets = useSafeAreaInsets();
   const { session, signOut } = useAuth();
   const { isAdmin } = useFeatureFlags();
 
@@ -59,7 +61,7 @@ export default function AccountScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut}>
           <Text style={styles.logoutText}>ログアウト</Text>
         </TouchableOpacity>
@@ -133,7 +135,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 16,
   },
   logoutButton: {
     margin: 20,

@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { COLORS } from '@/constants/styles';
+import { ScreenWrapper } from '@/components/ScreenWrapper';
 
 export default function TermsScreen() {
   return (
-    <ScrollView style={styles.container}>
+    <ScreenWrapper style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.lastUpdated}>最終更新日: 2025年7月</Text>
 
@@ -106,7 +107,7 @@ export default function TermsScreen() {
           </Text>
         </View>
       </View>
-    </ScrollView>
+    </ScreenWrapper>
   );
 }
 

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, PanResponder, Dimensions, ActivityIndicator, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { router } from 'expo-router';
 
@@ -32,6 +33,7 @@ interface Flashcard {
 }
 
 const StudyScreen = () => {
+  const insets = useSafeAreaInsets();
   const { session } = useAuth();
   const { speakText } = useSpeech();
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
@@ -635,7 +637,7 @@ const StudyScreen = () => {
       )}
 
       {/* アクションボタン */}
-      <View style={styles.actionSection}>
+      <View style={[styles.actionSection, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}>
         <View style={styles.swipeHints}>
           <View style={styles.swipeHint}>
             <Ionicons name="arrow-back" size={20} color={COLORS.ERROR.DEFAULT} />
@@ -906,7 +908,6 @@ const styles = StyleSheet.create({
   // アクションセクション
   actionSection: {
     paddingHorizontal: 20,
-    paddingBottom: 40,
   },
   swipeHints: {
     flexDirection: 'row',

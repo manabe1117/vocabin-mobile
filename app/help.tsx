@@ -1,12 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { COLORS } from '@/constants/styles';
+import { ScreenWrapper } from '@/components/ScreenWrapper';
 
 export default function HelpScreen() {
   return (
-    <ScrollView style={styles.container}>
+    <ScreenWrapper style={styles.container}>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>よくある質問</Text>
         
@@ -89,7 +90,7 @@ export default function HelpScreen() {
           <Text style={styles.infoValue}>1.0.4</Text>
         </View>
       </View>
-    </ScrollView>
+    </ScreenWrapper>
   );
 }
 

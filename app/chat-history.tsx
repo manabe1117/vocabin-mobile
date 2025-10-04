@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Platform,
   ActivityIndicator,
@@ -13,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
+import { ScreenWrapper } from '../components/ScreenWrapper';
 
 const COLORS = {
   BACKGROUND: {
@@ -166,13 +166,13 @@ const ChatHistoryScreen = () => {
 
   return (
     <View style={styles.container}>
-      <ScrollView
+      <ScreenWrapper 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
-        showsVerticalScrollIndicator={false}
+        bottomPadding={16}
       >
         {historyItems.map(renderHistoryItem)}
-      </ScrollView>
+      </ScreenWrapper>
     </View>
   );
 };
@@ -211,6 +211,7 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     padding: 16,
+    paddingTop: 16,
   },
   historyItemContainer: {
     backgroundColor: COLORS.BACKGROUND.LIGHT,

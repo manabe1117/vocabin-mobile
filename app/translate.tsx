@@ -18,6 +18,7 @@ import {
   Text,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
@@ -87,6 +88,7 @@ interface VocabularyResult {
 }
 
 const TranslateScreen = () => {
+  const insets = useSafeAreaInsets();
   const [inputText, setInputText] = useState('');
   const [translatedText, setTranslatedText] = useState('');
   const [sourceLang, setSourceLang] = useState('英語');
@@ -725,7 +727,7 @@ const TranslateScreen = () => {
             </View>
           </View>
           {/* Bottom Bar */}
-          <View style={styles.bottomBar}>
+          <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
             <TouchableOpacity style={styles.bottomLangButton} disabled={isRecording || isTranscribing || isLoading}>
               <ThemedText style={[styles.bottomLangText, (isRecording || isTranscribing || isLoading) && styles.disabledText]}>{sourceLang}</ThemedText>
             </TouchableOpacity>
@@ -787,7 +789,7 @@ const styles = StyleSheet.create({
     placeholderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
     placeholderText: { fontSize: 16, color: colors.placeholderColor, textAlign: 'center', lineHeight: 24 },
     loadingText: { marginTop: 10, fontSize: 14, color: colors.textSecondary },
-    bottomBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: Platform.OS === 'ios' ? 10 : 8, paddingBottom: Platform.OS === 'ios' ? 25 : 10, borderTopWidth: 1, borderColor: colors.borderColor, backgroundColor: colors.bottomBarBackground, minHeight: 55 },
+    bottomBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: Platform.OS === 'ios' ? 10 : 8, borderTopWidth: 1, borderColor: colors.borderColor, backgroundColor: colors.bottomBarBackground, minHeight: 55 },
     bottomLangButton: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 18, backgroundColor: colors.langButtonBackgroundOriginal, minWidth: 80, alignItems: 'center', marginHorizontal: 5 },
     bottomLangText: { fontSize: 14, fontWeight: '500', color: colors.accentBlue },
     disabledText: { color: colors.iconColorDisabled },

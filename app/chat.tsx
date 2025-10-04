@@ -14,8 +14,10 @@ import {
   Modal,
   TouchableWithoutFeedback,
   Dimensions,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -89,6 +91,7 @@ const markdownStyle = {
 };
 
 const ChatScreen = () => {
+  const insets = useSafeAreaInsets();
   const { session } = useAuth();
   const { speakText } = useSpeech();
   const [inputText, setInputText] = useState('');
@@ -102,7 +105,8 @@ const ChatScreen = () => {
 
   // Android専用: キーボードの高さに応じて下部を持ち上げる
   const [androidKeyboardHeight, setAndroidKeyboardHeight] = useState(0);
-  const ANDROID_EXTRA_LIFT_PX = 20; // 表示中のみ数px上乗せ
+  const ANDROID_EXTRA_LIFT_PX = 0; // 表示中のみ数px上乗せ
+  const INPUT_CONTAINER_HEIGHT = 80; // チャット入力欄の高さ
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
@@ -835,9 +839,11 @@ const ChatScreen = () => {
           style={styles.messagesContainer}
           contentContainerStyle={[
             styles.messagesContent,
-            Platform.OS === 'android'
-              ? { paddingBottom: 8 + liftedAndroidKeyboardHeight }
-              : { paddingBottom: 8 }
+            {
+              paddingBottom: Platform.OS === 'ios'
+                ? INPUT_CONTAINER_HEIGHT + Math.max(insets.bottom, 8) + 8 + 16
+                : INPUT_CONTAINER_HEIGHT + liftedAndroidKeyboardHeight + Math.max(insets.bottom, 8) + 8 + 16
+            }
           ]}
           showsVerticalScrollIndicator={false}
           onLayout={() => {
@@ -864,50 +870,66 @@ const ChatScreen = () => {
           )}
         </ScrollView>
         
-        <View style={[
-          styles.inputContainer,
-          Platform.OS === 'android' ? { marginBottom: 8 + liftedAndroidKeyboardHeight } : null
-        ]}>
-          <TouchableOpacity 
-            ref={menuButtonRef}
-            style={styles.historyButton}
-            onPress={handleMenuPress}
-          >
-            <Ionicons name="menu-outline" size={28} color={COLORS.PRIMARY} />
-          </TouchableOpacity>
-          <TextInput
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="英語に関する質問を入力..."
-            style={styles.textInput}
-            multiline
-            returnKeyType="default"
-            blurOnSubmit={false}
-            onSubmitEditing={() => {
-              if (Platform.OS === 'android' && inputText.trim()) {
-                // sendMessage();
-              }
-            }}
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!inputText.trim() || isLoading) && styles.sendButtonDisabled,
-            ]}
-            onPress={sendMessage}
-            disabled={!inputText.trim() || isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator size="small" color={COLORS.WHITE} />
-            ) : (
-              <Ionicons
-                name="send"
-                size={20}
-                color={inputText.trim() ? COLORS.WHITE : COLORS.ICON.DISABLED}
-              />
-            )}
-          </TouchableOpacity>
-        </View>
+        <SafeAreaView style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: Platform.OS === 'android' ? liftedAndroidKeyboardHeight : 0,
+          backgroundColor: COLORS.WHITE,
+          paddingBottom: Platform.OS === 'android' ? 8 : 0,
+          borderTopWidth: 1,
+          borderTopColor: COLORS.BORDER.LIGHT,
+          shadowColor: COLORS.EFFECTS.SHADOW,
+          shadowOffset: { width: 0, height: -1 },
+          shadowOpacity: 0.1,
+          shadowRadius: 2,
+          elevation: 2,
+        }}>
+          <View style={[styles.inputContainer, { 
+            marginTop: 8,
+            marginBottom: Math.max(insets.bottom, 8) 
+          }]}>
+            <TouchableOpacity 
+              ref={menuButtonRef}
+              style={styles.historyButton}
+              onPress={handleMenuPress}
+            >
+              <Ionicons name="menu-outline" size={28} color={COLORS.PRIMARY} />
+            </TouchableOpacity>
+            <TextInput
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="英語に関する質問を入力..."
+              style={styles.textInput}
+              multiline
+              returnKeyType="default"
+              blurOnSubmit={false}
+              onSubmitEditing={() => {
+                if (Platform.OS === 'android' && inputText.trim()) {
+                  // sendMessage();
+                }
+              }}
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                (!inputText.trim() || isLoading) && styles.sendButtonDisabled,
+              ]}
+              onPress={sendMessage}
+              disabled={!inputText.trim() || isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color={COLORS.WHITE} />
+              ) : (
+                <Ionicons
+                  name="send"
+                  size={20}
+                  color={inputText.trim() ? COLORS.WHITE : COLORS.ICON.DISABLED}
+                />
+              )}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
       </KeyboardAvoidingView>
 
       <Modal
@@ -1102,7 +1124,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
     marginHorizontal: 8,
-    marginBottom: Platform.OS === 'ios' ? 0 : 8,
     borderRadius: 24,
     backgroundColor: COLORS.WHITE,
     borderWidth: 1,

@@ -1,12 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { COLORS } from '@/constants/styles';
+import { ScreenWrapper } from '@/components/ScreenWrapper';
 
 export default function AboutScreen() {
   return (
-    <ScrollView style={styles.container}>
+    <ScreenWrapper style={styles.container}>
       <View style={styles.content}>
         <View style={styles.logoSection}>
           <Text style={styles.appName}>Vocabin</Text>
@@ -107,7 +108,7 @@ export default function AboutScreen() {
           </Text>
         </View>
       </View>
-    </ScrollView>
+    </ScreenWrapper>
   );
 }
 

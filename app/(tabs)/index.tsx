@@ -1,12 +1,13 @@
 // app/(tabs)/index.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { MaterialCommunityIcons, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
+import { ScreenWrapper } from '../../components/ScreenWrapper';
 
 // --- Layout Constants ---
 const { width } = Dimensions.get('window');
@@ -89,7 +90,11 @@ const HomeScreen = () => {
   };
 
   return (
-    <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
+    <ScreenWrapper 
+      style={styles.scrollView} 
+      contentContainerStyle={styles.container}
+      bottomPadding={50}
+    >
       {/* --- フレーズ統計バー --- */}
       <View style={styles.statsBar}>
         <TouchableOpacity 
@@ -250,7 +255,7 @@ const HomeScreen = () => {
         </View>
       )}
       {/* 広告は非表示にしました */}
-    </ScrollView>
+    </ScreenWrapper>
   );
 };
 
@@ -261,7 +266,6 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: containerPadding,
-    paddingBottom: 50, // 下部のスクロール領域確保
     gap: 32, // セクション間のギャップを広めに
   },
   section: {
