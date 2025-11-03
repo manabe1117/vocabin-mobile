@@ -671,6 +671,7 @@ const TranslateScreen = () => {
   const clearInput = async () => {
     setInputText('');
     setDisplayText('');
+    setIsDictionaryDetailsOpen(true); // 辞書詳細を展開状態に設定
     await resetAndFetchHistory();
   };
 
