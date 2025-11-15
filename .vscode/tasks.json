@@ -1,0 +1,75 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "🔒 Security: npm Audit チェック",
+      "type": "shell",
+      "command": "npm",
+      "args": ["audit", "--audit-level=moderate"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "🛡️  Security: Shai-Hulud マルウェアチェック",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "security:check"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "📋 Security: package-lock.json 整合性確認",
+      "type": "shell",
+      "command": "npm",
+      "args": ["ci", "--dry-run"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "✅ Security: 全セキュリティチェック実行",
+      "type": "shell",
+      "command": "npm",
+      "args": ["audit"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "dependsOn": [
+        "🔒 Security: npm Audit チェック",
+        "🛡️  Security: Shai-Hulud マルウェアチェック",
+        "📋 Security: package-lock.json 整合性確認"
+      ],
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      }
+    }
+  ]
+}
+

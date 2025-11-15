@@ -1,0 +1,23 @@
+{
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.indentSize": 2,
+  "files.exclude": {
+    "node_modules": true,
+    "**/*.bak": true
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "// ⚠️ セキュリティ設定 - Shai-Hulud対策": "以下の設定を変更しないこと",
+  "npm.autorun": "off",
+  "npm.enableRunFromFolder": false,
+  "// npm install の自動実行を無効化": "package.json変更時に手動実行を強制"
+}
+
