@@ -36,10 +36,25 @@ export const ADMOB_UNIT_IDS = {
     ? "ca-app-pub-3940256099942544/6300978111"
     : "YOUR_PRODUCTION_STUDY_BANNER_ID",
 
-  // インタースティシャル広告（全画面広告）
+  // インタースティシャル広告（全画面広告）- 共通用
   INTERSTITIAL: isDevelopment
     ? "ca-app-pub-3940256099942544/1033173712" // テスト用ID
     : "YOUR_PRODUCTION_INTERSTITIAL_ID",
+
+  // 辞書画面用インタースティシャル広告
+  DICTIONARY_INTERSTITIAL: isDevelopment
+    ? "ca-app-pub-3940256099942544/1033173712" // テスト用ID（インタースティシャル形式）
+    : "YOUR_PRODUCTION_DICTIONARY_INTERSTITIAL_ID",
+
+  // 翻訳画面用インタースティシャル広告
+  TRANSLATE_INTERSTITIAL: isDevelopment
+    ? "ca-app-pub-3940256099942544/1033173712" // テスト用ID（インタースティシャル形式）
+    : "YOUR_PRODUCTION_TRANSLATE_INTERSTITIAL_ID",
+
+  // 学習画面用インタースティシャル広告
+  STUDY_INTERSTITIAL: isDevelopment
+    ? "ca-app-pub-3940256099942544/1033173712" // テスト用ID（インタースティシャル形式）
+    : "YOUR_PRODUCTION_STUDY_INTERSTITIAL_ID",
 
   // リワード広告（報酬付き広告）
   REWARDED: isDevelopment

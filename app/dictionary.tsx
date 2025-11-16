@@ -30,8 +30,8 @@ import { useSpeech } from "../hooks/useSpeech";
 import * as FileSystem from "expo-file-system";
 import * as Clipboard from "expo-clipboard";
 import Markdown from "react-native-markdown-display";
-import { GoogleAdMobAd } from "../components/GoogleAdMobAd";
 import { ADMOB_UNIT_IDS } from "../config/admob";
+import { useInterstitialAd } from "../hooks/useInterstitialAd";
 
 // Markdown用のスタイル定義（コンポーネント外で定義）
 const markdownStyle: { body: TextStyle } = {
@@ -321,6 +321,31 @@ const TranslateScreen = () => {
   // 編集内容を保持するためのRef
   const savedEditDataRef = useRef<VocabularyResult | null>(null);
 
+  // 検索回数をカウント（3回に1回広告を表示）
+  const [searchCount, setSearchCount] = useState(0);
+
+  // インタースティシャル広告の初期化
+  const { loadAd, showAd } = useInterstitialAd(
+    ADMOB_UNIT_IDS.DICTIONARY_INTERSTITIAL
+  );
+
+  // ページ遷移時にインタースティシャル広告を表示
+  useEffect(() => {
+    loadAd();
+  }, [loadAd]);
+
+  // 3回に1回広告を表示するヘルパー関数
+  const showAdIfNeeded = () => {
+    const newCount = searchCount + 1;
+    setSearchCount(newCount);
+    // 3の倍数の時だけ広告を表示
+    if (newCount % 3 === 0) {
+      setTimeout(() => {
+        showAd();
+      }, 800);
+    }
+  };
+
   // AIチャット入力欄表示制御のためのフラグ
   const showAiInput = vocabulary || isChatFocusedMode || activeChatVocabulary;
 
@@ -440,37 +465,45 @@ const TranslateScreen = () => {
     }
   }, [vocabulary]);
 
-  const handleTranslate = () => {
+  const handleTranslate = async () => {
     setIsDictionaryDetailsOpen(true);
     setDisplayText(inputText);
-    translate(inputText);
+    await translate(inputText);
+    // 翻訳後に広告を表示（3回に1回）
+    showAdIfNeeded();
   };
 
-  const handleSuggestionClick = (text: string) => {
+  const handleSuggestionClick = async (text: string) => {
     setIsDictionaryDetailsOpen(true);
     setInputText(text);
     setDisplayText(text);
     setSuggestion(null);
     setSuggestions(null);
     setTranslations(null);
-    translate(text);
+    await translate(text);
+    // 翻訳後に広告を表示（3回に1回）
+    showAdIfNeeded();
   };
 
-  const handleTranslationClick = (translation: string) => {
+  const handleTranslationClick = async (translation: string) => {
     setIsDictionaryDetailsOpen(true);
     setInputText(translation);
     setDisplayText(translation);
     setSuggestion(null);
     setSuggestions(null);
     setTranslations(null);
-    translate(translation);
+    await translate(translation);
+    // 翻訳後に広告を表示（3回に1回）
+    showAdIfNeeded();
   };
 
-  const handleSearchHistoryClick = (text: string) => {
+  const handleSearchHistoryClick = async (text: string) => {
     setIsDictionaryDetailsOpen(true);
     setInputText(text);
     setDisplayText(text);
-    translate(text);
+    await translate(text);
+    // 翻訳後に広告を表示（3回に1回）
+    showAdIfNeeded();
   };
 
   const handleSave = async () => {
@@ -1475,9 +1508,11 @@ const TranslateScreen = () => {
                   <TouchableOpacity
                     key={index}
                     style={styles.synonym}
-                    onPress={() => {
+                    onPress={async () => {
                       setInputText(synonym);
-                      translate(synonym);
+                      await translate(synonym);
+                      // 類義語クリック時も広告カウント（3回に1回）
+                      showAdIfNeeded();
                     }}
                   >
                     <Text style={styles.synonymText}>{synonym}</Text>
@@ -1548,9 +1583,11 @@ const TranslateScreen = () => {
                       <TouchableOpacity
                         key={type}
                         style={styles.conjugationItem}
-                        onPress={() => {
+                        onPress={async () => {
                           setInputText(form);
-                          translate(form);
+                          await translate(form);
+                          // 活用形クリック時も広告カウント（3回に1回）
+                          showAdIfNeeded();
                         }}
                       >
                         <Text style={styles.conjugationType}>{type}:</Text>
@@ -2404,15 +2441,6 @@ const TranslateScreen = () => {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
-
-      {/* バナー広告 */}
-      <View style={styles.adContainer}>
-        <GoogleAdMobAd
-          adUnitId={ADMOB_UNIT_IDS.DICTIONARY_BANNER}
-          adFormat="banner"
-          testMode={false}
-        />
-      </View>
     </View>
   );
 };
@@ -3265,11 +3293,6 @@ const styles = StyleSheet.create({
   },
   messageActionCancelText: {
     color: COLORS.TEXT.LIGHT_GRAY,
-  },
-  adContainer: {
-    marginTop: 8,
-    marginBottom: 8,
-    alignItems: "center",
   },
 });
 

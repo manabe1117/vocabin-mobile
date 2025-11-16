@@ -31,8 +31,8 @@ import DictionaryModal from "../components/DictionaryModal";
 import DictionaryBanner from "../components/DictionaryBanner";
 import { useAuth } from "../context/AuthContext";
 import { COLORS } from "../constants/styles";
-import { GoogleAdMobAd } from "../components/GoogleAdMobAd";
 import { ADMOB_UNIT_IDS } from "../config/admob";
+import { useInterstitialAd } from "../hooks/useInterstitialAd";
 
 const colors = {
   background: COLORS.BACKGROUND.MAIN,
@@ -97,6 +97,16 @@ const TranslateScreen = () => {
   const [targetLang, setTargetLang] = useState("日本語");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // インタースティシャル広告の初期化
+  const { loadAd, showAd } = useInterstitialAd(
+    ADMOB_UNIT_IDS.TRANSLATE_INTERSTITIAL
+  );
+
+  // ページ遷移時にインタースティシャル広告をロード
+  useEffect(() => {
+    loadAd();
+  }, [loadAd]);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -395,6 +405,10 @@ const TranslateScreen = () => {
       if (data && data.translatedText) {
         setTranslatedText(data.translatedText);
         setError(null);
+        // 翻訳完了時に広告を表示
+        setTimeout(() => {
+          showAd();
+        }, 800);
       } else if (data && data.error) {
         throw new Error(data.error);
       } else {
@@ -1087,15 +1101,6 @@ const TranslateScreen = () => {
           isSaved={outputBannerSaved}
           onSave={handleOutputBannerSave}
         />
-
-        {/* バナー広告 */}
-        <View style={styles.adContainer}>
-          <GoogleAdMobAd
-            adUnitId={ADMOB_UNIT_IDS.TRANSLATE_BANNER}
-            adFormat="banner"
-            testMode={false}
-          />
-        </View>
       </>
     </TouchableWithoutFeedback>
   );
@@ -1212,11 +1217,6 @@ const styles = StyleSheet.create({
   },
   recordingButton: { backgroundColor: colors.errorColor + "20" },
   disabledButton: { opacity: 0.5 },
-  adContainer: {
-    marginTop: 8,
-    marginBottom: 8,
-    alignItems: "center",
-  },
 });
 
 export default TranslateScreen;

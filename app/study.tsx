@@ -24,8 +24,8 @@ import { useSpeech } from "../hooks/useSpeech";
 import { ThemedText } from "../components/ThemedText";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
-import { GoogleAdMobAd } from "../components/GoogleAdMobAd";
 import { ADMOB_UNIT_IDS } from "../config/admob";
+import { useInterstitialAd } from "../hooks/useInterstitialAd";
 
 // フラッシュカードの型定義
 interface Flashcard {
@@ -56,6 +56,16 @@ const StudyScreen = () => {
   const [showCompletionMessage, setShowCompletionMessage] = useState(false);
   const [showMeaningOnFront, setShowMeaningOnFront] = useState(false);
   const [studyCount, setStudyCount] = useState<number | null>(null);
+
+  // インタースティシャル広告の初期化
+  const { loadAd, showAd } = useInterstitialAd(
+    ADMOB_UNIT_IDS.STUDY_INTERSTITIAL
+  );
+
+  // ページ遷移時にインタースティシャル広告をロード
+  useEffect(() => {
+    loadAd();
+  }, [loadAd]);
 
   const fetchFlashcards = async () => {
     setIsLoading(true);
@@ -500,11 +510,16 @@ const StudyScreen = () => {
                 : "ホーム画面に戻る"
             }
             onPress={() => {
-              if (studyCount !== null && studyCount > 50) {
-                router.replace("/study");
-              } else {
-                router.push("/");
-              }
+              // ボタン押下時に広告を表示
+              showAd();
+              // 広告表示後に遷移
+              setTimeout(() => {
+                if (studyCount !== null && studyCount > 50) {
+                  router.replace("/study");
+                } else {
+                  router.push("/");
+                }
+              }, 500);
             }}
             type="primary"
             size="large"
@@ -764,15 +779,6 @@ const StudyScreen = () => {
           >
             <Ionicons name="checkmark" size={28} color={COLORS.WHITE} />
           </Button>
-        </View>
-
-        {/* バナー広告 */}
-        <View style={styles.adContainer}>
-          <GoogleAdMobAd
-            adUnitId={ADMOB_UNIT_IDS.STUDY_BANNER}
-            adFormat="banner"
-            testMode={false}
-          />
         </View>
       </View>
     </View>
@@ -1142,11 +1148,6 @@ const styles = StyleSheet.create({
   emptyButton: {
     paddingHorizontal: 24,
     minWidth: 120,
-  },
-  adContainer: {
-    marginTop: 12,
-    marginBottom: 8,
-    alignItems: "center",
   },
 });
 
