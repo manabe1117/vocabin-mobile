@@ -107,10 +107,11 @@ const HomeScreen = () => {
   };
 
   return (
+    <View style={styles.mainContainer}>
     <ScreenWrapper
       style={styles.scrollView}
       contentContainerStyle={styles.container}
-      bottomPadding={50}
+      bottomPadding={80} // 広告の分だけパディングを追加
     >
       {/* --- フレーズ統計バー --- */}
       <View style={styles.statsBar}>
@@ -349,19 +350,25 @@ const HomeScreen = () => {
         </View>
       )}
 
-      {/* バナー広告 */}
-      <View style={styles.adContainer}>
+    </ScreenWrapper>
+
+      {/* バナー広告（フッター上に固定） */}
+      <View style={styles.fixedAdContainer}>
         <GoogleAdMobAd
           adUnitId={ADMOB_UNIT_IDS.HOME_BANNER}
-          adFormat="banner"
+          adFormat="anchoredAdaptive"
           testMode={false}
         />
       </View>
-    </ScreenWrapper>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  mainContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   scrollView: {
     flex: 1,
     backgroundColor: colors.background,
@@ -603,6 +610,19 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 8,
     alignItems: "center",
+  },
+  fixedAdContainer: {
+    width: "100%",
+    backgroundColor: colors.cardBackground, // 背景色をつけて帯状にする
+    // borderTopWidth: 1, // 境界線を削除
+    // borderTopColor: "#e5e7eb", 
+    alignItems: "center",
+    paddingBottom: 0, 
+    // shadowColor: colors.shadow, // 影も削除して完全にフラットに
+    // shadowOffset: { width: 0, height: -2 },
+    // shadowOpacity: 0.05,
+    // shadowRadius: 4,
+    // elevation: 5,
   },
 });
 

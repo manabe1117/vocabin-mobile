@@ -9,7 +9,7 @@ import { ThemedText } from './ThemedText';
  */
 interface GoogleAdMobAdProps {
   adUnitId?: string; // ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx
-  adFormat?: 'banner' | 'largeBanner' | 'mediumRectangle' | 'fullBanner' | 'leaderboard';
+  adFormat?: 'banner' | 'largeBanner' | 'mediumRectangle' | 'fullBanner' | 'leaderboard' | 'anchoredAdaptive';
   testMode?: boolean;
 }
 
@@ -32,6 +32,8 @@ export function GoogleAdMobAd({
         return BannerAdSize.FULL_BANNER;
       case 'leaderboard':
         return BannerAdSize.LEADERBOARD;
+      case 'anchoredAdaptive':
+        return BannerAdSize.ANCHORED_ADAPTIVE_BANNER;
       default: // banner
         return BannerAdSize.BANNER;
     }
@@ -85,7 +87,7 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    // paddingVertical: 10, // 余白を削除
   },
   loadingContainer: {
     alignItems: 'center',

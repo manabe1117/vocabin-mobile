@@ -19,7 +19,7 @@ export const ADMOB_UNIT_IDS = {
   // ホーム画面用バナー広告
   HOME_BANNER: isDevelopment
     ? "ca-app-pub-3940256099942544/6300978111" // テスト用ID（Android）
-    : "YOUR_PRODUCTION_HOME_BANNER_ID", // リリース前に変更必須！
+    : "ca-app-pub-9940045330193360/8835995188", // Vocabin_Home_Banner
 
   // 辞書画面用バナー広告
   DICTIONARY_BANNER: isDevelopment
@@ -44,7 +44,7 @@ export const ADMOB_UNIT_IDS = {
   // 辞書画面用インタースティシャル広告
   DICTIONARY_INTERSTITIAL: isDevelopment
     ? "ca-app-pub-3940256099942544/1033173712" // テスト用ID（インタースティシャル形式）
-    : "YOUR_PRODUCTION_DICTIONARY_INTERSTITIAL_ID",
+    : "ca-app-pub-9940045330193360/3600046260", // Dictionary_Interstitial
 
   // 翻訳画面用インタースティシャル広告
   TRANSLATE_INTERSTITIAL: isDevelopment
@@ -54,7 +54,7 @@ export const ADMOB_UNIT_IDS = {
   // 学習画面用インタースティシャル広告
   STUDY_INTERSTITIAL: isDevelopment
     ? "ca-app-pub-3940256099942544/1033173712" // テスト用ID（インタースティシャル形式）
-    : "YOUR_PRODUCTION_STUDY_INTERSTITIAL_ID",
+    : "ca-app-pub-9940045330193360/2286964599", // Study_Interstitial
 
   // リワード広告（報酬付き広告）
   REWARDED: isDevelopment
