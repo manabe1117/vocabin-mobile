@@ -7,15 +7,18 @@ buildscript {
         compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '35')
         targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '35')
         kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.25'
-
-        ndkVersion = "26.1.10909125"
     }
     repositories {
         google()
         mavenCentral()
     }
+    configurations.all {
+        resolutionStrategy {
+            force "com.facebook.react:react-android:0.76.9"
+        }
+    }
     dependencies {
-        classpath('com.android.tools.build:gradle')
+        classpath('com.android.tools.build:gradle:8.7.3')
         classpath('com.facebook.react:react-native-gradle-plugin')
         classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
     }
@@ -37,5 +40,13 @@ allprojects {
         google()
         mavenCentral()
         maven { url 'https://www.jitpack.io' }
+    }
+}
+
+subprojects {
+    project.plugins.withId('com.android.library') {
+        project.android {
+            ndkVersion = "27.1.12297006"
+        }
     }
 }

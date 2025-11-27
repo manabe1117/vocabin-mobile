@@ -81,8 +81,7 @@ def enableProguardInReleaseBuilds = (findProperty('android.enableProguardInRelea
 def jscFlavor = 'org.webkit:android-jsc:+'
 
 android {
-    ndkVersion rootProject.ext.ndkVersion
-
+    ndkVersion "27.1.12297006"
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
@@ -91,8 +90,8 @@ android {
         applicationId 'com.takumi.vocabin'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 11
-        versionName "1.0.8"
+        versionCode 25
+        versionName "1.0.22"
     }
     signingConfigs {
         debug {
@@ -123,8 +122,11 @@ android {
     }
     packagingOptions {
         jniLibs {
-            useLegacyPackaging (findProperty('expo.useLegacyPackaging')?.toBoolean() ?: false)
+            useLegacyPackaging = false
         }
+        // Ensure 16 KB alignment for native libraries
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/NOTICE'
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
