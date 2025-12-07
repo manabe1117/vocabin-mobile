@@ -19,7 +19,7 @@ export const ADMOB_UNIT_IDS = {
   // ホーム画面用バナー広告
   HOME_BANNER: isDevelopment
     ? "ca-app-pub-3940256099942544/6300978111" // テスト用ID（Android）
-    : "ca-app-pub-9940045330193360/8835995188", // Vocabin_Home_Banner
+    : "ca-app-pub-9940045330193360/9813394924", // Home_Banner_Standard
 
   // 辞書画面用バナー広告
   DICTIONARY_BANNER: isDevelopment
