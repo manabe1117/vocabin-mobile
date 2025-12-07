@@ -259,3 +259,21 @@ packagingOptions {
 expo.useLegacyPackaging=false
 android.bundle.enableUncompressedNativeLibs=true
 ```
+
+## 追記: 成功した設定への切り戻し (バージョン 1.0.28)
+
+バージョン 1.0.27 (ライブラリ更新) でも解決しなかったとのことで、過去に成功実績のあるコミット (`970f1687...` = バージョン 1.0.22 相当) の設定に戻します。
+
+### 変更点
+
+1.  **`package.json`**: ライブラリバージョンを元に戻しました（Ads 14.x, Reanimated 3.16.x）。
+2.  **`android/app/build.gradle`**: `abiFilters` (32bit 除外設定) を削除しました。32bit/64bit 両方のライブラリを含めます。
+3.  **`android/gradle.properties`**: `android.bundle.enableUncompressedNativeLibs=true` を再設定しました。
+
+### 結果 (バージョン 1.0.28)
+
+- **成功**: Google Play Console へのアップロードと 16KB エラーの解消を確認。
+- **結論**:
+  - バージョン 1.0.22 の構成（全モジュール NDK 強制 + 非圧縮設定 + 32bit 含める）が正解だった。
+  - 途中で行った「32bit アーキテクチャの除外」や「ライブラリの無理なバージョンアップ」は不要だった（あるいは逆効果だった）。
+  - 重要なのは `subprojects { ... ndkVersion ... }` による依存ライブラリの強制ビルドと、適切な非圧縮設定の組み合わせである。

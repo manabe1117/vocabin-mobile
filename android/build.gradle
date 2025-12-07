@@ -7,6 +7,8 @@ buildscript {
         compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '35')
         targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '35')
         kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.25'
+        // 16KBページサイズ対応のためGoogle Mobile Ads SDKを最新に強制
+        googlePlayServicesAdsVersion = '23.6.0'
     }
     repositories {
         google()
@@ -15,6 +17,10 @@ buildscript {
     configurations.all {
         resolutionStrategy {
             force "com.facebook.react:react-android:0.76.9"
+            // 16KBページサイズ対応のためGoogle Mobile Ads SDKを強制更新
+            // force "com.google.android.gms:play-services-ads:23.6.0"
+            // force "com.google.android.gms:play-services-ads-base:23.6.0"
+            // force "com.google.android.gms:play-services-ads-lite:23.6.0"
         }
     }
     dependencies {
@@ -40,6 +46,16 @@ allprojects {
         google()
         mavenCentral()
         maven { url 'https://www.jitpack.io' }
+    }
+    
+    // 16KBページサイズ対応のため全モジュールでGoogle Mobile Ads SDKを強制更新
+    configurations.all {
+        resolutionStrategy {
+            force "com.google.android.gms:play-services-ads:23.6.0"
+            force "com.google.android.gms:play-services-ads-base:23.6.0"
+            force "com.google.android.gms:play-services-ads-lite:23.6.0"
+            force "com.google.mlkit:barcode-scanning:17.3.0"
+        }
     }
 }
 
